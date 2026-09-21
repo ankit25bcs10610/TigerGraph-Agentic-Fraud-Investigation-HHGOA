@@ -12,6 +12,7 @@ class InvestigationState(TypedDict, total=False):
     exposure_usd: float; fraud_probability: float; verdict: str
     evidence_requests: list[dict[str, Any]]; evidence_responses: list[dict[str, Any]]
     initial_actions: list[dict[str, Any]]; final_actions: list[dict[str, Any]]
+    what_changed: str; simulation_mode: bool; auto_resume_evidence: bool
     approval_requests: list[dict[str, Any]]; approval_results: list[dict[str, Any]]
     stop: bool; stop_reason: str; status: str; errors: list[str]
     tool_calls: list[dict[str, Any]]; started_at: str; completed_at: str; latency_s: float

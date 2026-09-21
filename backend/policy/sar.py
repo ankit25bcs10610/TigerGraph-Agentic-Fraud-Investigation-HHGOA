@@ -3,15 +3,53 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from collections.abc import Sequence
 
 from backend.models.answer import SAR, Verdict
+from backend.policy.approvals import get_approval_route
+from backend.models.answer import ApprovalRoute, FraudPattern, PolicyAction
+from backend.investigation.exposure import episode_exposure_usd, episode_transaction_ids
 
 
 @dataclass(frozen=True)
 class SARDecision:
     file: bool
     reason: str
+
+@dataclass(frozen=True)
+class SARGeneration:
+    sar: SAR
+    approval_route: ApprovalRoute | None
+    investigation_case_required: bool
+
+def _date(value: object) -> str:
+    if isinstance(value, datetime): return value.date().isoformat()
+    return datetime.fromisoformat(str(value)).date().isoformat()
+
+def generate_grounded_sar(*, decision: SARDecision, customer_id: str, card_id: str,
+    connected_card_ids: Sequence[str], episode_transactions: Sequence[dict[str, object]],
+    pattern: FraudPattern, linkage_claims: Sequence[str] = (), evidence_response: str = "",
+    known_subject_ids: Sequence[str], investigation_case_created: bool) -> SARGeneration:
+    """Render a SAR from supplied facts; eligibility remains in ``evaluate_sar``."""
+    if not decision.file: return SARGeneration(build_sar(decision), None, False)
+    if not investigation_case_created: raise ValueError("an InvestigationCase must exist before a report is generated")
+    subjects = list(dict.fromkeys([customer_id, card_id, *connected_card_ids]))
+    allowed = {str(value) for value in known_subject_ids}
+    if any(subject not in allowed for subject in subjects): raise ValueError("SAR subject is not present in supplied graph/input IDs")
+    transaction_ids = episode_transaction_ids(episode_transactions)
+    dates = sorted({_date(row.get("ts", row.get("timestamp"))) for row in episode_transactions})
+    exposure = episode_exposure_usd(episode_transactions)
+    components = [f"Customer {customer_id} and card {card_id} are the report subjects.",
+        f"The identified episode contains transactions {', '.join(transaction_ids)} between {dates[0]} and {dates[-1]}.",
+        f"The deterministic episode exposure is USD {exposure:.2f}.",
+        f"The deterministic investigation classified the observed pattern as {pattern.value}."]
+    if connected_card_ids: components.append(f"Connected cards supplied by graph evidence: {', '.join(connected_card_ids)}.")
+    if linkage_claims: components.append("Grounded linkage evidence: " + " ".join(linkage_claims))
+    if evidence_response: components.append("Recorded evidence response: " + evidence_response)
+    components.append("The report reason is: " + decision.reason)
+    narrative = " ".join(components)
+    return SARGeneration(build_sar(decision, narrative=narrative, subjects=subjects, total_amount_usd=exposure, activity_dates=[dates[0], dates[-1]]), get_approval_route(PolicyAction.FILE_REPORT, exposure), True)
 
 
 def evaluate_sar(
