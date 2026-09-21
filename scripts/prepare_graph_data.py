@@ -221,9 +221,9 @@ def main() -> int:
                 addr1 = (row.get("addr1") or "").strip()
                 if addr1:
                     addr2 = (row.get("addr2") or "").strip()
-                    regions.setdefault(addr1, [addr1, addr2])
-                    if not regions[addr1][1] and addr2:
-                        regions[addr1][1] = addr2
+                    regions.setdefault(addr1, [addr1, addr1, addr2])
+                    if not regions[addr1][2] and addr2:
+                        regions[addr1][2] = addr2
                     write_row(writers["billed_in.tsv"], [tid, addr1])
         # Rewrite customer file cleanly (the conditional write above is intentionally not relied on).
         handles["customer.tsv"].close()
