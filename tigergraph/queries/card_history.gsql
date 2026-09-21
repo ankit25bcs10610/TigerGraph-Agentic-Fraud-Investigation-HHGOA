@@ -1,0 +1,11 @@
+CREATE QUERY card_history(STRING card_id) FOR GRAPH FraudInvestigation SYNTAX v2 {
+  card = SELECT c
+         FROM Card:c
+         WHERE c.card_id == card_id;
+
+  history = SELECT t
+            FROM card:c -(MADE>:e)- t:Transaction
+            ORDER BY t.ts ASC;
+
+  PRINT card, history;
+}

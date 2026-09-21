@@ -1,0 +1,44 @@
+CREATE QUERY connected_cards(STRING card_id) FOR GRAPH FraudInvestigation SYNTAX v2 {
+  start = SELECT c
+          FROM Card:c
+          WHERE c.card_id == card_id;
+
+  device_cards = SELECT DISTINCT c2
+                 FROM start:c1 -(MADE>:e1)- t1:Transaction
+                              -(FROM_DEVICE>:e2)- d:DeviceProfile
+                              -( <FROM_DEVICE:e3)- t2:Transaction
+                              -( <MADE:e4)- c2:Card
+                 WHERE c2.card_id != card_id;
+
+  region_cards = SELECT DISTINCT c2
+                 FROM start:c1 -(MADE>:e1)- t1:Transaction
+                              -(BILLED_IN>:e2)- r:BillingRegion
+                              -( <BILLED_IN:e3)- t2:Transaction
+                              -( <MADE:e4)- c2:Card
+                 WHERE c2.card_id != card_id;
+
+  email_cards = SELECT DISTINCT c2
+               FROM start:c1 -(MADE>:e1)- t1:Transaction
+                            -(PURCHASER_EMAIL>:e2)- d:EmailDomain
+                            -( <PURCHASER_EMAIL:e3)- t2:Transaction
+                            -( <MADE:e4)- c2:Card
+               WHERE c2.card_id != card_id;
+
+  closed_primary_cards = SELECT DISTINCT c2
+                         FROM start:c1 -( <ON_CARD:e1)- cc:ClosedCase
+                                      -(CONNECTED_TO>:e2)- c2:Card
+                         WHERE c2.card_id != card_id;
+
+  closed_connected_cards = SELECT DISTINCT c2
+                           FROM start:c1 -( <CONNECTED_TO:e1)- cc:ClosedCase
+                                        -(ON_CARD>:e2)- c2:Card
+                           WHERE c2.card_id != card_id;
+
+  closed_peer_cards = SELECT DISTINCT c2
+                      FROM start:c1 -( <CONNECTED_TO:e1)- cc:ClosedCase
+                                   -(CONNECTED_TO>:e2)- c2:Card
+                      WHERE c2.card_id != card_id;
+
+  PRINT start, device_cards, region_cards, email_cards,
+        closed_primary_cards, closed_connected_cards, closed_peer_cards;
+}

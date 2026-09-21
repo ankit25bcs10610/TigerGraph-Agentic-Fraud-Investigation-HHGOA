@@ -1,0 +1,22 @@
+CREATE QUERY transaction_context(STRING transaction_id) FOR GRAPH FraudInvestigation SYNTAX v2 {
+  target = SELECT t
+           FROM Transaction:t
+           WHERE t.transaction_id == transaction_id;
+
+  cards = SELECT c
+          FROM target:t -( <MADE:e)- c:Card;
+
+  customers = SELECT customer
+              FROM cards:c -( <OWNS:e)- customer:Customer;
+
+  devices = SELECT d
+             FROM target:t -(FROM_DEVICE>:e)- d:DeviceProfile;
+
+  email_domains = SELECT d
+                  FROM target:t -(PURCHASER_EMAIL>:e)- d:EmailDomain;
+
+  regions = SELECT r
+            FROM target:t -(BILLED_IN>:e)- r:BillingRegion;
+
+  PRINT target, cards, customers, devices, email_domains, regions;
+}

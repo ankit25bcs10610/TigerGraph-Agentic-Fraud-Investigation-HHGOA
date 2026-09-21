@@ -1,0 +1,18 @@
+CREATE QUERY prior_cases(STRING customer_id, STRING card_id) FOR GRAPH FraudInvestigation SYNTAX v2 {
+  cases = SELECT cc
+          FROM ClosedCase:cc
+          WHERE cc.customer_id == customer_id
+             OR cc.card_id == card_id;
+
+  transactions = SELECT DISTINCT t
+                 FROM cases:cc -(INVOLVES>:e)- t:Transaction
+                 ORDER BY t.ts ASC;
+
+  primary_cards = SELECT DISTINCT c
+                  FROM cases:cc -(ON_CARD>:e)- c:Card;
+
+  connected_cards = SELECT DISTINCT c
+                   FROM cases:cc -(CONNECTED_TO>:e)- c:Card;
+
+  PRINT cases, transactions, primary_cards, connected_cards;
+}

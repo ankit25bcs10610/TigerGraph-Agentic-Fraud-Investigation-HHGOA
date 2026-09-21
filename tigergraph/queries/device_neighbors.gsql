@@ -1,0 +1,21 @@
+CREATE QUERY device_neighbors(STRING device_profile_id) FOR GRAPH FraudInvestigation SYNTAX v2 {
+  device = SELECT d
+           FROM DeviceProfile:d
+           WHERE d.device_profile_id == device_profile_id;
+
+  transactions = SELECT t
+                 FROM device:d -( <FROM_DEVICE:e)- t:Transaction
+                 ORDER BY t.ts ASC;
+
+  cards = SELECT DISTINCT c
+          FROM transactions:t -( <MADE:e)- c:Card;
+
+  customers = SELECT DISTINCT customer
+              FROM cards:c -( <OWNS:e)- customer:Customer;
+
+  related_fraud_cases = SELECT DISTINCT cc
+                        FROM transactions:t -( <INVOLVES:e)- cc:ClosedCase
+                        WHERE cc.outcome == "confirmed_fraud";
+
+  PRINT device, transactions, cards, customers, related_fraud_cases;
+}

@@ -1,0 +1,16 @@
+CREATE QUERY card_window(STRING card_id, STRING transaction_id, UINT hours) FOR GRAPH FraudInvestigation SYNTAX v2 {
+  target = SELECT t
+           FROM Card:c -(MADE>:e)- t:Transaction
+           WHERE c.card_id == card_id
+             AND t.transaction_id == transaction_id;
+
+  window = SELECT t
+           FROM target:anchor -( <MADE:e1)- c:Card -(MADE>:e2)- t:Transaction
+           WHERE (t.transaction_dt >= anchor.transaction_dt
+                  AND t.transaction_dt - anchor.transaction_dt <= hours * 3600)
+              OR (anchor.transaction_dt > t.transaction_dt
+                  AND anchor.transaction_dt - t.transaction_dt <= hours * 3600)
+           ORDER BY t.ts ASC;
+
+  PRINT target, window;
+}

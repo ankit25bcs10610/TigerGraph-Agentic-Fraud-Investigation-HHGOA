@@ -1,0 +1,41 @@
+CREATE QUERY fraud_episode_candidates(STRING transaction_id) FOR GRAPH FraudInvestigation SYNTAX v2 {
+  target = SELECT t
+           FROM Transaction:t
+           WHERE t.transaction_id == transaction_id;
+
+  card_candidates = SELECT DISTINCT t
+                   FROM target:anchor -( <MADE:e1)- c:Card -(MADE>:e2)- t:Transaction
+                   WHERE t.transaction_id != transaction_id
+                     AND ((t.transaction_dt >= anchor.transaction_dt
+                           AND t.transaction_dt - anchor.transaction_dt <= 172800)
+                       OR (anchor.transaction_dt > t.transaction_dt
+                           AND anchor.transaction_dt - t.transaction_dt <= 172800))
+                   ORDER BY t.ts ASC;
+
+  device_candidates = SELECT DISTINCT t
+                     FROM target:anchor -(FROM_DEVICE>:e1)- d:DeviceProfile
+                                  -( <FROM_DEVICE:e2)- t:Transaction
+                     WHERE t.transaction_id != transaction_id
+                     ORDER BY t.ts ASC;
+
+  region_candidates = SELECT DISTINCT t
+                     FROM target:anchor -(BILLED_IN>:e1)- r:BillingRegion
+                                  -( <BILLED_IN:e2)- t:Transaction
+                     WHERE t.transaction_id != transaction_id
+                     ORDER BY t.ts ASC;
+
+  email_candidates = SELECT DISTINCT t
+                    FROM target:anchor -(PURCHASER_EMAIL>:e1)- d:EmailDomain
+                                 -( <PURCHASER_EMAIL:e2)- t:Transaction
+                    WHERE t.transaction_id != transaction_id
+                    ORDER BY t.ts ASC;
+
+  closed_case_candidates = SELECT DISTINCT t
+                           FROM target:anchor -( <INVOLVES:e1)- cc:ClosedCase
+                                        -(INVOLVES>:e2)- t:Transaction
+                           WHERE t.transaction_id != transaction_id
+                           ORDER BY t.ts ASC;
+
+  PRINT target, card_candidates, device_candidates, region_candidates,
+        email_candidates, closed_case_candidates;
+}
