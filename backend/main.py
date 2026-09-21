@@ -7,6 +7,9 @@ from typing import Any, Protocol
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class CaseInputProvider(Protocol):

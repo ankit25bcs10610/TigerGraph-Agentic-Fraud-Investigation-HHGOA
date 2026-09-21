@@ -33,7 +33,7 @@ def test_reference_routes_are_wired():
     assert client.get("/cases").json() == [{"case_id": "demo-1"}]
     assert client.post("/investigations/start", json={"case_id": "demo-1"}).status_code == 200
     assert client.post("/investigations/demo-1/evidence", json={"evidence": {"result": "unknown"}}).status_code == 200
-    assert client.post("/investigations/demo-1/approval", json={"action": "MONITOR_CARD", "approved": True}).status_code == 200
+    assert client.post("/investigations/demo-1/approval", headers={"x-user-role": "fraud_approver"}, json={"action": "MONITOR_CARD", "approved": True}).status_code == 200
 
 
 def test_unconfigured_runtime_is_explicit():
