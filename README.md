@@ -154,6 +154,29 @@ npm run dev
 
 Set `NEXT_PUBLIC_API_BASE_URL` in `frontend/.env.local` to the URL of the separately running investigation API. The frontend intentionally does not fall back to locally fabricated data when the API is unavailable.
 
+### Local API reference runtime
+
+The repository includes a trigger-only reference composition. It reads the real benchmark case pack, exposes `GET /cases`, and proves the API/frontend wiring without inventing fraud results. It deliberately stops before graph-backed investigation until a production workflow is injected:
+
+```bash
+cp .env.example .env
+# Set CASE_PACK_PATH to the supplied case_pack.csv path.
+set -a && source .env && set +a
+uvicorn backend.main:app --reload --port 8000
+```
+
+The API exposes `GET /health`, `GET /cases`, investigation start/state, evidence response, and approval endpoints. Set `APP_API_KEY` to require an `x-api-key` header and `APP_APPROVER_ROLE` to require `x-user-role` on approval requests. For a live frontend/API split, set `FRONTEND_ORIGINS` explicitly.
+
+### Docker reference deployment
+
+The reference API and workbench can be started with Docker after placing the supplied `case_pack.csv` in the configured data directory:
+
+```bash
+CASE_PACK_DIR=/absolute/path/to/data docker compose up --build
+```
+
+This packages the trigger-only API runtime. A production deployment must inject the real TigerGraph-backed workflow and use a proper identity provider for analyst authentication and approvals.
+
 ### TigerGraph
 
 Prepare and validate source data before loading it. The scripts support a safe sample-first workflow:
@@ -205,6 +228,7 @@ Case output validators are available in `scripts/validate_case_output.py` and `s
 - [TigerGraph MCP integration](docs/TIGERGRAPH_MCP.md)
 - [GraphRAG](docs/GRAPHRAG.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [CI workflow](.github/workflows/ci.yml)
 
 ## Project constraints
 
@@ -213,9 +237,9 @@ Case output validators are available in `scripts/validate_case_output.py` and `s
 - Do not let an LLM override deterministic graph evidence, scores, stopping, policy, or approval routing.
 - Do not treat the benchmark `case_pack.csv` as historical fraud truth.
 
-## License
+## Data-quality limitation
 
-No license has been added to this repository yet.
+The supplied historical data contains closed-case transaction/card-label mismatches. These are preserved and surfaced by validation; card-based historical conclusions must not be treated as fully reliable until the source mapping is resolved. See [docs/DATASET_ANALYSIS.md](docs/DATASET_ANALYSIS.md) and the validation reports for the observed mismatch counts.
 
 ## Contributors
 

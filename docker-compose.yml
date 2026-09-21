@@ -1,0 +1,24 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      CASE_PACK_PATH: /data/case_pack.csv
+      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:3000}
+      APP_API_KEY: ${APP_API_KEY:-}
+      APP_APPROVER_ROLE: ${APP_APPROVER_ROLE:-}
+    volumes:
+      - ${CASE_PACK_DIR:-./data}:/data:ro
+    ports:
+      - "8000:8000"
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api

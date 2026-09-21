@@ -12,3 +12,4 @@ __pycache__/
 # Frontend build and dependency artifacts
 frontend/node_modules/
 frontend/.next/
+frontend/tsconfig.tsbuildinfo

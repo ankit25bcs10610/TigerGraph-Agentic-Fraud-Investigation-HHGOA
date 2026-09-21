@@ -5,3 +5,5 @@ sentence-transformers
 openai
 langgraph
 langgraph-checkpoint-sqlite
+fastapi
+uvicorn
