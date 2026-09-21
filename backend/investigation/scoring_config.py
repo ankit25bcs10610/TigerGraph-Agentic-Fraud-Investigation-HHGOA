@@ -20,3 +20,15 @@ class ScoringConfig:
 
 
 DEFAULT_SCORING_CONFIG = ScoringConfig()
+
+
+@dataclass(frozen=True)
+class StoppingConfig:
+    """Thresholds copied from the README stopping policy."""
+
+    strong_fraud_threshold: float = 0.85
+    strong_legitimate_threshold: float = 0.15
+    minimum_independent_evidence: int = 2
+
+
+DEFAULT_STOPPING_CONFIG = StoppingConfig()
