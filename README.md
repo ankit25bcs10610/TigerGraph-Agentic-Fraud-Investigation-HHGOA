@@ -216,3 +216,7 @@ Case output validators are available in `scripts/validate_case_output.py` and `s
 ## License
 
 No license has been added to this repository yet.
+
+## Contributors
+
+- Ankit Pandey
