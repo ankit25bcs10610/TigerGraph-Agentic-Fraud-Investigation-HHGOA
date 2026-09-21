@@ -1,3 +1,7 @@
 tigergraph-mcp
 mcp
 python-dotenv
+sentence-transformers
+openai
+langgraph
+langgraph-checkpoint-sqlite

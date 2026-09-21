@@ -116,6 +116,58 @@ class TigerGraphService:
             )
         return data
 
+    async def list_vertices(self, vertex_type: str, *, limit: int) -> list[dict[str, Any]]:
+        """Read vertices through the MCP server; callers choose a safe page size."""
+        data = await self._call(
+            "tigergraph__get_nodes",
+            {"graph_name": self.graph_name, "vertex_type": vertex_type, "limit": limit},
+        )
+        vertices = data.get("vertices") or data.get("nodes")
+        if not isinstance(vertices, list) or not all(isinstance(item, dict) for item in vertices):
+            raise TigerGraphMCPMalformedResponseError("get_nodes returned an invalid vertex list.")
+        return vertices
+
+    async def list_vector_attributes(self, vertex_type: str) -> dict[str, Any]:
+        return await self._call(
+            "tigergraph__list_vector_attributes",
+            {"graph_name": self.graph_name, "vertex_type": vertex_type},
+        )
+
+    async def add_vector_attribute(
+        self, *, vertex_type: str, vector_name: str, dimension: int, metric: str
+    ) -> dict[str, Any]:
+        return await self._call(
+            "tigergraph__add_vector_attribute",
+            {"graph_name": self.graph_name, "vertex_type": vertex_type,
+             "vector_name": vector_name, "dimension": dimension, "metric": metric},
+        )
+
+    async def get_vector_index_status(
+        self, *, vertex_type: str, vector_name: str
+    ) -> dict[str, Any]:
+        return await self._call(
+            "tigergraph__get_vector_index_status",
+            {"graph_name": self.graph_name, "vertex_type": vertex_type, "vector_name": vector_name},
+        )
+
+    async def upsert_vectors(
+        self, *, vertex_type: str, vector_attribute: str, vectors: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        return await self._call(
+            "tigergraph__upsert_vectors",
+            {"graph_name": self.graph_name, "vertex_type": vertex_type,
+             "vector_attribute": vector_attribute, "vectors": vectors},
+        )
+
+    async def search_top_k_similarity(
+        self, *, vertex_type: str, vector_attribute: str, query_vector: list[float], top_k: int
+    ) -> dict[str, Any]:
+        return await self._call(
+            "tigergraph__search_top_k_similarity",
+            {"graph_name": self.graph_name, "vertex_type": vertex_type,
+             "vector_attribute": vector_attribute, "query_vector": query_vector, "top_k": top_k},
+        )
+
     async def run_installed_query(
         self, query_name: str, params: Mapping[str, Any] | None = None
     ) -> dict[str, Any]:

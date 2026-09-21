@@ -1,0 +1,16 @@
+// GraphRAG schema extension. Apply once after FraudInvestigationGraph exists.
+// The vector attribute is intentionally created through the official MCP tool:
+// its dimension must match the configured embedding provider at runtime.
+// Before applying, check that KnowledgeChunk does not already exist; do not
+// re-run CREATE VERTEX against an existing vertex type.
+
+USE GRAPH FraudInvestigationGraph;
+
+CREATE VERTEX KnowledgeChunk (
+    PRIMARY_ID chunk_id STRING,
+    source_type STRING,
+    source_id STRING,
+    title STRING,
+    text STRING,
+    section STRING
+) WITH primary_id_as_attribute="true";
