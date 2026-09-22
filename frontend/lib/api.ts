@@ -16,9 +16,21 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   }
   return response.json() as Promise<T>;
 }
+async function uploadCasePack(file: File): Promise<{ status: string; workflow_configured: boolean; case_count: number }> {
+  if (!configuredBaseUrl) throw new Error("The investigation API is not configured. Set NEXT_PUBLIC_API_BASE_URL in frontend/.env.local.");
+  let response: Response;
+  try { response = await fetch(`${configuredBaseUrl}/setup/case-pack`, { method: "POST", headers: { ...(apiKey ? { "x-api-key": apiKey } : {}) }, body: await file.text() }); }
+  catch { throw new Error("The investigation API could not be reached. Confirm it is running and permits this frontend origin."); }
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { detail?: string } | null;
+    throw new Error(body?.detail || `The investigation API returned ${response.status}.`);
+  }
+  return response.json() as Promise<{ status: string; workflow_configured: boolean; case_count: number }>;
+}
 export const api = {
   isConfigured: Boolean(configuredBaseUrl),
   health: () => call<ApiHealth>("/health", { headers: { accept: "application/json" } }),
+  uploadCasePack,
   cases: () => call<CaseOption[]>("/cases"),
   start: (caseId: string) => call<Investigation>("/investigations/start", { method: "POST", body: JSON.stringify({ case_id: caseId }) }),
   approve: (caseId: string, action: string, approved: boolean) => call<Investigation>(`/investigations/${caseId}/approval`, { method: "POST", body: JSON.stringify({ action, approved }) }),

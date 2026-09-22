@@ -25,7 +25,7 @@ printf 'NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000\n' > .env.local
 npm run dev -- --port 3001
 ```
 
-Open `http://127.0.0.1:3001`. A green **System ready** badge confirms that the API and benchmark case pack are available. An amber **Setup required** badge means the API is reachable but `CASE_PACK_PATH` still needs the absolute path to the supplied `case_pack.csv`; it is not an API outage.
+Open `http://127.0.0.1:3001`. A green **System ready** badge confirms that the API and benchmark case pack are available. An amber **Setup required** badge means the API is reachable but the benchmark input has not been loaded yet; choose the supplied `case_pack.csv` in the workbench, or set `CASE_PACK_PATH` before starting the API. It is not an API outage.
 
 > The reference runtime intentionally uses real case triggers only. It never creates invented benchmark cases or fabricated fraud decisions when the case pack is missing.
 
@@ -250,7 +250,7 @@ For cost-conscious grounded summaries, use `LLM_PROVIDER=openai` and `LLM_MODEL=
 | What you see | Meaning | Fix |
 |---|---|---|
 | **System ready** | API and case workflow are ready. | Select a case and begin the investigation. |
-| **Setup required** | API is running, but the benchmark case pack is not configured. | Set `CASE_PACK_PATH` to the absolute `case_pack.csv` path and restart the API. |
+| **Setup required** | API is running, but the benchmark case pack is not configured. | Choose `case_pack.csv` in the workbench, or set `CASE_PACK_PATH` to its absolute path and restart the API. |
 | **API offline** | The frontend cannot reach `NEXT_PUBLIC_API_BASE_URL`. | Start the API, confirm port `8000`, and use `http://127.0.0.1:8000` in `frontend/.env.local`. |
 | `503 /ready` | The API has started without its case provider/workflow. | This is expected until `CASE_PACK_PATH` or production adapters are supplied. |
 

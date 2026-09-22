@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import os
 import time
+import tempfile
+from pathlib import Path
 from uuid import uuid4
 from typing import Any, Protocol
 
@@ -42,6 +44,8 @@ class EvidenceRequest(BaseModel):
 
 def create_app(workflow: Workflow | None = None, case_provider: CaseInputProvider | None = None) -> FastAPI:
     app = FastAPI(title="Fraud Investigation API", version="1.0.0")
+    app.state.workflow = workflow
+    app.state.case_provider = case_provider
     origins = [item.strip() for item in os.getenv("FRONTEND_ORIGINS", "").split(",") if item.strip()]
     if origins:
         app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["GET", "POST"], allow_headers=["*"])
@@ -75,20 +79,48 @@ def create_app(workflow: Workflow | None = None, case_provider: CaseInputProvide
             raise HTTPException(403, "Approval role required")
 
     def dependencies() -> tuple[Workflow, CaseInputProvider]:
-        if workflow is None or case_provider is None:
+        if app.state.workflow is None or app.state.case_provider is None:
             raise HTTPException(503, "Investigation workflow is not configured. Set CASE_PACK_PATH or inject production adapters.")
-        return workflow, case_provider
+        return app.state.workflow, app.state.case_provider
 
     @app.get("/health")
     def health() -> dict[str, Any]:
-        return {"status": "ok", "workflow_configured": workflow is not None and case_provider is not None, "auth_enabled": bool(os.getenv("APP_API_KEY"))}
+        return {"status": "ok", "workflow_configured": app.state.workflow is not None and app.state.case_provider is not None, "auth_enabled": bool(os.getenv("APP_API_KEY"))}
 
     @app.get("/ready")
     def ready() -> dict[str, Any]:
-        configured = workflow is not None and case_provider is not None
+        configured = app.state.workflow is not None and app.state.case_provider is not None
         if not configured:
             raise HTTPException(503, "Investigation workflow is not configured")
         return {"status": "ready", "workflow_configured": True}
+
+    @app.post("/setup/case-pack")
+    async def setup_case_pack(request: Request) -> dict[str, Any]:
+        """Load a user-selected local benchmark CSV into the reference runtime.
+
+        This is a local convenience path for the analyst workbench. It accepts
+        only the CSV payload and never treats it as graph or historical truth.
+        """
+        authorize(request)
+        payload = await request.body()
+        if not payload:
+            raise HTTPException(422, "Upload the supplied case_pack.csv before continuing.")
+        path: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(prefix="fraud-case-pack-", suffix=".csv", delete=False) as handle:
+                handle.write(payload)
+                path = handle.name
+            from backend.demo_runtime import build_reference_runtime
+            provider, service = build_reference_runtime(path)
+            if not provider.list():
+                raise ValueError("The case pack contains no cases.")
+        except (OSError, UnicodeError, ValueError, KeyError) as error:
+            if path:
+                Path(path).unlink(missing_ok=True)
+            raise HTTPException(422, f"The uploaded file is not a valid case_pack.csv: {error}") from error
+        app.state.case_provider = provider
+        app.state.workflow = service
+        return {"status": "ready", "workflow_configured": True, "case_count": len(provider.list())}
 
     @app.get("/cases")
     def cases(request: Request) -> list[dict[str, Any]]:
