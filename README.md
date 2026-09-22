@@ -165,7 +165,7 @@ set -a && source .env && set +a
 uvicorn backend.main:app --reload --port 8000
 ```
 
-The API exposes `GET /health`, `GET /cases`, investigation start/state, evidence response, and approval endpoints. Set `APP_API_KEY` to require an `x-api-key` header and `APP_APPROVER_ROLE` to require `x-user-role` on approval requests. For a live frontend/API split, set `FRONTEND_ORIGINS` explicitly.
+The API exposes `GET /health`, `GET /ready`, `GET /cases`, investigation start/state, evidence response, and approval endpoints. Set `APP_API_KEY` to require an `x-api-key` header and `APP_APPROVER_ROLE` to require `x-user-role` on approval requests. Set `APP_RATE_LIMIT_PER_MINUTE` to a positive value to enable the per-process local rate limit. For a live frontend/API split, set `FRONTEND_ORIGINS` explicitly.
 
 ### Docker reference deployment
 

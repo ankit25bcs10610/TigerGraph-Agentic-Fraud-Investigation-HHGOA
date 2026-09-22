@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import os
+import time
 from uuid import uuid4
 from typing import Any, Protocol
 
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
@@ -47,6 +49,19 @@ def create_app(workflow: Workflow | None = None, case_provider: CaseInputProvide
     @app.middleware("http")
     async def add_request_id(request: Request, call_next):
         request_id = request.headers.get("x-request-id") or str(uuid4())
+        limit = int(os.getenv("APP_RATE_LIMIT_PER_MINUTE", "0") or "0")
+        if limit > 0:
+            now = time.monotonic()
+            bucket = getattr(app.state, "rate_limit_bucket", {})
+            client = request.client.host if request.client else "unknown"
+            recent = [stamp for stamp in bucket.get(client, []) if now - stamp < 60]
+            if len(recent) >= limit:
+                response = JSONResponse({"detail": "Rate limit exceeded", "request_id": request_id}, status_code=429)
+                response.headers["retry-after"] = "60"
+                response.headers["x-request-id"] = request_id
+                return response
+            bucket[client] = [*recent, now]
+            app.state.rate_limit_bucket = bucket
         response: Response = await call_next(request)
         response.headers["x-request-id"] = request_id
         return response
@@ -67,6 +82,13 @@ def create_app(workflow: Workflow | None = None, case_provider: CaseInputProvide
     @app.get("/health")
     def health() -> dict[str, Any]:
         return {"status": "ok", "workflow_configured": workflow is not None and case_provider is not None, "auth_enabled": bool(os.getenv("APP_API_KEY"))}
+
+    @app.get("/ready")
+    def ready() -> dict[str, Any]:
+        configured = workflow is not None and case_provider is not None
+        if not configured:
+            raise HTTPException(503, "Investigation workflow is not configured")
+        return {"status": "ready", "workflow_configured": True}
 
     @app.get("/cases")
     def cases(request: Request) -> list[dict[str, Any]]:
