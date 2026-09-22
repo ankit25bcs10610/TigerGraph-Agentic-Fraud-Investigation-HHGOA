@@ -7,4 +7,5 @@ langgraph
 langgraph-checkpoint-sqlite
 fastapi
 uvicorn
+anyio
 pytest

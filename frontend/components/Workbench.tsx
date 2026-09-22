@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { Action, CaseOption, Evidence, EvidenceRequest, Investigation } from "../lib/types";
 import { Audit, Sar, SimilarCases, Timeline } from "./DataPanels";
@@ -26,15 +26,51 @@ export function Workbench() {
   const [availableCases, setAvailableCases] = useState<CaseOption[]>([]);
   const [selected, setSelected] = useState("");
   const [data, setData] = useState<Investigation | null>(null);
-  const [tab, setTab] = useState<Tab>("Graph Evidence");
+  const [tab, setTab] = useState<Tab>("Overview");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [connection, setConnection] = useState<"checking" | "online" | "setup" | "offline">(api.isConfigured ? "checking" : "offline");
+  const [queueFilter, setQueueFilter] = useState("");
   const [responses, setResponses] = useState<Record<string, { result: string; details: string }>>({});
 
   useEffect(() => {
     if (!api.isConfigured) return;
-    api.cases().then((items) => { setAvailableCases(items); setSelected(items[0]?.case_id ?? ""); }).catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to load case queue."));
+    let active = true;
+    api.health().then((health) => {
+      if (!active) return;
+      if (!health.workflow_configured) {
+        setConnection("setup");
+        return;
+      }
+      setConnection("online");
+      return api.cases();
+    }).then((items) => {
+      if (!active || !items) return;
+      setAvailableCases(items);
+      setSelected((current) => current || items[0]?.case_id || "");
+    }).catch((caught) => {
+      if (!active) return;
+      setConnection("offline");
+      setError(caught instanceof Error ? caught.message : "Unable to connect to the investigation API.");
+    });
+    return () => { active = false; };
   }, []);
+
+  const filteredCases = useMemo(() => {
+    const query = queueFilter.trim().toLowerCase();
+    if (!query) return availableCases;
+    return availableCases.filter((item) => `${item.case_id} ${item.trigger_type ?? ""}`.toLowerCase().includes(query));
+  }, [availableCases, queueFilter]);
+
+  async function retryConnection() {
+    setError(""); setConnection("checking");
+    try {
+      const health = await api.health();
+      if (!health.workflow_configured) { setConnection("setup"); setAvailableCases([]); return; }
+      setConnection("online"); setAvailableCases(await api.cases());
+    }
+    catch (caught) { setConnection("offline"); setError(caught instanceof Error ? caught.message : "Unable to connect to the investigation API."); }
+  }
 
   async function start() {
     if (!selected) return;
@@ -63,12 +99,13 @@ export function Workbench() {
 
   const requests = data?.evidence_requests ?? [];
   const assessedCase = data?.case;
+  const connectionLabel = connection === "checking" ? "Checking API" : connection === "online" ? "System ready" : connection === "setup" ? "Setup required" : "API offline";
   return <main className="workbench-shell">
-    <header className="topbar"><div className="brand-mark"><span className="brand-shield">◇</span><div><strong>SENTINEL</strong><small>Agentic Fraud Intelligence</small></div></div><div className="global-search"><span>⌕</span><input aria-label="Search cases, customers, transactions" placeholder="Search cases, customers, transactions…" /></div><div className="topbar-right"><span className={`connection ${api.isConfigured ? "ready" : "offline"}`}><i />{api.isConfigured ? "TigerGraph Connected" : "API Offline"}</span><span className="analyst-pill">AD <b>Analyst</b>⌄</span></div></header>
+    <header className="topbar"><div className="brand-mark"><span className="brand-shield">◇</span><div><strong>SENTINEL</strong><small>Agentic Fraud Intelligence</small></div></div><div className="global-search"><span>⌕</span><input aria-label="Search cases, customers, transactions" placeholder="Search cases, customers, transactions…" value={queueFilter} onChange={(event) => setQueueFilter(event.target.value)} /></div><div className="topbar-right"><span className={`connection ${connection}`}><i />{connectionLabel}</span><span className="analyst-pill"><span className="analyst-avatar">AD</span><b>Analyst</b>⌄</span></div></header>
     <div className="workbench-layout">
-      <aside className="case-queue"><nav className="side-nav" aria-label="Primary navigation"><p className="nav-label">Workspace</p><button className={`nav-item ${tab === "Overview" ? "active" : ""}`} onClick={() => setTab("Overview")} type="button">⌂ <span>Dashboard</span></button><button className={`nav-item ${data ? "active" : ""}`} onClick={() => setTab("Overview")} type="button">◉ <span>Investigations</span></button><button className="nav-item" onClick={() => document.querySelector(".case-queue")?.scrollIntoView({ behavior: "smooth" })} type="button">▣ <span>Cases</span></button><button className={`nav-item ${tab === "Graph Evidence" ? "active" : ""}`} onClick={() => setTab("Graph Evidence")} type="button">⌘ <span>Graph Explore</span></button><button className={`nav-item ${tab === "SAR" ? "active" : ""}`} onClick={() => setTab("SAR")} type="button">▤ <span>Reports</span></button><button className={`nav-item ${tab === "Audit Trail" ? "active" : ""}`} onClick={() => setTab("Audit Trail")} type="button">▥ <span>Audit Log</span></button><button className="nav-item nav-disabled" onClick={() => setError("Knowledge Base is not configured for this local reference runtime.")} type="button">▧ <span>Knowledge Base</span></button><p className="nav-label nav-system">System</p><button className="nav-item nav-disabled" onClick={() => setError("Settings are managed through environment configuration, not the browser.")} type="button">⚙ <span>Settings</span></button></nav><div className="queue-head"><div><p className="eyebrow">Backend queue</p><h2>Case intake</h2></div><span>{availableCases.length}</span></div><p className="queue-copy">Cases are loaded from the backend; no benchmark IDs are generated in the browser.</p><div className="case-list">{availableCases.map((item) => <button className={item.case_id === selected ? "selected" : ""} key={item.case_id} onClick={() => setSelected(item.case_id)} type="button"><strong>{item.case_id}</strong><small>{item.trigger_type || "Ready"}</small></button>)}</div><button className="start-button" disabled={loading || !selected || !api.isConfigured} onClick={start} type="button">{loading ? "Working…" : `Start ${selected || "case"}`}</button><div className="graph-health"><i /> <span>TigerGraph<br/><b>{api.isConfigured ? "Connected" : "Not connected"}</b></span></div></aside>
-      <section className="workspace">{error && <p className="notice error" role="alert">{error}</p>}{!api.isConfigured && <p className="notice config"><strong>Connect the investigation API.</strong><span>Set <code>NEXT_PUBLIC_API_BASE_URL</code> in <code>frontend/.env.local</code>, then restart Next.js.</span></p>}
-        {!data ? <section className="intake-state"><p className="eyebrow">Investigation intake</p><h2>{api.isConfigured ? "Select a backend case" : "API connection required"}</h2><p>{api.isConfigured ? "Start a case to load graph evidence, deterministic decisions, evidence requests, and audit events." : "The workbench will not fabricate a queue or investigation result while the API is unavailable."}</p></section> : <>
+      <aside className="case-queue"><nav className="side-nav" aria-label="Primary navigation"><p className="nav-label">Workspace</p><button className={`nav-item ${tab === "Overview" ? "active" : ""}`} onClick={() => setTab("Overview")} type="button">⌂ <span>Dashboard</span></button><button className={`nav-item ${data ? "active" : ""}`} onClick={() => setTab("Overview")} type="button">◉ <span>Investigations</span></button><button className="nav-item" onClick={() => document.querySelector(".case-queue")?.scrollIntoView({ behavior: "smooth" })} type="button">▣ <span>Cases</span></button><button className={`nav-item ${tab === "Graph Evidence" ? "active" : ""}`} onClick={() => setTab("Graph Evidence")} type="button">⌘ <span>Graph Explore</span></button><button className={`nav-item ${tab === "SAR" ? "active" : ""}`} onClick={() => setTab("SAR")} type="button">▤ <span>Reports</span></button><button className={`nav-item ${tab === "Audit Trail" ? "active" : ""}`} onClick={() => setTab("Audit Trail")} type="button">▥ <span>Audit Log</span></button><button className="nav-item nav-disabled" onClick={() => setError("Knowledge Base is not configured for this local reference runtime.")} type="button">▧ <span>Knowledge Base</span></button><p className="nav-label nav-system">System</p><button className="nav-item nav-disabled" onClick={() => setError("Settings are managed through environment configuration, not the browser.")} type="button">⚙ <span>Settings</span></button></nav><div className="queue-head"><div><p className="eyebrow">Backend queue</p><h2>Case intake</h2></div><span>{availableCases.length}</span></div><p className="queue-copy">Live benchmark cases from the investigation API. Select a case to begin a grounded review.</p><div className="case-list">{filteredCases.map((item) => <button className={item.case_id === selected ? "selected" : ""} key={item.case_id} onClick={() => setSelected(item.case_id)} type="button"><strong>{item.case_id}</strong><small>{item.trigger_type || "Ready"}</small></button>)}{!filteredCases.length && <div className="queue-empty">{availableCases.length ? "No cases match your search." : "No cases returned by the API."}</div>}</div><button className="start-button" disabled={loading || !selected || connection !== "online"} onClick={start} type="button">{loading ? "Working…" : `Start ${selected || "case"}`}</button>{connection !== "online" && <button className="retry-button" onClick={retryConnection} type="button">Retry connection</button>}<div className="graph-health"><i /> <span>Investigation API<br/><b>{connectionLabel}</b></span></div></aside>
+      <section className="workspace">{error && <p className="notice error" role="alert"><strong>Connection issue</strong><span>{error}</span></p>}{!api.isConfigured && <p className="notice config"><strong>Connect the investigation API.</strong><span>Set <code>NEXT_PUBLIC_API_BASE_URL</code> in <code>frontend/.env.local</code>, then restart Next.js.</span></p>}
+        {!data ? <section className="intake-state"><div className="intake-orbit orbit-one" /><div className="intake-orbit orbit-two" /><div className="intake-icon">⌁</div><p className="eyebrow">Fraud operations command center</p><h2>{connection === "online" ? "Select a case. See the full picture." : connection === "checking" ? "Securing your investigation workspace…" : connection === "setup" ? "Your API is online. Load the case pack to investigate." : "Investigation API unavailable"}</h2><p>{connection === "online" ? "Start a benchmark case to assemble graph evidence, policy decisions, evidence requests, and a complete audit record in one defensible workflow." : connection === "setup" ? "Add the supplied case_pack.csv path to CASE_PACK_PATH, then restart the API. Sentinel will automatically load the twenty benchmark triggers—no browser-side sample data or fabricated outcomes." : "The workbench cannot reach the local API. Start the FastAPI service, then retry the connection."}</p>{connection === "setup" && <div className="setup-card"><div><span className="setup-kicker">Required configuration</span><strong>CASE_PACK_PATH</strong><small>Absolute path to the supplied case_pack.csv</small></div><code>CASE_PACK_PATH=/path/to/case_pack.csv</code></div>}{connection !== "online" && <button className="primary-cta" onClick={retryConnection} type="button">{connection === "setup" ? "Check configuration" : "Retry connection"}</button>}<div className="intake-points"><span><i />Graph-grounded evidence</span><span><i />Policy-controlled actions</span><span><i />Auditable decisions</span></div></section> : <>
           <section className="case-hero"><div><p className="eyebrow">Fraud investigation</p><h2>{data.case_id} <span className="case-status">{data.status ?? "INVESTIGATING"}</span></h2><p>{assessedCase?.summary || data.message || data.trigger_text}</p></div><div className="case-meta"><span>Customer <b>{data.customer_id || "Not returned"}</b></span><span>Card <b>{data.card_id || "Not returned"}</b></span><span>Flagged transaction <b>{data.flagged_txn_id || "Not returned"}</b></span></div></section>
           <section className="case-metrics"><article><span>Bank risk score</span><strong className="risk-value">{data.risk_score ?? "Not returned"}</strong><small>Input signal only</small></article><article><span>Fraud probability</span><strong className="probability-value">{assessedCase?.fraud_probability == null ? "Not assessed" : `${Math.round(assessedCase.fraud_probability * 100)}%`}</strong><small>Deterministic evidence assessment</small></article><article><span>Exposure</span><strong>{formatExposure(assessedCase?.exposure_usd)}</strong><small>{data.timeline?.length ?? 0} transaction(s) returned</small></article><article><span>Pattern</span><strong>{assessedCase?.pattern?.replaceAll("_", " ") || "Not assessed"}</strong><small>Evidence-derived pattern</small></article><article><span>Status</span><strong>{assessedCase?.status || data.status || "Open"}</strong><small>{data.evidence_requests?.length ? "Awaiting evidence" : "Investigation state"}</small></article></section>
           <nav className="tabs" aria-label="Case workspace views">{tabs.map((item) => <button className={tab === item ? "active" : ""} key={item} onClick={() => setTab(item)} type="button">{item}</button>)}</nav>
