@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import os
+from uuid import uuid4
 from typing import Any, Protocol
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
@@ -42,6 +43,13 @@ def create_app(workflow: Workflow | None = None, case_provider: CaseInputProvide
     origins = [item.strip() for item in os.getenv("FRONTEND_ORIGINS", "").split(",") if item.strip()]
     if origins:
         app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["GET", "POST"], allow_headers=["*"])
+
+    @app.middleware("http")
+    async def add_request_id(request: Request, call_next):
+        request_id = request.headers.get("x-request-id") or str(uuid4())
+        response: Response = await call_next(request)
+        response.headers["x-request-id"] = request_id
+        return response
 
     def authorize(request: Request, approval: bool = False) -> None:
         expected = os.getenv("APP_API_KEY")
