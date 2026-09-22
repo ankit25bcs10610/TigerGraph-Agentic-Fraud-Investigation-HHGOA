@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from backend.demo_runtime import build_reference_runtime
+from backend.demo_runtime import build_preview_runtime, build_reference_runtime
 
 
 def test_reference_runtime_seals_a_chain_for_each_case_event(tmp_path: Path):
@@ -21,3 +21,15 @@ def test_reference_runtime_seals_a_chain_for_each_case_event(tmp_path: Path):
     assert state["integrity"]["event_count"] == 2
     assert state["integrity_ledger"][1]["previous_hash"] == first_hash
     assert state["integrity_ledger"][1]["hash"] == state["integrity"]["latest_hash"]
+
+
+def test_preview_runtime_is_explicitly_simulated_and_interactive():
+    provider, workflow = build_preview_runtime()
+    state = workflow.start_investigation(provider.get("DEMO-001"))
+    assert state["simulation_mode"] is True
+    assert state["case"]["evidence"][0]["simulated"] is True
+    assert state["graph"]["nodes"]
+
+    state = workflow.resume_with_evidence("DEMO-001", {"result": "denied"})
+    assert state["approval_requests"][0]["approval_status"] == "pending"
+    assert state["integrity"]["event_count"] == 2

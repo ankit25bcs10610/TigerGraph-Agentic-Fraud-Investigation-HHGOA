@@ -165,7 +165,9 @@ def create_app(workflow: Workflow | None = None, case_provider: CaseInputProvide
 
 def configured_app() -> FastAPI:
     if not os.getenv("CASE_PACK_PATH"):
-        return create_app()
+        from backend.demo_runtime import build_preview_runtime
+        provider, workflow = build_preview_runtime()
+        return create_app(workflow=workflow, case_provider=provider)
     from backend.demo_runtime import build_reference_runtime
     provider, workflow = build_reference_runtime(os.environ["CASE_PACK_PATH"])
     return create_app(workflow=workflow, case_provider=provider)
