@@ -1,0 +1,4 @@
+case_id,trigger_type,opened_at,flagged_txn_id,customer_id,card_id,risk_score,trigger_text
+SYN-001,synthetic_risk_signal,2026-09-22T10:42:00Z,SYN-TXN-9031,SYN-CUSTOMER-41,SYN-CARD-41,0.82,"SYNTHETIC SAMPLE: unusual device and merchant velocity signal."
+SYN-002,synthetic_customer_report,2026-09-22T11:15:00Z,SYN-TXN-6710,SYN-CUSTOMER-18,SYN-CARD-18,0.61,"SYNTHETIC SAMPLE: customer reported an unfamiliar online purchase."
+SYN-003,synthetic_analyst_request,2026-09-22T12:06:00Z,SYN-TXN-1204,SYN-CUSTOMER-72,SYN-CARD-72,0.48,"SYNTHETIC SAMPLE: analyst requested a linked-device review."

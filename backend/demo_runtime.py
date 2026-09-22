@@ -198,8 +198,8 @@ class PreviewWorkflow:
         return self._states[case_id]
 
 
-def build_reference_runtime(path: str) -> tuple[CasePackProvider, ReferenceWorkflow]:
-    transaction_path = os.getenv("TRANSACTIONS_PATH")
+def build_reference_runtime(path: str, transactions_path: str | None = None) -> tuple[CasePackProvider, ReferenceWorkflow]:
+    transaction_path = transactions_path or os.getenv("TRANSACTIONS_PATH")
     return CasePackProvider(path), ReferenceWorkflow(transaction_path)
 
 
