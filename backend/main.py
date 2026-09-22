@@ -77,17 +77,26 @@ def create_app(workflow: Workflow | None = None, case_provider: CaseInputProvide
     @app.get("/investigations/{case_id}")
     def state(request: Request, case_id: str):
         authorize(request)
-        return dependencies()[0].get_investigation_state(case_id)
+        try:
+            return dependencies()[0].get_investigation_state(case_id)
+        except KeyError:
+            raise HTTPException(404, "Investigation was not found")
 
     @app.post("/investigations/{case_id}/approval")
     def approval(request: Request, case_id: str, payload: ApprovalRequest):
         authorize(request, approval=True)
-        return dependencies()[0].resume_with_approval(case_id, {"action": payload.action, "approved": payload.approved})
+        try:
+            return dependencies()[0].resume_with_approval(case_id, {"action": payload.action, "approved": payload.approved})
+        except KeyError:
+            raise HTTPException(404, "Investigation was not found")
 
     @app.post("/investigations/{case_id}/evidence")
     def evidence(request: Request, case_id: str, payload: EvidenceRequest):
         authorize(request)
-        return dependencies()[0].resume_with_evidence(case_id, payload.evidence)
+        try:
+            return dependencies()[0].resume_with_evidence(case_id, payload.evidence)
+        except KeyError:
+            raise HTTPException(404, "Investigation was not found")
 
     return app
 
