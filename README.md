@@ -4,6 +4,40 @@ An evidence-first fraud-investigation system built for the Hacker House Goa chal
 
 The system is deliberately designed so that an LLM can explain evidence but cannot replace graph queries, change the fraud score, approve restricted actions, or fabricate facts.
 
+## Demo in five minutes
+
+The workbench is designed for a clean, explainable analyst demo: a case enters through the intake queue, the agent gathers graph-grounded context, policy determines the next best action, and the analyst can review evidence, uncertainty, approval routes, and an immutable audit trail in one place.
+
+```bash
+# 1. Create your local configuration (never commit this file).
+cp .env.example .env
+
+# 2. Point this to the supplied benchmark input.
+# CASE_PACK_PATH=/absolute/path/to/case_pack.csv
+
+# 3. Start the API with the same Python environment used for dependencies.
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+
+# 4. In a second terminal, start the workbench.
+cd frontend
+npm install
+printf 'NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000\n' > .env.local
+npm run dev -- --port 3001
+```
+
+Open `http://127.0.0.1:3001`. A green **System ready** badge confirms that the API and benchmark case pack are available. An amber **Setup required** badge means the API is reachable but `CASE_PACK_PATH` still needs the absolute path to the supplied `case_pack.csv`; it is not an API outage.
+
+> The reference runtime intentionally uses real case triggers only. It never creates invented benchmark cases or fabricated fraud decisions when the case pack is missing.
+
+### Demo checklist
+
+- Start with a trigger from the case intake queue.
+- Open Graph Evidence to show relationships and grounded claims.
+- Explain the risk, pattern, exposure, confidence, and remaining uncertainty.
+- Show the controlled evidence-request branch when the policy requires more information.
+- Show the Actions tab to distinguish recommendations from L1/L2 approval-required actions.
+- Finish with SAR and Audit Trail views to demonstrate compliance-grade record keeping.
+
 ## What it does
 
 - Builds a TigerGraph investigation graph from transaction, identity, and historical closed-case data.
@@ -208,6 +242,19 @@ Use environment variables or deployment secret management for credentials. Never
 | `OPENAI_API_KEY` | Optional OpenAI provider | Authentication for LLM synthesis |
 
 The deterministic pipeline remains available if no LLM provider is configured.
+
+For cost-conscious grounded summaries, use `LLM_PROVIDER=openai` and `LLM_MODEL=gpt-4o-mini`. Keep `OPENAI_API_KEY` only in your ignored local `.env` or your deployment secret manager. Embeddings are configured independently with `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, and the same API key when using OpenAI embeddings.
+
+## Runtime status and troubleshooting
+
+| What you see | Meaning | Fix |
+|---|---|---|
+| **System ready** | API and case workflow are ready. | Select a case and begin the investigation. |
+| **Setup required** | API is running, but the benchmark case pack is not configured. | Set `CASE_PACK_PATH` to the absolute `case_pack.csv` path and restart the API. |
+| **API offline** | The frontend cannot reach `NEXT_PUBLIC_API_BASE_URL`. | Start the API, confirm port `8000`, and use `http://127.0.0.1:8000` in `frontend/.env.local`. |
+| `503 /ready` | The API has started without its case provider/workflow. | This is expected until `CASE_PACK_PATH` or production adapters are supplied. |
+
+If the Next.js development server reports missing generated chunks after a build or abrupt restart, stop the dev server, remove only `frontend/.next`, and run `npm run dev` again. `.next` is a generated cache and is safe to recreate.
 
 ## Validation
 
