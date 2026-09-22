@@ -275,6 +275,7 @@ Case output validators are available in `scripts/validate_case_output.py` and `s
 - [TigerGraph MCP integration](docs/TIGERGRAPH_MCP.md)
 - [GraphRAG](docs/GRAPHRAG.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Hackathon demo playbook](docs/HACKATHON_DEMO.md)
 - [CI workflow](.github/workflows/ci.yml)
 
 ## Project constraints
