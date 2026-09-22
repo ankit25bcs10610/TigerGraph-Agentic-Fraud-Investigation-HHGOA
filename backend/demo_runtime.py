@@ -53,7 +53,7 @@ class ReferenceWorkflow:
             ])
             timeline.append({"transaction_id": flagged_id, "ts": transaction.get("ts", ""), "transaction_amt": transaction.get("TransactionAmt", ""), "channel": transaction.get("channel", ""), "risk_score": transaction.get("risk_score", ""), "billing_region": transaction.get("addr1", "")})
             evidence.append({"claim": f"Transaction {flagged_id} is present in the supplied transaction dataset with customer {customer_id} and timestamp {transaction.get('ts', '')}.", "source": "graph", "ref": "local.transactions.csv", "entity_ids": [flagged_id, customer_id]})
-        state = {"case_id": case_id, "trigger": case_input, "status": "evidence_available", "message": "Grounded local transaction context loaded. Fraud assessment remains unavailable until the configured investigation workflow runs.", "graph": {"nodes": nodes, "edges": edges}, "timeline": timeline, "case": {"evidence": evidence}, "audit": [{"type": "local_transaction_lookup", "reference": flagged_id, "grounded": bool(transaction)}]}
+        state = {**case_input, "case_id": case_id, "trigger": case_input, "status": "evidence_available", "message": "Grounded local transaction context loaded. Fraud assessment remains unavailable until the configured investigation workflow runs.", "graph": {"nodes": nodes, "edges": edges}, "timeline": timeline, "case": {"evidence": evidence}, "audit": [{"type": "local_transaction_lookup", "reference": flagged_id, "grounded": bool(transaction)}]}
         self._states[case_id] = state
         return state
 
