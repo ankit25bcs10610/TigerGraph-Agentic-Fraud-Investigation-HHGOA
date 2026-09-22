@@ -5,9 +5,10 @@ type Props = {
   requests: EvidenceRequest[];
   auditCount: number;
   status?: string;
+  integrity?: { status: string; event_count: number; latest_hash: string };
 };
 
-export function CaseIntegrity({ evidence, requests, auditCount, status }: Props) {
+export function CaseIntegrity({ evidence, requests, auditCount, status, integrity }: Props) {
   const sourceCount = new Set(evidence.map((item) => item.source)).size;
   const openRequests = requests.filter((item) => item.status !== "completed").length;
   const checks = [
@@ -19,6 +20,7 @@ export function CaseIntegrity({ evidence, requests, auditCount, status }: Props)
   return <section className="integrity-card" aria-label="Evidence integrity">
     <div className="integrity-heading"><div><p className="eyebrow">Decision integrity</p><h3>Defensibility snapshot</h3></div><span className="integrity-status">{status?.replaceAll("_", " ") || "In review"}</span></div>
     <div className="integrity-grid">{checks.map((check) => <article key={check.label}><strong>{check.value}</strong><span>{check.label}</span><small>{check.detail}</small></article>)}</div>
+    {integrity && <div className="ledger-seal"><span>⌘ Tamper-evident case ledger</span><code>{integrity.latest_hash.slice(0, 16)}…{integrity.latest_hash.slice(-8)}</code><small>{integrity.event_count} sealed event{integrity.event_count === 1 ? "" : "s"}</small></div>}
     <p className="integrity-note"><i /> Sentinel separates evidence completeness from fraud probability so analysts can see what is known, what remains unresolved, and why policy-controlled actions are required.</p>
   </section>;
 }

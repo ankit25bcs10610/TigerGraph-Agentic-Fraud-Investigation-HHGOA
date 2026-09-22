@@ -5,7 +5,10 @@ It exposes benchmark triggers from case_pack.csv and never fabricates outcomes.
 from __future__ import annotations
 
 import csv
+import hashlib
+import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +36,33 @@ class ReferenceWorkflow:
             with Path(transactions_path).open(newline="", encoding="utf-8-sig") as handle:
                 self._transactions = {row["TransactionID"]: row for row in csv.DictReader(handle) if row.get("TransactionID")}
 
+    @staticmethod
+    def _seal(state: dict[str, Any], event: dict[str, Any]) -> None:
+        """Append an auditable, deterministic hash-chain entry for a case event."""
+        ledger = list(state.get("integrity_ledger", []))
+        previous_hash = ledger[-1]["hash"] if ledger else "GENESIS"
+        material = json.dumps(
+            {"case_id": state["case_id"], "previous_hash": previous_hash, "event": event},
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        )
+        digest = hashlib.sha256(material.encode("utf-8")).hexdigest()
+        ledger.append({
+            "sequence": len(ledger) + 1,
+            "event_type": str(event.get("type", "case_event")),
+            "recorded_at": datetime.now(timezone.utc).isoformat(),
+            "previous_hash": previous_hash,
+            "hash": digest,
+        })
+        state["integrity_ledger"] = ledger
+        state["integrity"] = {
+            "status": "sealed",
+            "event_count": len(ledger),
+            "latest_hash": digest,
+            "chain_root": ledger[0]["hash"],
+        }
+
     def start_investigation(self, case_input: dict[str, Any]) -> dict[str, Any]:
         case_id = case_input["case_id"]
         flagged_id = case_input.get("flagged_txn_id", "")
@@ -53,19 +83,27 @@ class ReferenceWorkflow:
             ])
             timeline.append({"transaction_id": flagged_id, "ts": transaction.get("ts", ""), "transaction_amt": transaction.get("TransactionAmt", ""), "channel": transaction.get("channel", ""), "risk_score": transaction.get("risk_score", ""), "billing_region": transaction.get("addr1", "")})
             evidence.append({"claim": f"Transaction {flagged_id} is present in the supplied transaction dataset with customer {customer_id} and timestamp {transaction.get('ts', '')}.", "source": "graph", "ref": "local.transactions.csv", "entity_ids": [flagged_id, customer_id]})
-        state = {**case_input, "case_id": case_id, "trigger": case_input, "status": "evidence_available", "message": "Grounded local transaction context loaded. Fraud assessment remains unavailable until the configured investigation workflow runs.", "graph": {"nodes": nodes, "edges": edges}, "timeline": timeline, "case": {"evidence": evidence}, "audit": [{"type": "local_transaction_lookup", "reference": flagged_id, "grounded": bool(transaction)}]}
+        audit_event = {"type": "local_transaction_lookup", "reference": flagged_id, "grounded": bool(transaction)}
+        state = {**case_input, "case_id": case_id, "trigger": case_input, "status": "evidence_available", "message": "Grounded local transaction context loaded. Fraud assessment remains unavailable until the configured investigation workflow runs.", "graph": {"nodes": nodes, "edges": edges}, "timeline": timeline, "case": {"evidence": evidence}, "audit": [audit_event]}
+        self._seal(state, audit_event)
         self._states[case_id] = state
         return state
 
     def resume_with_approval(self, case_id: str, decision: dict[str, Any]) -> dict[str, Any]:
         state = self._states[case_id]
         state["approval_events"] = [*state.get("approval_events", []), decision]
+        event = {"type": "approval_recorded", "action": decision.get("action", ""), "approved": bool(decision.get("approved"))}
+        state["audit"] = [*state.get("audit", []), event]
+        self._seal(state, event)
         state["message"] = "Approval event recorded by the reference runtime; no fraud decision was inferred."
         return state
 
     def resume_with_evidence(self, case_id: str, evidence: dict[str, Any]) -> dict[str, Any]:
         state = self._states[case_id]
         state["evidence_responses"] = [*state.get("evidence_responses", []), evidence]
+        event = {"type": "evidence_response_recorded", "request_id": evidence.get("request_id", ""), "result": evidence.get("result", "unknown")}
+        state["audit"] = [*state.get("audit", []), event]
+        self._seal(state, event)
         state["message"] = "Evidence response recorded as supplied; no fraud decision was inferred."
         return state
 
