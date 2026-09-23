@@ -18,7 +18,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Cytoscape](https://img.shields.io/badge/Cytoscape.js-graphs-F7DF1E?style=for-the-badge&logoColor=black)](https://js.cytoscape.org/)
 <br />
-[![Tests](https://img.shields.io/badge/tests-135_passing-2C8F5F?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
+[![Tests](https://img.shields.io/badge/tests-142_passing-2C8F5F?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
 [![License](https://img.shields.io/badge/license-MIT-C2611A?style=for-the-badge)](LICENSE)
 [![Hacker House Goa](https://img.shields.io/badge/Hacker_House-Goa-6F665B?style=for-the-badge)](#credits)
 
@@ -112,6 +112,34 @@ Warm light and dark themes, keyboard search (<kbd>Ctrl</kbd> <kbd>K</kbd>), case
 <img src="docs/screenshots/command-center-dark.png" alt="Command center in the dark theme" width="100%" />
 <p><sub>The same command center in the dark theme, one click away in the header.</sub></p>
 </div>
+
+<br />
+
+## 🤖 The agent
+
+Every investigation is an explicit loop over **graph tools**. Each tool is an installed GSQL query called through the **official TigerGraph MCP server** (or, offline, the same question answered from the CSVs), and every call is recorded with the reason it ran.
+
+| Tool | GSQL query | Why the agent calls it |
+|---|---|---|
+| `get_transaction` | `agent_txn_profile` | The flagged transaction with its card, device and identity signals |
+| `get_customer_activity` | `agent_customer_activity` | The customer's baseline across every card |
+| `get_device_activity` | `agent_device_activity` | Who else used the same device |
+| `detect_device_ring` | `agent_device_ring` | Graph algorithm: bounded connected component around a shared or new device, to find fraud rings |
+| `get_linked_closed_cases` | `agent_linked_closed_cases` | Prior investigations on the same customer, card or device users |
+| `get_closed_cases_by_pattern` | `agent_closed_cases_by_pattern` | Case memory by detected pattern, with outcomes |
+| `recall_case_memory` | `InvestigationCase` / memory store | The agent's own earlier investigations on these entities |
+
+After the tools, the agent scores the evidence, checks the stopping rules, requests evidence if it needs more, applies policy R1–R10, cites the rule text behind each action, optionally writes a grounded LLM narrative, and writes the case back to TigerGraph.
+
+### From dataset to submission
+
+| Script | What it does |
+|---|---|
+| `scripts/setup_tigergraph.py` | Creates the schema and loading job, loads the data and installs every query (works on Savanna over REST) |
+| `scripts/calibrate_closed_cases.py` | Replays closed cases through the agent with no label leakage and reports pattern and verdict agreement |
+| `scripts/run_benchmark.py` | Answers every benchmark case: actions before and after evidence, labelled assumed responses, graph write, validation, report |
+
+The full order of operations, down to the submission form, is in [docs/submission/RUNBOOK.md](docs/submission/RUNBOOK.md), alongside the [demo script](docs/submission/DEMO_SCRIPT.md), [blog post](docs/submission/BLOG_POST.md) and [social posts](docs/submission/SOCIAL_POSTS.md).
 
 <br />
 
@@ -249,11 +277,11 @@ Every section can be opened before a case is. If no case is open, the section ex
 | Section | What it shows |
 |---|---|
 | **Command center** | Operational risk, priority brief, ranked queue with network glyphs and risk rings, relationship view, day-by-day timeline, live intelligence and filters |
-| **Investigation** | Key figures, relationship map, workflow timeline, next best action with policy route, evidence ledger and similar cases |
+| **Investigation** | Key figures, relationship map, workflow timeline, next best action with policy route, the agent's reasoning and explanation, evidence ledger and similar cases |
 | **Graph intelligence** | The full returned subgraph with per-type colours and icons, four layouts, entity search and an inspector |
 | **Transactions** | Customer history, amount and risk chart, and the flagged amount compared with the customer's others |
 | **Evidence** | Evidence requests to answer, the ledger filtered by source, and similar closed cases |
-| **Decisions** | Actions before and after evidence, and approve or reject for protected actions |
+| **Decisions** | Actions before and after evidence, approve or reject for protected actions, and the policy text behind each one |
 | **Reports** | SAR decision, subjects, amount, dates and narrative, with copy and download |
 | **Audit** | Hash chain verified in the browser, plus redacted raw events |
 
@@ -288,6 +316,10 @@ Keep credentials in environment variables or a secret manager. Never commit `.en
 | `CASE_PACK_PATH` | API | Case pack loaded at start-up (it can also be uploaded) |
 | `TRANSACTIONS_PATH` | API | Transactions for the timeline, charts, graph and assessment |
 | `CLOSED_CASES_PATH` | API | Closed cases for linked prior fraud and similar cases |
+| `IDENTITY_PATH` | API | `identity.csv`, for device profiles in CSV mode |
+| `DATA_SOURCE` | API, scripts | `csv` (default) or `tigergraph` to answer the agent's tools over MCP |
+| `POLICY_DOCS_PATH` | API, scripts | Policy, pattern and regulation documents the agent cites |
+| `CASE_MEMORY_PATH` | API, scripts | Where the agent remembers its own finished investigations |
 | `FRONTEND_ORIGINS` | API | Allowed browser origins (CORS) |
 | `LLM_PROVIDER`, `LLM_MODEL` | LLM layer | Optional grounded synthesis provider and model |
 | `OPENAI_API_KEY` | Optional provider | Authentication for LLM synthesis or embeddings |
@@ -306,12 +338,14 @@ backend/
   evidence_requests/   request/response models and deterministic simulation
   cases/               InvestigationCase persistence
   app/                 TigerGraph, MCP, GraphRAG, LLM and output modules
-  local_engine.py      runs the deterministic engine over CSV inputs
+  local_engine.py      the investigation agent: tool loop, assessment, policy, memory
+  sources/             graph tools over TigerGraph MCP or the CSVs
+  memory.py            case memory of the agent's own investigations
   main.py              thin FastAPI boundary
 frontend/
   components/          command center, investigation views, graphs, audit
   lib/                 API client, types and formatting
-tigergraph/            schema, loading jobs and read-only GSQL queries
+tigergraph/            schema, loading jobs, read-only GSQL queries and agent tools
 data/sample/           labelled synthetic cases for local exploration
 scripts/               data preparation and validation commands
 docs/                  dataset, schema, loading, query, MCP and architecture docs
@@ -350,7 +384,7 @@ A production deployment injects the TigerGraph-backed workflow and a real identi
 ## ✅ Validation
 
 ```bash
-pytest -q                      # 135 deterministic tests
+pytest -q                      # 142 deterministic tests
 cd frontend && npm run build   # type-checked production build
 ```
 

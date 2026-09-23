@@ -1,0 +1,88 @@
+# Sentinel: an agent that investigates fraud on TigerGraph, and knows when it doesn't know enough
+
+*Built for the TigerGraph Hacker House Goa challenge by Kartikeya Yadav and Ankit Pandey.*
+
+Fraud teams don't lack alerts. They lack time. For every flagged payment, an analyst traces the customer's history, checks the device, looks for linked accounts, reads prior cases and policy, and only then decides what to do, often after the money has gone. We set out to build an agent that does that investigation, and that is honest about uncertainty: it asks for more evidence when it needs to, acts when the evidence is enough, and leaves a record anyone can audit.
+
+## What we built
+
+Sentinel takes a trigger (a risk score, a customer report or an analyst request) and turns it into an evidence-backed case:
+
+1. **Investigate.** The agent calls graph tools on TigerGraph: the flagged transaction with its card and device, the customer's baseline across every card, everyone else who used the same device, a fraud-ring expansion around that device, and prior cases on the same entities.
+2. **Assess.** Deterministic detectors look for five documented patterns (card testing, card-not-present fraud with or without a new device, out-of-region use, account takeover) and for coordinated activity none of them explains. A transparent weighted score turns the evidence into a fraud probability.
+3. **Decide whether to stop.** Stopping rules check whether the evidence is strong and independent enough. If not, the agent asks the customer to validate the transaction, or requests step-up authentication, and pauses.
+4. **Recommend.** Policy rules R1–R10 produce the next best actions. Automatic actions run; declines, card blocks and report filings are routed to L1 or L2 approval, and the route follows the exposure.
+5. **Explain and remember.** Every action is cited to the policy text that produced it. The case is written back to TigerGraph as an `InvestigationCase`, and into case memory, so the next investigation on the same customer, card or device starts from it.
+
+The analyst sees all of this in a command center: exposure and verdict mix across the queue, a priority brief, the relationship map, the agent's reasoning step by step, and the approvals waiting for them.
+
+## Architecture
+
+```
+case_pack trigger
+      │
+      ▼
+ Agent loop ──tools──► TigerGraph MCP ──► installed GSQL queries
+      │                    (agent_txn_profile, agent_customer_activity,
+      │                     agent_device_activity, agent_device_ring,
+      │                     agent_linked_closed_cases, agent_closed_cases_by_pattern)
+      ▼
+ Deterministic assessment: patterns → fraud probability → stopping rules
+      │            │
+      │            └─ not enough evidence → evidence request → resume
+      ▼
+ Policy R1–R10 → approval routing (auto / L1 / L2) → SAR rules
+      │
+      ├─► grounding: rule text + policy documents (GraphRAG)
+      ├─► optional LLM narrative, rejected if any claim is uncited
+      ├─► InvestigationCase written to TigerGraph + case memory
+      └─► SHA-256 hash chain of every event, verified in the browser
+```
+
+The backend is Python (FastAPI); the workbench is Next.js, React and Cytoscape.js.
+
+## How TigerGraph is used
+
+- **The graph** holds customers, cards, transactions, device profiles, email domains, billing regions, the bank's closed cases and the agent's own investigation cases. Card and device identities are derived deterministically from the raw fields, so the same device seen by two customers is one vertex.
+- **GSQL queries are the agent's tools.** Each is a small, read-only question with a clear answer. The agent calls them through the **official TigerGraph MCP server**, and every call is recorded with the reason it was made.
+- **A graph algorithm finds rings.** `agent_device_ring` runs a seeded, bounded connected-component expansion: device → transactions → cards → their other transactions → other devices, for two rounds. It returns the ring's customers, cards and devices, and any confirmed-fraud cases touching it. That feeds both the "coordinated, undocumented abuse" detector and the shared-origin reporting rule.
+- **Case memory lives in the graph.** Each formal case becomes an `InvestigationCase` vertex linked to the flagged transaction, the customer, the card, connected cards, devices and similar closed cases.
+- **GraphRAG** grounds the explanation: the agent retrieves the relevant policy passages and similar closed cases, and the LLM may only write from what was retrieved.
+
+## The agentic part, and where we kept it deterministic
+
+We drew a hard line. The LLM never computes the probability, never picks an action and never approves anything. It can write the narrative, and our validator throws the narrative away if it cites anything that wasn't retrieved.
+
+What *is* agentic:
+
+- **Tool use with reasons.** The agent decides which graph questions to ask: it only expands a fraud ring when the device is shared or new, and only retrieves same-pattern cases after a pattern is found.
+- **Knowing when to stop.** The agent keeps investigating until a stopping rule is met: strong fraud or strong legitimacy with enough independent evidence, a settled customer answer, or no useful next step.
+- **Gathering evidence under control.** When uncertain, the agent requests customer validation first (the strongest single signal), then step-up authentication. Each request pauses the case until the answer is recorded.
+- **Updating its recommendation.** We record the next best actions **before** any evidence and **after** it, with a sentence on what changed.
+- **Memory.** Completed investigations are recalled when a later case touches the same customer, card or device.
+- **Controls and audit.** L1/L2 actions wait for a human. Every event (each graph call, assessment, request, response and approval) extends a SHA-256 hash chain, and the UI recomputes every hash to prove nothing was edited.
+
+## How accurate is it?
+
+We replayed the bank's closed cases through the agent, hiding the case under test and every case opened after it, and compared the agent's pattern and verdict with the analysts' conclusions.
+
+*(Paste the table from `outputs/CALIBRATION.md` here.)*
+
+The most useful number isn't raw agreement: it's how often the agent stays *uncertain* instead of guessing wrong. Uncertain cases go to the evidence-request branch, not straight to a block.
+
+## What we learned
+
+- **Graphs make the second question cheap.** "Who else used this device?" is one hop in TigerGraph and a painful self-join anywhere else. Most of our best evidence came from the second and third hop.
+- **Uncertainty is a feature.** Designing the "not enough evidence yet" path first made the whole agent more trustworthy than tuning for a confident verdict.
+- **Separate facts from prose.** Letting the LLM only narrate cited facts kept explanations readable without letting them drift from the evidence.
+
+## What we'd do with more time
+
+- Let an LLM planner choose among the graph tools under a budget, with the deterministic planner as the safety net.
+- Vector-index every closed-case narrative for semantic similarity, alongside the structural matches.
+- Run the full weakly-connected-components and Louvain algorithms from the TigerGraph GDS library across the whole graph, and track rings over time.
+- Integrate real customer messaging and step-up providers instead of labelled simulated responses.
+
+---
+
+Code, benchmark answers and the demo: *(repository link)* · Demo video: *(link)* · Built on TigerGraph Savanna with @TigerGraphDB.
