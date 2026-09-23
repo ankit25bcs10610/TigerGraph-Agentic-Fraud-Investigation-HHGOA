@@ -1,0 +1,15 @@
+// Agent tool: closed cases on the same customer or card, or that list the card as connected,
+// with the transactions each case involved.
+CREATE QUERY agent_linked_closed_cases(STRING customer_id, STRING card_id) FOR GRAPH FraudInvestigation SYNTAX v2 {
+  SetAccum<STRING> @@cards;
+  ListAccum<STRING> @txn_ids;
+  @@cards += card_id;
+  direct = SELECT cc FROM ClosedCase:cc WHERE cc.customer_id == customer_id OR cc.card_id == card_id;
+  card = to_vertex_set(@@cards, "Card");
+  connected = SELECT cc FROM card:k -(<CONNECTED_TO)- ClosedCase:cc;
+  cases = direct UNION connected;
+  involved = SELECT t FROM cases:cc -(INVOLVES>)- Transaction:t ACCUM cc.@txn_ids += t.transaction_id;
+  PRINT cases[cases.case_id AS case_id, cases.customer_id AS customer_id, cases.card_id AS card_id, cases.outcome AS outcome,
+              cases.pattern AS pattern, cases.@txn_ids AS txn_ids, cases.connected_card_ids AS connected_card_ids,
+              cases.exposure_usd AS exposure_usd, cases.analyst_notes AS analyst_notes, cases.opened_at AS opened_at] AS rows;
+}

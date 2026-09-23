@@ -1,0 +1,17 @@
+// Agent tool: every transaction a customer made, across all of their cards, with device signals.
+CREATE QUERY agent_customer_activity(STRING customer_id) FOR GRAPH FraudInvestigation SYNTAX v2 {
+  SetAccum<STRING> @@ids;
+  SumAccum<STRING> @card_id, @device_id, @device_status, @proxy_type, @match_status;
+  @@ids += customer_id;
+  customer = to_vertex_set(@@ids, "Customer");
+  cards = SELECT k FROM customer:c -(OWNS>)- Card:k;
+  txns = SELECT t FROM cards:k -(MADE>)- Transaction:t ACCUM t.@card_id = k.card_id;
+  devices = SELECT d FROM txns:t -(FROM_DEVICE>)- DeviceProfile:d
+            ACCUM t.@device_id = d.device_profile_id, t.@device_status = d.device_status,
+                  t.@proxy_type = d.proxy_type, t.@match_status = d.match_status;
+  PRINT txns[txns.transaction_id AS transaction_id, txns.customer_id AS customer_id, txns.@card_id AS card_id,
+             txns.ts AS ts, txns.transaction_amt AS amount, txns.channel AS channel, txns.risk_score AS risk_score,
+             txns.addr1 AS region, txns.p_emaildomain AS email, txns.product_cd AS product_code,
+             txns.@device_id AS device_profile_id, txns.@device_status AS device_status,
+             txns.@proxy_type AS proxy_type, txns.@match_status AS match_status] AS rows;
+}

@@ -1,20 +1,31 @@
-"""Local investigation engine over CSV inputs.
+"""The investigation agent.
 
-It runs the repository's deterministic investigation modules (pattern
-detection, fraud probability, stopping, policy R1-R10, approval routing and
-SAR generation) against transactions and closed cases read from CSV files, so
-the full analyst workflow can be exercised without a TigerGraph instance.
+An explicit, auditable agent loop over graph tools:
 
-Every claim is derived from a supplied row. Nothing here invents a fact: when
-the flagged transaction is missing, the engine falls back to lookup only.
+1. **Investigate**: call graph tools (TigerGraph MCP or CSV) to load the flagged
+   transaction, the customer's baseline, who else used the device, the fraud
+   ring around it and prior cases on the same entities. Every call is a
+   recorded tool step with the reason it was made.
+2. **Assess**: run the repository's deterministic pattern detectors and
+   weighted fraud probability over what the tools returned.
+3. **Decide whether to stop**: apply the stopping rules. If the evidence is not
+   enough, request customer validation or step-up authentication and pause.
+4. **Recommend**: apply policy R1-R10 and approval routing; ground every action
+   in the policy text that produced it.
+5. **Remember**: completed investigations become case memory so later
+   investigations start from them.
+
+Nothing here invents a fact: every claim cites the tool and entities it came
+from. When the flagged transaction cannot be found, the agent falls back to a
+lookup-only record instead of guessing.
 """
 from __future__ import annotations
 
-import csv
-from datetime import datetime, timedelta
-from pathlib import Path
+import os
+import time
+from datetime import datetime, timedelta, timezone
 from statistics import median
-from typing import Any
+from typing import Any, Callable
 
 from backend.demo_runtime import ReferenceWorkflow
 from backend.evidence_requests.models import CustomerResult, StepUpResult
@@ -23,132 +34,156 @@ from backend.investigation.fraud_probability import ScoringInputs, deterministic
 from backend.investigation.patterns import PatternContext, TransactionEvidence, classify_pattern
 from backend.investigation.scoring_config import DEFAULT_STOPPING_CONFIG
 from backend.investigation.stopping import EvidenceDirection, IndependentEvidence, VerificationResponse, evaluate_stopping
+from backend.memory import CaseMemory
 from backend.models.answer import FraudPattern, PolicyAction, Verdict
 from backend.policy.approvals import get_approval_route
+from backend.policy.knowledge import PolicyKnowledge
 from backend.policy.rules import CustomerResponse, PolicyContext, recommend_actions
 from backend.policy.sar import build_sar, evaluate_sar, generate_grounded_sar
+from backend.sources.base import CaseDataSource, ClosedCaseRecord, RingResult, Txn
 
-TRANSACTIONS_REF = "transactions.csv"
-CLOSED_CASES_REF = "closed_cases_history.csv"
-CONFIRMED_OUTCOMES = {"confirmed_fraud", "fraud", "fraud_confirmed"}
 PATTERN_WINDOW = timedelta(hours=48)
 NETWORK_WINDOW = timedelta(days=7)
-
-
-def _time(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return parsed.replace(tzinfo=None)
-
-
-def _float(value: Any) -> float | None:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
+RING_HOPS = 2
 
 
 def _money(value: float) -> str:
     return f"${value:,.2f}"
 
 
+def _evidence(txn: Txn) -> TransactionEvidence:
+    return TransactionEvidence(
+        transaction_id=txn.transaction_id, card_id=txn.card_id, customer_id=txn.customer_id, timestamp=txn.ts,
+        amount_usd=txn.amount, channel=txn.channel, billing_region=txn.region, product_code=txn.product_code,
+        purchaser_email_domain=txn.email, device_profile_id=txn.device_profile_id, device_status=txn.device_status,
+        proxy_type=txn.proxy_type, match_status=txn.match_status,
+    )
+
+
+def _timeline_row(txn: Txn, flagged: str, episode: set[str]) -> dict[str, Any]:
+    return {"transaction_id": txn.transaction_id, "ts": txn.ts.isoformat(), "transaction_amt": f"{txn.amount:.2f}", "channel": txn.channel,
+            "risk_score": "" if txn.risk_score is None else f"{txn.risk_score:.2f}", "billing_region": txn.region or "", "email_domain": txn.email or "",
+            "device_profile_id": txn.device_profile_id or "", "suspicious": txn.transaction_id == flagged, "in_episode": txn.transaction_id in episode}
+
+
+class ToolTrace:
+    """Records each tool the agent calls: what, why, what came back, how long."""
+
+    def __init__(self, source_name: str) -> None:
+        self.source_name = source_name
+        self.steps: list[dict[str, Any]] = []
+
+    def call(self, tool: str, args: dict[str, Any], reason: str, run: Callable[[], Any], summarise: Callable[[Any], str]) -> Any:
+        started = time.perf_counter()
+        error = ""
+        try:
+            result = run()
+        except Exception as caught:  # noqa: BLE001 - the trace records the failure; the agent continues with less evidence
+            result, error = None, f"{type(caught).__name__}: {caught}"
+        self.steps.append({"step": len(self.steps) + 1, "tool": tool, "source": self.source_name, "args": args, "reason": reason,
+                           "result": error or summarise(result), "ok": not error, "ms": round((time.perf_counter() - started) * 1000, 1)})
+        return result
+
+    def note(self, tool: str, source: str, args: dict[str, Any], reason: str, result: str) -> None:
+        self.steps.append({"step": len(self.steps) + 1, "tool": tool, "source": source, "args": args, "reason": reason, "result": result, "ok": True, "ms": 0.0})
+
+
 class LocalInvestigationEngine(ReferenceWorkflow):
-    def __init__(self, transactions_path: str | None = None, closed_cases_path: str | None = None) -> None:
-        super().__init__(transactions_path)
-        self._closed: list[dict[str, str]] = []
-        if closed_cases_path and Path(closed_cases_path).exists():
-            with Path(closed_cases_path).open(newline="", encoding="utf-8-sig") as handle:
-                self._closed = [row for row in csv.DictReader(handle) if row.get("case_id")]
+    """The investigation agent (kept under its original name for compatibility)."""
+
+    def __init__(self, source: CaseDataSource | None = None, *, memory: CaseMemory | None = None, knowledge: PolicyKnowledge | None = None) -> None:
+        super().__init__(None)
+        self.source = source
+        self.memory = memory or CaseMemory(os.getenv("CASE_MEMORY_PATH") or None)
+        self.knowledge = knowledge or PolicyKnowledge(os.getenv("POLICY_DOCS_PATH") or None)
         self._contexts: dict[str, dict[str, Any]] = {}
+        self._previews: dict[str, dict[str, Any]] = {}
 
-    # ------------------------------------------------------------------ data
+    @property
+    def source_name(self) -> str:
+        return getattr(self.source, "name", "none")
 
-    def _card_of(self, row: dict[str, str], case_input: dict[str, Any]) -> str:
-        if row.get("card_id"):
-            return row["card_id"]
-        return case_input.get("card_id", "") if row.get("customer_id") == case_input.get("customer_id") else ""
+    # ------------------------------------------------------------ investigate
 
-    def _evidence_row(self, txn_id: str, case_input: dict[str, Any]) -> TransactionEvidence | None:
-        row = self._transactions.get(txn_id)
-        stamp = _time(row.get("ts")) if row else None
-        amount = _float(row.get("TransactionAmt")) if row else None
-        if not row or stamp is None or amount is None:
+    def _gather(self, case_input: dict[str, Any], trace: ToolTrace) -> dict[str, Any] | None:
+        if self.source is None:
             return None
-        return TransactionEvidence(
-            transaction_id=txn_id, card_id=self._card_of(row, case_input), customer_id=row.get("customer_id", ""),
-            timestamp=stamp, amount_usd=amount, channel=row.get("channel", ""), billing_region=row.get("addr1") or None,
-            product_code=row.get("ProductCD") or None, purchaser_email_domain=row.get("P_emaildomain") or None,
-            device_profile_id=row.get("device_profile_id") or None, device_status=row.get("id_15") or None,
-            proxy_type=row.get("id_23") or None, match_status=row.get("id_34") or None,
-        )
-
-    def _context(self, case_input: dict[str, Any]) -> dict[str, Any] | None:
-        target = self._evidence_row(case_input.get("flagged_txn_id", ""), case_input)
+        source = self.source
+        flagged = case_input.get("flagged_txn_id", "")
+        target = trace.call("get_transaction", {"transaction_id": flagged}, "Load the flagged transaction with its card, device and identity signals.",
+                            lambda: source.transaction(flagged), lambda txn: f"{_money(txn.amount)} {txn.channel} on {txn.card_id or 'unknown card'}" if txn else "not found")
         if target is None:
             return None
-        customer_ids = self._by_customer.get(target.customer_id, [])
-        customer_history = [item for item in (self._evidence_row(txn, case_input) for txn in customer_ids) if item]
-        card_history = [item for item in customer_history if item.card_id == target.card_id] if target.card_id else customer_history
-        network: list[TransactionEvidence] = []
+        if not target.card_id and case_input.get("card_id") and target.customer_id == case_input.get("customer_id"):
+            target = Txn(**{**target.__dict__, "card_id": case_input["card_id"]})
+        history = trace.call("get_customer_activity", {"customer_id": target.customer_id}, "Build the customer's baseline across every card they hold.",
+                             lambda: source.customer_transactions(target.customer_id), lambda rows: f"{len(rows)} transactions") or [target]
+        if all(item.transaction_id != target.transaction_id for item in history):
+            history = sorted([*history, target], key=lambda item: item.ts)
+        network: list[Txn] = []
+        ring: RingResult | None = None
         if target.device_profile_id:
-            for txn_id, row in self._transactions.items():
-                if row.get("device_profile_id") != target.device_profile_id or row.get("customer_id") == target.customer_id:
-                    continue
-                item = self._evidence_row(txn_id, {})
-                if item and abs(item.timestamp - target.timestamp) <= NETWORK_WINDOW:
-                    network.append(item)
-        return {"target": target, "card_history": card_history, "customer_history": customer_history, "network": network}
+            device = target.device_profile_id
+            on_device = trace.call("get_device_activity", {"device_profile_id": device}, f"Check who else has used device {device}.",
+                                   lambda: source.device_transactions(device), lambda rows: f"{len(rows)} transactions from {len({row.customer_id for row in rows})} customers") or []
+            network = [item for item in on_device if item.customer_id != target.customer_id and abs(item.ts - target.ts) <= NETWORK_WINDOW]
+            if network or (target.device_status or "").lower() == "new":
+                ring = trace.call("detect_device_ring", {"device_profile_id": device, "max_hops": RING_HOPS},
+                                  "The device is shared or new: expand the connected component around it to look for a fraud ring.",
+                                  lambda: source.device_ring(device, RING_HOPS),
+                                  lambda result: f"{len(result.customers)} customers, {len(result.cards)} cards, {len(result.devices)} devices, {len(result.confirmed_cases)} confirmed cases" if result else "no ring")
+        related_customers = {item.customer_id for item in network}
+        linked = trace.call("get_linked_closed_cases", {"customer_id": target.customer_id, "card_id": target.card_id},
+                            "Case memory: find prior investigations on this customer, card or the customers sharing its device.",
+                            lambda: source.linked_closed_cases(target.customer_id, target.card_id, related_customers, {item.transaction_id for item in network}),
+                            lambda rows: f"{len(rows)} closed cases") or []
+        devices = {item.device_profile_id for item in history if item.device_profile_id}
+        remembered = self.memory.related(case_id=case_input["case_id"], customer_id=target.customer_id, card_id=target.card_id, devices=devices)
+        if len(self.memory):
+            trace.note("recall_case_memory", "case-memory", {"customer_id": target.customer_id}, "Check this agent's own earlier investigations on the same entities.", f"{len(remembered)} related investigations")
+        card_history = [item for item in history if item.card_id == target.card_id] if target.card_id else history
+        return {"input": dict(case_input), "target": target, "history": history, "card_history": card_history, "network": network, "ring": ring,
+                "linked": linked, "remembered": remembered, "trace": trace}
 
-    # ------------------------------------------------------------ assessment
+    @staticmethod
+    def _link_reasons(case: ClosedCaseRecord, target: Txn, network: list[Txn]) -> list[str]:
+        reasons = []
+        if case.customer_id == target.customer_id:
+            reasons.append(f"same customer {target.customer_id}")
+        if target.card_id and (case.card_id == target.card_id or target.card_id in case.connected_card_ids):
+            reasons.append(f"same card {target.card_id}")
+        if case.customer_id in {item.customer_id for item in network} or set(case.txn_ids) & {item.transaction_id for item in network}:
+            reasons.append(f"customer who shared device {target.device_profile_id}")
+        return reasons or ["linked by the graph"]
 
-    def _linked_closed_cases(self, context: dict[str, Any]) -> list[tuple[dict[str, str], list[str]]]:
-        """Closed cases sharing an entity with this case, with the entities they share."""
-        target: TransactionEvidence = context["target"]
-        network_customers = {item.customer_id for item in context["network"]}
-        network_txns = {item.transaction_id for item in context["network"]}
-        linked = []
-        for row in self._closed:
-            reasons = []
-            txn_ids = set(filter(None, row.get("txn_ids", "").split("|")))
-            connected = set(filter(None, row.get("connected_card_ids", "").split("|")))
-            if row.get("customer_id") == target.customer_id:
-                reasons.append(f"same customer {target.customer_id}")
-            if target.card_id and (row.get("card_id") == target.card_id or target.card_id in connected):
-                reasons.append(f"same card {target.card_id}")
-            if txn_ids & network_txns or row.get("customer_id") in network_customers:
-                reasons.append(f"customer who shared device {target.device_profile_id}")
-            devices = {self._transactions.get(txn, {}).get("device_profile_id") for txn in txn_ids}
-            if target.device_profile_id and target.device_profile_id in devices and not any("device" in reason for reason in reasons):
-                reasons.append(f"same device {target.device_profile_id}")
-            if reasons:
-                linked.append((row, reasons))
-        return linked
+    # ----------------------------------------------------------------- assess
 
-    def _assess(self, case_input: dict[str, Any], context: dict[str, Any], responses: list[dict[str, Any]]) -> dict[str, Any]:
-        target: TransactionEvidence = context["target"]
-        card_history: list[TransactionEvidence] = context["card_history"]
-        network: list[TransactionEvidence] = context["network"]
-        prior = [item for item in card_history if item.timestamp < target.timestamp]
+    def _assess(self, case_input: dict[str, Any], context: dict[str, Any], responses: list[dict[str, Any]], trace: ToolTrace | None = None) -> dict[str, Any]:
+        target: Txn = context["target"]
+        card_history: list[Txn] = context["card_history"]
+        network: list[Txn] = context["network"]
+        ring: RingResult | None = context["ring"]
+        prior = [item for item in card_history if item.ts < target.ts]
         evidence: list[dict[str, Any]] = []
         independent: list[IndependentEvidence] = []
+        graph_ref = "tigergraph" if self.source_name == "tigergraph-mcp" else "transactions.csv"
+        cases_ref = "tigergraph:ClosedCase" if self.source_name == "tigergraph-mcp" else "closed_cases_history.csv"
 
-        def fact(claim: str, entities: list[str], key: str | None = None, direction: EvidenceDirection = EvidenceDirection.FRAUD, source: str = "graph", ref: str = TRANSACTIONS_REF) -> None:
+        def fact(claim: str, entities: list[str], key: str | None = None, direction: EvidenceDirection = EvidenceDirection.FRAUD, source: str = "graph", ref: str = graph_ref) -> None:
             evidence.append({"claim": claim, "source": source, "ref": ref, "entity_ids": [entity for entity in entities if entity]})
             if key:
                 independent.append(IndependentEvidence(claim, direction, key))
 
-        # Pattern detection runs the documented detectors unchanged.
-        other_cards = sorted({item.card_id for item in network if item.card_id})
-        linked = self._linked_closed_cases(context)
-        confirmed_links = [(row, reasons) for row, reasons in linked if row.get("outcome", "").lower() in CONFIRMED_OUTCOMES]
+        linked = [(case, self._link_reasons(case, target, network)) for case in context["linked"]]
+        confirmed_links = [(case, reasons) for case, reasons in linked if case.confirmed_fraud]
+        other_customers = sorted({item.customer_id for item in network})
+        other_cards = sorted({item.card_id for item in network if item.card_id and item.card_id != target.card_id})
+        ring_cards = sorted(set(ring.cards) - {target.card_id}) if ring else []
+
         pattern = classify_pattern(PatternContext(
-            target=target, card_history=tuple(card_history), customer_history=tuple(context["customer_history"]),
-            network_transactions=tuple(network), connected_card_ids=tuple(other_cards),
-            confirmed_related_case_ids=tuple(row["case_id"] for row, _ in confirmed_links),
+            target=_evidence(target), card_history=tuple(map(_evidence, card_history)), customer_history=tuple(map(_evidence, context["history"])),
+            network_transactions=tuple(map(_evidence, network)), connected_card_ids=tuple(sorted(set(other_cards) | set(ring_cards))),
+            confirmed_related_case_ids=tuple(sorted({case.case_id for case, _ in confirmed_links} | set(ring.confirmed_cases if ring else ()))),
         ))
         if pattern.pattern is not FraudPattern.NONE:
             fact(f"Pattern {pattern.pattern.value.replace('_', ' ')} detected: {'; '.join(pattern.supporting_evidence)}.", [target.transaction_id, target.card_id], "pattern")
@@ -157,37 +192,44 @@ class LocalInvestigationEngine(ReferenceWorkflow):
 
         unusual = 0.0
         if prior:
-            typical = median(item.amount_usd for item in prior)
-            if target.amount_usd >= max(2 * typical, typical + 50):
+            typical = median(item.amount for item in prior)
+            if target.amount >= max(2 * typical, typical + 50):
                 unusual = 1.0
-                fact(f"Flagged amount {_money(target.amount_usd)} is {target.amount_usd / typical:.1f}× the card's prior median of {_money(typical)} across {len(prior)} transactions.", [target.transaction_id, target.card_id], "amount")
+                fact(f"Flagged amount {_money(target.amount)} is {target.amount / max(typical, 0.01):.1f}× the card's prior median of {_money(typical)} across {len(prior)} transactions.", [target.transaction_id, target.card_id], "amount")
             else:
-                fact(f"Flagged amount {_money(target.amount_usd)} is in line with the card's prior median of {_money(typical)}.", [target.transaction_id], "amount_consistent", EvidenceDirection.LEGITIMATE)
+                fact(f"Flagged amount {_money(target.amount)} is in line with the card's prior median of {_money(typical)}.", [target.transaction_id], "amount_consistent", EvidenceDirection.LEGITIMATE)
 
         shared = 0.0
-        other_customers = sorted({item.customer_id for item in network})
         prior_devices = {item.device_profile_id for item in prior if item.device_profile_id}
+        device_new = (target.device_status or "").lower() == "new"
         if target.device_profile_id and other_customers:
             shared = 1.0
-            fact(f"Device {target.device_profile_id} was also used by {len(other_customers)} other customer(s) ({', '.join(other_customers)}) within seven days.", [target.device_profile_id, *other_customers], "device")
-        elif (target.device_status or "").lower() == "new" or (target.device_profile_id and prior_devices and target.device_profile_id not in prior_devices):
+            fact(f"Device {target.device_profile_id} was also used by {len(other_customers)} other customer(s) ({', '.join(other_customers[:6])}) within seven days.", [target.device_profile_id, *other_customers[:6]], "device")
+        elif device_new or (target.device_profile_id and prior_devices and target.device_profile_id not in prior_devices):
             shared = 0.5
-            fact(f"Device {target.device_profile_id or 'on the flagged transaction'} is new for this card{' (identity marks it New)' if (target.device_status or '').lower() == 'new' else ''}.", [target.transaction_id, target.device_profile_id or ""], "device")
+            fact(f"Device {target.device_profile_id or 'on the flagged transaction'} is new for this card{' (identity marks it New)' if device_new else ''}.", [target.transaction_id, target.device_profile_id or ""], "device")
         elif target.device_profile_id and target.device_profile_id in prior_devices:
             fact(f"Device {target.device_profile_id} has been used on this card before.", [target.device_profile_id], "device_known", EvidenceDirection.LEGITIMATE)
+        if ring and (len(ring.customers) >= 3 or ring.confirmed_cases):
+            touching = f", touching confirmed fraud case(s) {', '.join(ring.confirmed_cases[:4])}" if ring.confirmed_cases else ""
+            fact(f"Fraud-ring analysis: device {ring.seed_device} sits in a connected component of {len(ring.customers)} customers, {len(ring.cards)} cards and {len(ring.devices)} devices within {ring.hops} hops{touching}.",
+                 [ring.seed_device, *ring.cards[:6]], "ring")
 
         region = 0.0
-        prior_regions = {item.billing_region for item in prior if item.billing_region}
-        if target.billing_region and prior_regions and target.billing_region not in prior_regions:
+        prior_regions = {item.region for item in prior if item.region}
+        if target.region and prior_regions and target.region not in prior_regions:
             region = 1.0
-            fact(f"Billing region {target.billing_region} is new for this card; prior regions: {', '.join(sorted(prior_regions))}.", [target.transaction_id], "region")
+            fact(f"Billing region {target.region} is new for this card; prior regions: {', '.join(sorted(prior_regions))}.", [target.transaction_id], "region")
 
-        history = 0.0
-        for row, reasons in confirmed_links[:3]:
-            history = 1.0
-            fact(f"Closed case {row['case_id']} ({row.get('outcome', '').replace('_', ' ')}, {row.get('pattern', 'unknown').replace('_', ' ')}) involved the {', '.join(reasons)}.", [row["case_id"], *filter(None, [row.get("customer_id"), row.get("card_id")])], "history", ref=CLOSED_CASES_REF)
+        history_signal = 0.0
+        for case, reasons in confirmed_links[:3]:
+            history_signal = 1.0
+            fact(f"Closed case {case.case_id} ({case.outcome.replace('_', ' ')}, {(case.pattern or 'unknown').replace('_', ' ')}) involved the {', '.join(reasons)}.", [case.case_id, case.customer_id, case.card_id], "history", ref=cases_ref)
+        for record, reasons in context["remembered"][:2]:
+            fact(f"This agent's earlier investigation {record['case_id']} ({record.get('verdict')}, {str(record.get('pattern', 'none')).replace('_', ' ')}) shares the {', '.join(reasons)}.", [record["case_id"]], ref="case_memory")
+            if record.get("verdict") == "fraud":
+                history_signal = 1.0
 
-        # Customer and step-up evidence, from the trigger or recorded responses.
         customer: CustomerResponse | None = None
         no_reply = False
         step_up = 0.0
@@ -195,39 +237,40 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         verification: VerificationResponse | None = None
         if case_input.get("trigger_type") == "customer_report":
             customer = CustomerResponse.DENIED
-            fact(f"The customer reported the transaction as not made by them: “{case_input.get('trigger_text', '').strip()}”", [target.customer_id, target.transaction_id], "customer", source="customer", ref="case_pack.trigger_text")
+            fact(f"The customer reported the transaction as not made by them: “{str(case_input.get('trigger_text', '')).strip()}”", [target.customer_id, target.transaction_id], "customer", source="customer", ref="case_pack.trigger_text")
             verification = VerificationResponse(True, EvidenceDirection.FRAUD, "case_pack.trigger_text")
         for response in responses:
             result = response.get("result")
+            simulated = " (simulated response)" if response.get("simulated") else ""
             if response.get("type") == "customer_validation":
                 if result == "denied":
                     customer = CustomerResponse.DENIED
-                    fact("The customer denied making the transaction.", [target.customer_id, target.transaction_id], "customer", source="customer", ref=response["request_id"])
+                    fact(f"The customer denied making the transaction{simulated}.", [target.customer_id, target.transaction_id], "customer", source="customer", ref=response["request_id"])
                     verification = VerificationResponse(True, EvidenceDirection.FRAUD, response["request_id"])
                 elif result == "confirmed":
                     customer = CustomerResponse.CONFIRMED
                     conflicting = 1.0
-                    fact("The customer confirmed they made the transaction.", [target.customer_id, target.transaction_id], "customer", EvidenceDirection.LEGITIMATE, "customer", response["request_id"])
+                    fact(f"The customer confirmed they made the transaction{simulated}.", [target.customer_id, target.transaction_id], "customer", EvidenceDirection.LEGITIMATE, "customer", response["request_id"])
                     verification = VerificationResponse(True, EvidenceDirection.LEGITIMATE, response["request_id"])
                 elif result == "no_reply":
                     no_reply = True
-                    fact("The customer did not reply to the verification request.", [target.customer_id], source="customer", ref=response["request_id"])
+                    fact(f"The customer did not reply to the verification request{simulated}.", [target.customer_id], source="customer", ref=response["request_id"])
             elif response.get("type") == "step_up_auth":
                 if result == "failed":
                     step_up = 1.0
-                    fact("Step-up authentication failed.", [target.customer_id], "step_up", source="external", ref=response["request_id"])
+                    fact(f"Step-up authentication failed{simulated}.", [target.customer_id], "step_up", source="external", ref=response["request_id"])
                 elif result == "passed":
                     conflicting = max(conflicting, 0.5)
-                    fact("Step-up authentication passed.", [target.customer_id], "step_up", EvidenceDirection.LEGITIMATE, "external", response["request_id"])
+                    fact(f"Step-up authentication passed{simulated}.", [target.customer_id], "step_up", EvidenceDirection.LEGITIMATE, "external", response["request_id"])
             elif response.get("details"):
                 fact(f"Analyst note: {response['details']}", [target.transaction_id], source="document", ref=response["request_id"])
 
-        risk = min(1.0, max(0.0, _float(case_input.get("risk_score")) or _float(self._transactions[target.transaction_id].get("risk_score")) or 0.0))
+        risk_value = case_input.get("risk_score")
+        risk = float(risk_value) if risk_value not in (None, "") else (target.risk_score or 0.0)
         probability = deterministic_fraud_probability(ScoringInputs(
-            risk_score=risk, pattern_strength=pattern.strength, unusual_transaction_behavior=unusual,
-            shared_device_evidence=shared, region_evidence=region, prior_confirmed_fraud_cases=history,
-            customer_evidence=1.0 if customer is CustomerResponse.DENIED else 0.0,
-            step_up_authentication_evidence=step_up, conflicting_evidence=conflicting,
+            risk_score=min(1.0, max(0.0, risk)), pattern_strength=pattern.strength, unusual_transaction_behavior=unusual,
+            shared_device_evidence=shared, region_evidence=region, prior_confirmed_fraud_cases=history_signal,
+            customer_evidence=1.0 if customer is CustomerResponse.DENIED else 0.0, step_up_authentication_evidence=step_up, conflicting_evidence=conflicting,
         ))
         config = DEFAULT_STOPPING_CONFIG
         if customer is CustomerResponse.CONFIRMED:
@@ -239,61 +282,113 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         else:
             verdict = Verdict.UNCERTAIN
 
-        # Episode: the card's transactions that the detected pattern covers.
         if pattern.pattern is FraudPattern.NONE:
             episode = [target]
         elif pattern.pattern is FraudPattern.OUT_OF_REGION_USE:
-            episode = [item for item in card_history if item.billing_region == target.billing_region and abs(item.timestamp - target.timestamp) <= timedelta(days=7)]
+            episode = [item for item in card_history if item.region == target.region and abs(item.ts - target.ts) <= timedelta(days=7)]
         else:
             channels = {"online"} if pattern.pattern in {FraudPattern.CARD_TESTING, FraudPattern.CARD_NOT_PRESENT_FRAUD, FraudPattern.CARD_NOT_PRESENT_NEW_DEVICE} else {"online", "in_person"}
-            episode = [item for item in card_history if item.channel.lower() in channels and abs(item.timestamp - target.timestamp) <= PATTERN_WINDOW and item.timestamp <= target.timestamp]
-        episode = sorted({item.transaction_id: item for item in [*episode, target]}.values(), key=lambda item: item.timestamp)
-        episode_rows = [{"TransactionID": item.transaction_id, "TransactionAmt": item.amount_usd, "ts": item.timestamp.isoformat()} for item in episode]
-        exposure = episode_exposure_usd(episode_rows)
+            episode = [item for item in card_history if item.channel.lower() in channels and abs(item.ts - target.ts) <= PATTERN_WINDOW and item.ts <= target.ts]
+        episode = sorted({item.transaction_id: item for item in [*episode, target]}.values(), key=lambda item: item.ts)
+        if verdict is Verdict.LEGITIMATE:
+            episode = []  # answer format: a legitimate case has no affected transactions and no exposure
+        episode_rows = [{"TransactionID": item.transaction_id, "TransactionAmt": item.amount, "ts": item.ts.isoformat()} for item in episode]
+        exposure = episode_exposure_usd(episode_rows) if episode_rows else 0.0
 
         asked = {response.get("type") for response in responses}
-        stop = evaluate_stopping(
-            fraud_probability=probability, evidence=independent, verification=verification,
-            further_investigation_unlikely={"customer_validation", "step_up_auth"} <= asked,
-        )
-        shared_origin = len(other_customers) >= 2 or (bool(other_customers) and bool(confirmed_links))
-        confirmed_cards = {row.get("card_id") for row, _ in confirmed_links if row.get("customer_id") == target.customer_id and row.get("card_id")}
+        further_unlikely = {"customer_validation", "step_up_auth"} <= asked
+        stop = evaluate_stopping(fraud_probability=probability, evidence=independent, verification=verification, further_investigation_unlikely=further_unlikely)
+        shared_origin = len(other_customers) >= 2 or (bool(other_customers) and bool(confirmed_links)) or bool(ring and ring.confirmed_cases and len(ring.customers) >= 3)
+        coordinated = pattern.pattern is FraudPattern.UNDOCUMENTED
+        confirmed_cards = {case.card_id for case, _ in confirmed_links if case.customer_id == target.customer_id and case.card_id}
         independent_count = len({item.independence_key for item in independent if item.direction is EvidenceDirection.FRAUD})
         actions = recommend_actions(PolicyContext(
             verdict=verdict, fraud_probability=probability, exposure_usd=exposure, pattern=pattern.pattern,
             independent_evidence_count=independent_count, customer_response=customer, no_reply_within_24h=no_reply,
             shared_fraud_origin=shared_origin, conflicting_evidence=conflicting > 0 and verdict is not Verdict.LEGITIMATE,
-            confirmed_fraud_cards_for_customer=len(confirmed_cards),
+            coordinated_undocumented_abuse=coordinated, confirmed_fraud_cards_for_customer=len(confirmed_cards),
         ))
-        sar_decision = evaluate_sar(verdict=verdict, fraud_probability=probability, exposure_usd=exposure, shared_fraud_origin=shared_origin, connected_to_other_card_fraud=bool(confirmed_links) and bool(other_customers))
-        sar = None if sar_decision.file else build_sar(sar_decision)
+        connected_cards = sorted(set(other_cards) | set(ring_cards))
+        sar_decision = evaluate_sar(verdict=verdict, fraud_probability=probability, exposure_usd=exposure, shared_fraud_origin=shared_origin,
+                                    connected_to_other_card_fraud=bool(confirmed_links) and bool(other_customers), coordinated_undocumented_abuse=coordinated)
         if sar_decision.file:
-            generated = generate_grounded_sar(
-                decision=sar_decision, customer_id=target.customer_id, card_id=target.card_id or target.customer_id,
-                connected_card_ids=other_cards, episode_transactions=episode_rows, pattern=pattern.pattern,
-                linkage_claims=[item["claim"] for item in evidence if item["ref"] == CLOSED_CASES_REF],
+            subject_card = target.card_id or target.customer_id
+            sar = generate_grounded_sar(
+                decision=sar_decision, customer_id=target.customer_id, card_id=subject_card, connected_card_ids=connected_cards[:10],
+                episode_transactions=episode_rows, pattern=pattern.pattern,
+                linkage_claims=[item["claim"] for item in evidence if item["ref"] in {cases_ref, "case_memory"}],
                 evidence_response="; ".join(f"{item.get('type', '').replace('_', ' ')}: {item.get('result')}" for item in responses),
-                known_subject_ids=[target.customer_id, target.card_id or target.customer_id, *other_cards], investigation_case_created=True,
-            )
-            sar = generated.sar
-        assert sar is not None
+                known_subject_ids=[target.customer_id, subject_card, *connected_cards[:10]], investigation_case_created=True,
+            ).sar
+        else:
+            sar = build_sar(sar_decision)
+
+        similar: list[tuple[ClosedCaseRecord, list[str]]] = list(linked)
+        if pattern.pattern is not FraudPattern.NONE:
+            if trace is not None and self.source is not None and context.get("pattern_cases_for") != pattern.pattern.value:
+                source = self.source
+                context["pattern_cases"] = trace.call("get_closed_cases_by_pattern", {"pattern": pattern.pattern.value, "k": 5},
+                                                      f"Retrieve closed cases with the same {pattern.pattern.value.replace('_', ' ')} pattern and their outcomes.",
+                                                      lambda: source.closed_cases_by_pattern(pattern.pattern.value, 5), lambda rows: f"{len(rows)} closed cases") or []
+                context["pattern_cases_for"] = pattern.pattern.value
+            known = {case.case_id for case, _ in similar}
+            similar += [(case, []) for case in context.get("pattern_cases", []) if case.case_id not in known]
+
+        return {"target": target, "pattern": pattern, "probability": probability, "verdict": verdict, "exposure": exposure, "episode": episode,
+                "evidence": evidence, "stop": stop, "actions": [item.model_dump(mode="json") for item in actions], "sar": sar.model_dump(mode="json"),
+                "linked": linked, "similar": similar, "other_customers": other_customers, "connected_cards": connected_cards, "customer": customer,
+                "ring": ring, "independent_count": independent_count, "verification_settled": verification is not None,
+                "further_unlikely": further_unlikely, "customer_disputed": customer is CustomerResponse.DENIED}
+
+    # -------------------------------------------------------------- explain
+
+    def _grounding(self, assessment: dict[str, Any]) -> list[dict[str, Any]]:
+        """The policy text behind each recommended action, plus relevant policy documents."""
+        cited: dict[str, dict[str, Any]] = {}
+        for action in assessment["actions"]:
+            for rule in {part.split(":")[0].strip() for part in action["reason"].split(";")}:
+                chunk = self.knowledge.rule(rule)
+                if chunk:
+                    entry = cited.setdefault(chunk.ref, {"ref": chunk.ref, "title": chunk.title, "text": chunk.text, "source": chunk.source, "supports": []})
+                    entry["supports"].append(action["action"])
+        if any(action["route"] in {"L1", "L2"} for action in assessment["actions"]):
+            chunk = self.knowledge.rule("approval_routes")
+            if chunk:
+                cited.setdefault(chunk.ref, {"ref": chunk.ref, "title": chunk.title, "text": chunk.text, "source": chunk.source, "supports": [a["action"] for a in assessment["actions"] if a["route"] != "auto"]})
+        if self.knowledge.has_documents:
+            query = " ".join([assessment["pattern"].pattern.value.replace("_", " "), *(action["action"].replace("_", " ").lower() for action in assessment["actions"])])
+            for chunk in self.knowledge.search(query, 3, documents_only=True):
+                cited.setdefault(chunk.ref, {"ref": chunk.ref, "title": chunk.title, "text": chunk.text, "source": chunk.source, "supports": []})
+        return list(cited.values())
+
+    @staticmethod
+    def _explanation(assessment: dict[str, Any], request: dict[str, Any] | None) -> dict[str, str]:
+        """Plain-language reasoning built only from the assessment's own facts."""
+        stop = assessment["stop"]
+        claims = [item["claim"] for item in assessment["evidence"]]
+        verdict = assessment["verdict"].value
+        uncertainty = stop.stop_reason
+        if request:
+            uncertainty += f" The agent asked for {request['type'].replace('_', ' ')} because it is the cheapest evidence that can settle the question."
+        elif verdict == "uncertain":
+            uncertainty += " No further evidence request is available, so the case is escalated rather than decided."
         return {
-            "target": target, "pattern": pattern, "probability": probability, "verdict": verdict, "exposure": exposure,
-            "episode": episode, "evidence": evidence, "stop": stop, "actions": [item.model_dump(mode="json") for item in actions],
-            "sar": sar.model_dump(mode="json"), "linked": linked, "other_customers": other_customers, "other_cards": other_cards,
-            "customer": customer,
+            "verdict": f"Verdict {verdict} at fraud probability {assessment['probability']:.2f}, backed by {assessment['independent_count']} independent fraud-supporting evidence source(s).",
+            "evidence": " ".join(claims[:3]) or "The trigger was the only signal available.",
+            "uncertainty": uncertainty,
+            "actions": "; ".join(f"{item['action'].replace('_', ' ').lower()} ({item['route']}), {item['reason']}" for item in assessment["actions"]) or "Policy recommends no action for this evidence.",
         }
 
-    # ----------------------------------------------------------- rendering
+    # -------------------------------------------------------------- render
 
     def _next_request(self, case_id: str, assessment: dict[str, Any], state: dict[str, Any]) -> dict[str, Any] | None:
         if assessment["stop"].should_stop:
             return None
         asked = {item["type"] for item in state.get("evidence_requests", [])}
-        target: TransactionEvidence = assessment["target"]
+        target: Txn = assessment["target"]
         if "customer_validation" not in asked and assessment["customer"] is None:
             return {"request_id": f"{case_id}-customer-validation", "case_id": case_id, "type": "customer_validation",
-                    "question": f"Did you make the {_money(target.amount_usd)} {target.channel.replace('_', ' ')} purchase on {target.timestamp:%d %b %Y at %H:%M} (transaction {target.transaction_id})?",
+                    "question": f"Did you make the {_money(target.amount)} {target.channel.replace('_', ' ')} purchase on {target.ts:%d %b %Y at %H:%M} (transaction {target.transaction_id})?",
                     "reason": assessment["stop"].stop_reason + " Customer confirmation is the strongest way to settle it.", "status": "pending"}
         if "step_up_auth" not in asked:
             return {"request_id": f"{case_id}-step-up", "case_id": case_id, "type": "step_up_auth",
@@ -302,8 +397,9 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         return None
 
     def _render(self, state: dict[str, Any], assessment: dict[str, Any]) -> None:
-        self._contexts[state["case_id"]]["last"] = assessment
-        target: TransactionEvidence = assessment["target"]
+        context = self._contexts[state["case_id"]]
+        context["last"] = assessment
+        target: Txn = assessment["target"]
         pattern = assessment["pattern"]
         previous = {item["action"]: item for item in state.get("approval_requests", [])}
         approvals = []
@@ -319,41 +415,43 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         open_requests = [item for item in state.get("evidence_requests", []) if item.get("status") != "resolved"]
         pending = [item for item in approvals if item["approval_status"] == "pending"]
         verdict: Verdict = assessment["verdict"]
-        if open_requests:
-            status = "awaiting_evidence"
-        elif pending:
-            status = "awaiting_approval"
-        else:
-            status = "completed"
+        status = "awaiting_evidence" if open_requests else "awaiting_approval" if pending else "completed"
         case_status = ("escalated" if pending or any(item["action"] == "ESCALATE_TO_ANALYST" for item in assessment["actions"]) else
                        "closed_fraud" if verdict is Verdict.FRAUD else "closed_legitimate" if verdict is Verdict.LEGITIMATE else "open")
         pattern_text = pattern.pattern.value.replace("_", " ")
         summary = (f"{pattern_text.capitalize()} pattern on {target.card_id or target.customer_id}" if pattern.pattern is not FraudPattern.NONE else f"No documented fraud pattern on {target.card_id or target.customer_id}")
         summary += f": fraud probability {assessment['probability']:.2f}, exposure {_money(assessment['exposure'])} across {len(assessment['episode'])} transaction(s). {assessment['stop'].stop_reason}"
-        similar = []
-        for row, reasons in assessment["linked"]:
-            similar.append((len(reasons) + (1 if row.get("pattern") == pattern.pattern.value else 0), row, reasons))
-        for row in self._closed:
-            if pattern.pattern is not FraudPattern.NONE and row.get("pattern") == pattern.pattern.value and all(row is not item for _, item, _ in similar):
-                similar.append((1, row, []))
-        similar.sort(key=lambda item: -item[0])
+        scored = []
+        for case, reasons in assessment["similar"]:
+            same = case.pattern == pattern.pattern.value and pattern.pattern is not FraudPattern.NONE
+            scored.append((len(reasons) + (1 if same else 0), case, reasons, same))
+        scored.sort(key=lambda item: -item[0])
         state["similar_cases"] = [{
-            "case_id": row["case_id"], "pattern": row.get("pattern", ""), "outcome": row.get("outcome", ""),
-            "similarity_score": round(min(1.0, score / 4), 2),
-            "reason_for_match": "Shares the " + ", ".join(reasons) + ("; same pattern" if row.get("pattern") == pattern.pattern.value else "") + "." if reasons else f"Same pattern ({pattern_text}); {row.get('analyst_notes', '').strip() or 'no analyst note'}",
-        } for score, row, reasons in similar[:6]]
+            "case_id": case.case_id, "pattern": case.pattern, "outcome": case.outcome, "similarity_score": round(min(1.0, score / 4), 2),
+            "reason_for_match": ("Shares the " + ", ".join(reasons) + ("; same pattern" if same else "") + ".") if reasons else f"Same pattern ({pattern_text}). {case.analyst_notes or 'No analyst note.'}",
+        } for score, case, reasons, same in scored[:6]]
+        episode_devices = {item.device_profile_id for item in assessment["episode"] if item.device_profile_id}
         state["case"] = {"status": case_status, "verdict": verdict.value, "fraud_probability": assessment["probability"], "pattern": pattern.pattern.value,
+                         "pattern_description": "; ".join(pattern.supporting_evidence) if pattern.pattern is FraudPattern.UNDOCUMENTED else "",
                          "exposure_usd": assessment["exposure"], "summary": summary, "evidence": assessment["evidence"],
-                         "similar_prior_cases": [item["case_id"] for item in state["similar_cases"]],
-                         "affected_txn_ids": [item.transaction_id for item in assessment["episode"]]}
+                         "similar_prior_cases": [item["case_id"] for item in state["similar_cases"]], "affected_txn_ids": [item.transaction_id for item in assessment["episode"]],
+                         "first_suspicious_txn_id": assessment["episode"][0].transaction_id if assessment["episode"] else "",
+                         "connected_card_ids": assessment["connected_cards"], "connected_device_profiles": sorted(episode_devices)}
         state["stop_reason"] = assessment["stop"].stop_reason
+        state["stop_context"] = {"independent_evidence_count": assessment["stop"].independent_evidence_count, "verification_settled": assessment["verification_settled"],
+                                 "further_investigation_unlikely": assessment["further_unlikely"], "customer_disputed": assessment["customer_disputed"]}
         state["sar"] = assessment["sar"]
         state["status"] = status
         state["message"] = summary
+        state["explanation"] = self._explanation(assessment, open_requests[0] if open_requests else None)
+        state["policy_grounding"] = self._grounding(assessment)
+        state["agent_trace"] = context["trace"].steps
+        state["data_source"] = self.source_name
         self._render_graph(state, assessment)
 
     def _render_graph(self, state: dict[str, Any], assessment: dict[str, Any]) -> None:
-        target: TransactionEvidence = assessment["target"]
+        target: Txn = assessment["target"]
+        context = self._contexts[state["case_id"]]
         nodes: dict[str, dict[str, Any]] = {}
         edges: dict[str, dict[str, Any]] = {}
 
@@ -369,42 +467,40 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         card = node("Card", target.card_id) if target.card_id else customer
         if card != customer:
             edge(customer, card, "OWNS")
-        episode_ids = {item.transaction_id for item in assessment["episode"]}
-        for item in assessment["episode"]:
-            txn = node("Transaction", item.transaction_id, flagged=item.transaction_id == target.transaction_id, amount_usd=item.amount_usd, channel=item.channel, ts=item.timestamp.isoformat())
-            edge(card, txn, "MADE")
-        flagged = f"transaction:{target.transaction_id}"
+        flagged = node("Transaction", target.transaction_id, flagged=True, amount_usd=target.amount, channel=target.channel, ts=target.ts.isoformat())
+        for item in assessment["episode"] or [target]:
+            edge(card, node("Transaction", item.transaction_id, flagged=item.transaction_id == target.transaction_id, amount_usd=item.amount, channel=item.channel, ts=item.ts.isoformat()), "MADE")
         if target.device_profile_id:
-            device = node("DeviceProfile", target.device_profile_id, status=target.device_status or "")
+            device = node("DeviceProfile", target.device_profile_id, status=target.device_status or "", proxy=target.proxy_type or "")
             edge(flagged, device, "USED_DEVICE")
-            for other in assessment["other_customers"]:
+            for other in assessment["other_customers"][:8]:
                 edge(node("Customer", other, shares_device=True), device, "SHARES_DEVICE")
-        if target.purchaser_email_domain:
-            edge(flagged, node("EmailDomain", target.purchaser_email_domain), "USED_EMAIL")
-        if target.billing_region:
-            edge(flagged, node("BillingRegion", target.billing_region), "BILLED_TO")
-        for row, reasons in assessment["linked"][:4]:
-            closed = node("ClosedCase", row["case_id"], outcome=row.get("outcome", ""), pattern=row.get("pattern", ""))
-            anchor = customer if any("customer " + target.customer_id in reason for reason in reasons) else f"deviceprofile:{target.device_profile_id}" if target.device_profile_id else customer
-            if row.get("customer_id") in assessment["other_customers"]:
-                anchor = f"customer:{row['customer_id']}"
+        if target.email:
+            edge(flagged, node("EmailDomain", target.email), "USED_EMAIL")
+        if target.region:
+            edge(flagged, node("BillingRegion", target.region), "BILLED_TO")
+        for case, _ in assessment["linked"][:4]:
+            closed = node("ClosedCase", case.case_id, outcome=case.outcome, pattern=case.pattern)
+            anchor = f"customer:{case.customer_id}" if f"customer:{case.customer_id}" in nodes else customer
             edge(closed, anchor, "INVOLVED")
         state["graph"] = {"nodes": list(nodes.values()), "edges": list(edges.values())}
-        state["timeline"] = [{**row, "suspicious": row["transaction_id"] == target.transaction_id, "in_episode": row["transaction_id"] in episode_ids,
-                              "device_profile_id": self._transactions.get(row["transaction_id"], {}).get("device_profile_id", "")} for row in state.get("timeline", [])]
+        episode_ids = {item.transaction_id for item in assessment["episode"]}
+        state["timeline"] = [_timeline_row(item, target.transaction_id, episode_ids) for item in context["history"]]
 
     def _record(self, state: dict[str, Any], event: dict[str, Any]) -> None:
         state["audit"] = [*state.get("audit", []), event]
         self._seal(state, event)
 
-    def _step(self, state: dict[str, Any], assessment: dict[str, Any], label: str) -> None:
+    def _seal_steps(self, state: dict[str, Any], assessment: dict[str, Any], label: str, trace: ToolTrace, from_step: int) -> None:
+        for step in trace.steps[from_step:]:
+            self._record(state, {"type": "tool_call", "tool": step["tool"], "source": step["source"], "ok": step["ok"], "result": step["result"]})
         pattern = assessment["pattern"]
         self._record(state, {"type": f"{label}pattern_detection", "pattern": pattern.pattern.value, "strength": f"{pattern.strength:.2f}"})
         self._record(state, {"type": f"{label}fraud_probability", "fraud_probability": f"{assessment['probability']:.4f}", "verdict": assessment["verdict"].value, "evidence_items": len(assessment["evidence"])})
         self._record(state, {"type": f"{label}stopping_evaluation", "stop": assessment["stop"].should_stop, "reason_code": assessment["stop"].reason_code.value})
         self._record(state, {"type": f"{label}policy_applied", "actions": ",".join(item["action"] for item in assessment["actions"]), "exposure_usd": f"{assessment['exposure']:.2f}"})
 
-    # -------------------------------------------------------- queue overview
+    # ---------------------------------------------------------- queue view
 
     @staticmethod
     def _finding(assessment: dict[str, Any]) -> str:
@@ -425,43 +521,51 @@ class LocalInvestigationEngine(ReferenceWorkflow):
             approvals = [item for item in state.get("approval_requests", []) if item["approval_status"] == "pending"]
             open_requests = len([item for item in state.get("evidence_requests", []) if item.get("status") != "resolved"])
         else:
-            context = self._context(case_input)
+            context = self._previews.get(case_id)
             if context is None:
-                return None
+                context = self._gather(case_input, ToolTrace(self.source_name))
+                if context is None:
+                    return None
+                self._previews[case_id] = context
             assessment = self._assess(case_input, context, [])
             status = "not_started"
             approvals = [item for item in assessment["actions"] if item["route"] in {"L1", "L2"}]
             open_requests = 0 if assessment["stop"].should_stop else 1
-        target: TransactionEvidence = assessment["target"]
-        history = context["customer_history"]
+        target: Txn = assessment["target"]
+        history = context["history"]
         return {
-            "verdict": assessment["verdict"].value, "pattern": assessment["pattern"].pattern.value,
-            "fraud_probability": assessment["probability"], "exposure_usd": assessment["exposure"],
-            "finding": self._finding(assessment), "flagged_amount": target.amount_usd, "channel": target.channel,
+            "verdict": assessment["verdict"].value, "pattern": assessment["pattern"].pattern.value, "fraud_probability": assessment["probability"],
+            "exposure_usd": assessment["exposure"], "finding": self._finding(assessment), "flagged_amount": target.amount, "channel": target.channel,
             "status": status, "pending_approvals": [{"action": item["action"], "route": item["route"]} for item in approvals],
             "open_requests": open_requests, "sar_required": bool(assessment["sar"]["file"]),
             "entities": {
                 "customers": sorted({target.customer_id, *assessment["other_customers"]}),
-                "cards": sorted({item.card_id for item in history if item.card_id} | set(assessment["other_cards"])),
+                "cards": sorted({item.card_id for item in history if item.card_id} | set(assessment["connected_cards"])),
                 "devices": sorted({item.device_profile_id for item in history if item.device_profile_id}),
                 "shared_devices": [target.device_profile_id] if target.device_profile_id and assessment["other_customers"] else [],
                 "transactions": sorted({item.transaction_id for item in history} | {item.transaction_id for item in context["network"]}),
-                "closed_cases": [row["case_id"] for row, _ in assessment["linked"]],
+                "closed_cases": [case.case_id for case, _ in assessment["linked"]],
             },
         }
 
-    # -------------------------------------------------------- workflow API
+    # ------------------------------------------------------ workflow API
 
     def start_investigation(self, case_input: dict[str, Any]) -> dict[str, Any]:
-        state = super().start_investigation(case_input)
-        context = self._context(case_input)
-        if context is None:
-            return state
         case_id = case_input["case_id"]
-        self._contexts[case_id] = {"input": dict(case_input), **context}
-        state["evidence_requests"], state["evidence_responses"], state["approval_requests"] = [], [], []
-        assessment = self._assess(case_input, context, [])
-        self._step(state, assessment, "")
+        trace = ToolTrace(self.source_name)
+        context = self._gather(case_input, trace)
+        if context is None:
+            state = super().start_investigation(case_input)
+            state["agent_trace"] = trace.steps
+            state["data_source"] = self.source_name
+            return state
+        self._contexts[case_id] = context
+        self._previews.pop(case_id, None)
+        state: dict[str, Any] = {**case_input, "case_id": case_id, "trigger": dict(case_input), "evidence_requests": [], "evidence_responses": [], "approval_requests": [], "audit": []}
+        self._states[case_id] = state
+        self._record(state, {"type": "case_opened", "trigger_type": str(case_input.get("trigger_type", "")), "flagged_txn_id": str(case_input.get("flagged_txn_id", ""))})
+        assessment = self._assess(case_input, context, [], trace)
+        self._seal_steps(state, assessment, "", trace, 0)
         request = self._next_request(case_id, assessment, state)
         if request:
             state["evidence_requests"] = [request]
@@ -470,6 +574,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         self._render(state, assessment)
         if state["approval_requests"]:
             self._record(state, {"type": "approvals_routed", "pending": ",".join(item["action"] for item in state["approval_requests"])})
+        self._remember_if_done(state)
         return state
 
     def resume_with_evidence(self, case_id: str, evidence: dict[str, Any]) -> dict[str, Any]:
@@ -485,29 +590,37 @@ class LocalInvestigationEngine(ReferenceWorkflow):
             raise ValueError(f"{result!r} is not a valid {request['type']} result")
         details = evidence.get("details") or ""
         label = {"customer_validation": "Customer", "step_up_auth": "Step-up authentication", "analyst_info": "Analyst"}[request["type"]]
+        simulated = bool(evidence.get("simulated"))
         response = {"request_id": request["request_id"], "type": request["type"], "result": result, "details": details if isinstance(details, str) else str(details),
                     "claim": f"{label} response: {result.replace('_', ' ')}" + (f". {details}" if details else "."), "source": evidence.get("source", "analyst"),
-                    "ref": request["request_id"], "entity_ids": [self._contexts[case_id]["target"].customer_id], "simulated": False}
+                    "ref": request["request_id"], "entity_ids": [self._contexts[case_id]["target"].customer_id], "simulated": simulated}
+        if simulated:
+            response["assumption"] = str(evidence.get("assumption") or "Simulated response; not customer-provided evidence.")
         request["status"] = "resolved"
         state["evidence_responses"] = [*state.get("evidence_responses", []), response]
-        self._record(state, {"type": "evidence_response_recorded", "request_id": request["request_id"], "result": result})
+        self._record(state, {"type": "evidence_response_recorded", "request_id": request["request_id"], "result": result, "simulated": simulated})
         context = self._contexts[case_id]
-        assessment = self._assess(context["input"], context, state["evidence_responses"])
-        self._step(state, assessment, "reassessed_")
+        trace: ToolTrace = context["trace"]
+        steps_before = len(trace.steps)
+        assessment = self._assess(context["input"], context, state["evidence_responses"], trace)
+        self._seal_steps(state, assessment, "reassessed_", trace, steps_before)
         follow_up = self._next_request(case_id, assessment, state)
         if follow_up:
             state["evidence_requests"] = [*state["evidence_requests"], follow_up]
             self._record(state, {"type": "evidence_requested", "request_id": follow_up["request_id"], "request_type": follow_up["type"]})
         initial = state["next_best_actions"]["initial"]
-        changed = [item["action"] for item in assessment["actions"] if item["action"] not in {entry["action"] for entry in initial}]
+        added = [item["action"] for item in assessment["actions"] if item["action"] not in {entry["action"] for entry in initial}]
         dropped = [item["action"] for item in initial if item["action"] not in {entry["action"] for entry in assessment["actions"]}]
         what_changed = f"{label} evidence ({result.replace('_', ' ')}) moved fraud probability to {assessment['probability']:.2f}."
-        if changed:
-            what_changed += " Added: " + ", ".join(action.replace("_", " ").lower() for action in changed) + "."
+        if added:
+            what_changed += " Added: " + ", ".join(action.replace("_", " ").lower() for action in added) + "."
         if dropped:
             what_changed += " No longer recommended: " + ", ".join(action.replace("_", " ").lower() for action in dropped) + "."
+        if not added and not dropped:
+            what_changed += " The recommended actions did not change."
         state["next_best_actions"] = {"initial": initial, "final": assessment["actions"], "what_changed": what_changed}
         self._render(state, assessment)
+        self._remember_if_done(state)
         return state
 
     def resume_with_approval(self, case_id: str, decision: dict[str, Any]) -> dict[str, Any]:
@@ -526,5 +639,19 @@ class LocalInvestigationEngine(ReferenceWorkflow):
             verdict = state["case"]["verdict"]
             state["case"]["status"] = "closed_fraud" if verdict == "fraud" else "closed_legitimate" if verdict == "legitimate" else "escalated"
             self._record(state, {"type": "case_closed", "case_status": state["case"]["status"]})
+            self._remember_if_done(state)
         state["message"] = f"{item['action'].replace('_', ' ').capitalize()} {'approved' if approved else 'rejected'} at {item['route']}" + (f"; {len(pending)} approval(s) still pending." if pending else "; no approvals pending.")
         return state
+
+    def _remember_if_done(self, state: dict[str, Any]) -> None:
+        """Completed investigations become case memory for later ones."""
+        if state.get("status") != "completed" or state.get("remembered"):
+            return
+        context = self._contexts[state["case_id"]]
+        target: Txn = context["target"]
+        self.memory.remember({"case_id": state["case_id"], "customer_id": target.customer_id, "card_id": target.card_id,
+                              "devices": sorted({item.device_profile_id for item in context["history"] if item.device_profile_id}),
+                              "verdict": state["case"]["verdict"], "pattern": state["case"]["pattern"], "fraud_probability": state["case"]["fraud_probability"],
+                              "status": state["case"]["status"], "summary": state["case"]["summary"], "recorded_at": datetime.now(timezone.utc).isoformat()})
+        state["remembered"] = True
+        self._record(state, {"type": "case_memory_updated", "case_id": state["case_id"]})

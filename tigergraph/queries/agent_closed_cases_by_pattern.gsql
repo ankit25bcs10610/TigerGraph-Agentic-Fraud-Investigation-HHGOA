@@ -1,0 +1,9 @@
+// Agent tool: case memory lookup - the most recent closed cases that share a detected pattern.
+CREATE QUERY agent_closed_cases_by_pattern(STRING pattern, INT k) FOR GRAPH FraudInvestigation SYNTAX v2 {
+  ListAccum<STRING> @txn_ids;
+  cases = SELECT cc FROM ClosedCase:cc WHERE cc.pattern == pattern ORDER BY cc.closed_at DESC LIMIT k;
+  involved = SELECT t FROM cases:cc -(INVOLVES>)- Transaction:t ACCUM cc.@txn_ids += t.transaction_id;
+  PRINT cases[cases.case_id AS case_id, cases.customer_id AS customer_id, cases.card_id AS card_id, cases.outcome AS outcome,
+              cases.pattern AS pattern, cases.@txn_ids AS txn_ids, cases.connected_card_ids AS connected_card_ids,
+              cases.exposure_usd AS exposure_usd, cases.analyst_notes AS analyst_notes, cases.opened_at AS opened_at] AS rows;
+}

@@ -154,6 +154,17 @@ class ReferenceWorkflow:
 
 
 def build_reference_runtime(path: str, transactions_path: str | None = None, closed_cases_path: str | None = None) -> tuple[CasePackProvider, ReferenceWorkflow]:
-    """Case pack plus the local investigation engine over the configured CSV inputs."""
+    """Case pack plus the investigation agent over the configured graph source.
+
+    ``DATA_SOURCE=tigergraph`` answers the agent's tools with installed GSQL
+    queries over TigerGraph MCP; otherwise the supplied CSV files are used.
+    """
     from backend.local_engine import LocalInvestigationEngine
-    return CasePackProvider(path), LocalInvestigationEngine(transactions_path or os.getenv("TRANSACTIONS_PATH"), closed_cases_path or os.getenv("CLOSED_CASES_PATH"))
+    from backend.sources.tigergraph_source import open_source
+
+    transactions = transactions_path or os.getenv("TRANSACTIONS_PATH")
+    closed_cases = closed_cases_path or os.getenv("CLOSED_CASES_PATH")
+    identity = os.getenv("IDENTITY_PATH")
+    kind = os.getenv("DATA_SOURCE", "csv")
+    source = open_source(kind, transactions=transactions, identity=identity, closed_cases=closed_cases) if (kind.lower().startswith("tiger") or transactions) else None
+    return CasePackProvider(path), LocalInvestigationEngine(source)
