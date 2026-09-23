@@ -165,12 +165,6 @@ def create_app(workflow: Workflow | None = None, case_provider: CaseInputProvide
 
 def configured_app() -> FastAPI:
     if not os.getenv("CASE_PACK_PATH"):
-        sample_dir = Path(__file__).resolve().parents[1] / "data" / "demo"
-        sample_pack, sample_transactions = sample_dir / "case_pack.csv", sample_dir / "transactions.csv"
-        if sample_pack.exists() and sample_transactions.exists():
-            from backend.demo_runtime import build_reference_runtime
-            provider, workflow = build_reference_runtime(str(sample_pack), str(sample_transactions))
-            return create_app(workflow=workflow, case_provider=provider)
         return create_app()
     from backend.demo_runtime import build_reference_runtime
     provider, workflow = build_reference_runtime(os.environ["CASE_PACK_PATH"])

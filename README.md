@@ -14,6 +14,7 @@ cp .env.example .env
 
 # 2. Point this to the supplied benchmark input.
 # CASE_PACK_PATH=/absolute/path/to/case_pack.csv
+# TRANSACTIONS_PATH=/absolute/path/to/transactions.csv
 
 # 3. Start the API with the same Python environment used for dependencies.
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000

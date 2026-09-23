@@ -3,6 +3,7 @@ import { CaseOption, EvidenceRequest, Investigation } from "./types";
 const configuredBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
 const apiKey = process.env.NEXT_PUBLIC_API_KEY;
 const userRole = process.env.NEXT_PUBLIC_USER_ROLE;
+const analystName = process.env.NEXT_PUBLIC_ANALYST_NAME?.trim();
 const headers = () => ({ "content-type": "application/json", ...(apiKey ? { "x-api-key": apiKey } : {}), ...(userRole ? { "x-user-role": userRole } : {}) });
 export type ApiHealth = { status: string; workflow_configured?: boolean; auth_enabled?: boolean };
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -29,6 +30,7 @@ async function uploadCasePack(file: File): Promise<{ status: string; workflow_co
 }
 export const api = {
   isConfigured: Boolean(configuredBaseUrl),
+  identity: { name: analystName || "", role: userRole || "" },
   health: () => call<ApiHealth>("/health", { headers: { accept: "application/json" } }),
   uploadCasePack,
   cases: () => call<CaseOption[]>("/cases"),

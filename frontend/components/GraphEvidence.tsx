@@ -1,12 +1,61 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+
+import { useEffect, useMemo, useRef, useState } from "react";
 import cytoscape, { Core, ElementDefinition } from "cytoscape";
-type Graph = { nodes: unknown[]; edges: unknown[] };
-const colors: Record<string, string> = { Customer: "#4da3ff", Card: "#20d7a0", Transaction: "#ff5964", DeviceProfile: "#a879ff", EmailDomain: "#5f8cff", BillingRegion: "#ffb83d", ClosedCase: "#ef6c9e", InvestigationCase: "#d080ff" };
+import { humanize } from "../lib/format";
+import { Graph } from "../lib/types";
+import { Icon } from "./icons";
+
+function cssVar(name: string) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
 export function GraphEvidence({ graph }: { graph?: Graph }) {
-  const ref = useRef<HTMLDivElement>(null); const cyRef = useRef<Core | null>(null); const [layout, setLayout] = useState("cose"); const [focus, setFocus] = useState("all");
-  useEffect(() => { if (!ref.current || !graph) return; const elements = [...(graph.nodes as ElementDefinition[]), ...(graph.edges as ElementDefinition[])]; const cy = cytoscape({ container: ref.current, elements, wheelSensitivity: 0.2, style: [{ selector: "node", style: { "background-color": "#4da3ff", label: "data(label)", color: "#dbeafe", "font-size": "10px", "text-wrap": "wrap", "text-max-width": "100px", "border-width": "2px", "border-color": "#8fc9ff", "text-outline-color": "#07101e", "text-outline-width": "2px", "text-valign": "bottom", "text-margin-y": 7, width: 26, height: 26 } }, { selector: "edge", style: { width: 1.5, "line-color": "#54718f", "target-arrow-color": "#8fb2d4", "target-arrow-shape": "triangle", label: "data(label)", color: "#a8c2df", "font-size": "8px", "text-background-color": "#0d1b2e", "text-background-opacity": 1, "curve-style": "bezier" } }, ...Object.entries(colors).map(([type, color]) => ({ selector: `node[entity_type = "${type}"]`, style: { "background-color": color, "border-color": color, "shadow-blur": "14px", "shadow-color": color, "shadow-opacity": 0.35 } }))], layout: { name: layout } }); cyRef.current = cy; return () => { cy.destroy(); cyRef.current = null; }; }, [graph, layout]);
-  useEffect(() => { const cy = cyRef.current; if (!cy) return; cy.nodes().forEach((node) => { node.style("display", focus === "all" || node.data("entity_type") === focus ? "element" : "none"); }); cy.edges().forEach((edge) => { edge.style("display", edge.source().style("display") === "none" || edge.target().style("display") === "none" ? "none" : "element"); }); }, [focus]);
-  if (!graph) return <div className="graph-empty">No graph evidence returned by the investigation API.</div>;
-  return <section className="graph-card"><div className="graph-toolbar"><div><h3>Investigation Graph</h3><p>Connected entities and relationships · powered by TigerGraph</p></div><div className="graph-controls"><label>Focus <select value={focus} onChange={(event) => setFocus(event.target.value)}><option value="all">All entities</option>{Object.keys(colors).map((type) => <option key={type} value={type}>{type}</option>)}</select></label><label>Layout <select value={layout} onChange={(event) => setLayout(event.target.value)}><option value="cose">Force</option><option value="breadthfirst">Hierarchy</option><option value="circle">Circle</option></select></label><button type="button" onClick={() => cyRef.current?.fit(undefined, 35)}>Fit view</button></div></div><div className="graph-legend">{Object.entries(colors).map(([type, color]) => <span key={type}><i style={{ background: color }} />{type}</span>)}</div><div className="graph-canvas" ref={ref} aria-label="Investigation subgraph" /></section>;
+  const ref = useRef<HTMLDivElement>(null);
+  const cyRef = useRef<Core | null>(null);
+  const [layout, setLayout] = useState("breadthfirst");
+  const [focus, setFocus] = useState("all");
+  const [picked, setPicked] = useState<Record<string, unknown> | null>(null);
+  const types = useMemo(() => [...new Set((graph?.nodes ?? []).map((node) => node.data.entity_type).filter(Boolean))] as string[], [graph]);
+
+  useEffect(() => {
+    if (!ref.current || !graph?.nodes.length) return;
+    const text = cssVar("--text"); const muted = cssVar("--muted"); const line = cssVar("--line-strong");
+    const surface = cssVar("--surface-2"); const risk = cssVar("--risk"); const info = cssVar("--info");
+    const cy = cytoscape({
+      container: ref.current,
+      elements: [...graph.nodes, ...graph.edges] as ElementDefinition[],
+      wheelSensitivity: 0.2,
+      style: [
+        { selector: "node", style: { "background-color": surface, "border-width": 2, "border-color": info, label: "data(label)", color: text, "font-size": 11, "font-family": "IBM Plex Sans, system-ui, sans-serif", "text-valign": "bottom", "text-margin-y": 8, "text-wrap": "ellipsis", "text-max-width": "120px", width: 34, height: 34 } },
+        { selector: "node[?flagged]", style: { "border-color": risk, "border-width": 3, "underlay-color": risk, "underlay-opacity": 0.18, "underlay-padding": 8 } },
+        { selector: "node:selected", style: { "border-color": text } },
+        { selector: "edge", style: { width: 1.4, "line-color": line, "target-arrow-color": line, "target-arrow-shape": "triangle", "curve-style": "bezier", label: "data(label)", color: muted, "font-size": 9, "text-rotation": "autorotate", "text-margin-y": -8 } },
+      ],
+      layout: (layout === "breadthfirst" ? { name: "breadthfirst", directed: true, spacingFactor: 1.3, padding: 30 } : { name: layout, padding: 30 }) as cytoscape.LayoutOptions,
+    });
+    cy.on("tap", "node", (event) => setPicked(event.target.data()));
+    cy.on("tap", (event) => { if (event.target === cy) setPicked(null); });
+    cyRef.current = cy;
+    return () => { cy.destroy(); cyRef.current = null; };
+  }, [graph, layout]);
+
+  useEffect(() => {
+    const cy = cyRef.current; if (!cy) return;
+    cy.nodes().forEach((node) => { node.style("display", focus === "all" || node.data("entity_type") === focus ? "element" : "none"); });
+    cy.edges().forEach((edge) => { edge.style("display", edge.source().style("display") === "none" || edge.target().style("display") === "none" ? "none" : "element"); });
+  }, [focus, layout, graph]);
+
+  return <section className="panel explorer">
+    <header className="panel-head">
+      <span className="panel-icon"><Icon name="graph" /></span>
+      <div><h2>Graph explorer</h2><p>{graph?.nodes.length ?? 0} entities, {graph?.edges.length ?? 0} links. Drag to rearrange; select an entity to inspect it.</p></div>
+      <div className="toolbar">
+        <label>Show<select value={focus} onChange={(event) => setFocus(event.target.value)}><option value="all">All entities</option>{types.map((type) => <option key={type} value={type}>{humanize(type.replace(/([a-z])([A-Z])/g, "$1_$2"))}</option>)}</select></label>
+        <label>Layout<select value={layout} onChange={(event) => setLayout(event.target.value)}><option value="breadthfirst">Hierarchy</option><option value="cose">Force</option><option value="circle">Circle</option><option value="concentric">Concentric</option></select></label>
+        <button className="button ghost" onClick={() => cyRef.current?.fit(undefined, 30)} type="button">Fit view</button>
+      </div>
+    </header>
+    {!graph?.nodes.length ? <p className="empty">This investigation returned no graph entities.</p> : <div className="explorer-body"><div className="explorer-canvas" ref={ref} aria-label="Interactive investigation graph" />{picked && <aside className="map-detail"><div className="map-detail-head"><strong>{String(picked.entity_id ?? picked.label ?? picked.id)}</strong><button aria-label="Close entity details" className="icon-button small" onClick={() => setPicked(null)} type="button"><Icon name="x" size={14} /></button></div><dl>{Object.entries(picked).filter(([key, value]) => !["id", "label"].includes(key) && value !== "" && value !== undefined).map(([key, value]) => <div key={key}><dt>{humanize(key)}</dt><dd>{typeof value === "object" ? JSON.stringify(value) : String(value)}</dd></div>)}</dl></aside>}</div>}
+  </section>;
 }

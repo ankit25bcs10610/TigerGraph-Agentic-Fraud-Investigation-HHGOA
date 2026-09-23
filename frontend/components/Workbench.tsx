@@ -1,134 +1,114 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { Action, CaseOption, Evidence, EvidenceRequest, Investigation } from "../lib/types";
-import { Audit, Sar, SimilarCases, Timeline } from "./DataPanels";
+import { dateTime, flaggedRow, humanize, initials, money, relative, rowTime, toNumber, verdictTone } from "../lib/format";
+import { CaseOption, EvidenceRequest, Investigation } from "../lib/types";
 import { GraphEvidence } from "./GraphEvidence";
-import { CaseIntegrity } from "./CaseIntegrity";
+import { Icon, IconName } from "./icons";
+import { ActionsView, allEvidence, AuditView, EvidenceRequests, EvidenceTable, KeyFigures, LinkButton, NextBestAction, Panel, redact, SarView, SimilarCases, TransactionsTable, WorkflowTimeline } from "./Panels";
+import { RelationshipMap } from "./RelationshipMap";
 
-const tabs = ["Overview", "Graph Evidence", "Transaction Timeline", "Evidence", "Similar Cases", "Actions", "SAR", "Audit Trail"] as const;
-type Tab = (typeof tabs)[number];
+type View = "overview" | "cases" | "graph" | "transactions" | "evidence" | "actions" | "report" | "audit";
+type Connection = "checking" | "online" | "setup" | "offline";
 
-function formatExposure(value: unknown): string {
-  const amount = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(amount) ? `$${amount.toLocaleString()}` : "Not assessed";
+const nav: { view: View; label: string; icon: IconName; needsCase: boolean }[] = [
+  { view: "overview", label: "Investigation", icon: "radar", needsCase: true },
+  { view: "cases", label: "Case queue", icon: "queue", needsCase: false },
+  { view: "graph", label: "Graph explorer", icon: "graph", needsCase: true },
+  { view: "transactions", label: "Transactions", icon: "swap", needsCase: true },
+  { view: "evidence", label: "Evidence", icon: "doc", needsCase: true },
+  { view: "actions", label: "Actions & approvals", icon: "shield", needsCase: true },
+  { view: "report", label: "SAR report", icon: "ledger", needsCase: true },
+  { view: "audit", label: "Audit log", icon: "pulse", needsCase: true },
+];
+
+const connectionText: Record<Connection, string> = { checking: "Connecting to API", online: "System operational", setup: "Case pack needed", offline: "API offline" };
+
+function message(caught: unknown, fallback: string) {
+  return caught instanceof Error ? caught.message : fallback;
 }
 
-function ActionList({ title, items }: { title: string; items?: Action[] }) {
-  return <section className="space-y-2"><h3 className="panel-title">{title}</h3>{items?.length ? items.map((item, index) => <article className="rounded-xl border border-slate-200 p-3" key={`${item.action}-${index}`}><div className="flex justify-between gap-3"><strong>{item.action.replaceAll("_", " ")}</strong><span className={`route-badge route-${item.route.toLowerCase()}`}>{item.route}</span></div><p className="mt-1 text-sm text-slate-600">{item.reason}</p></article>) : <p className="text-sm text-slate-500">No actions returned.</p>}</section>;
-}
-
-function EvidenceRow({ item }: { item: Evidence }) {
-  return <article className="border-b border-slate-100 py-4 last:border-0"><div className="mb-2 flex gap-2"><span className="source-badge">{item.source} evidence</span>{item.simulated && <span className="simulated-badge">Simulated</span>}</div><p className="text-sm">{item.claim}</p><small className="text-slate-500">Reference: {item.ref} · Entities: {item.entity_ids.join(", ") || "None"}</small>{item.simulated && <p className="text-xs text-amber-900">Assumption: {item.assumption}</p>}</article>;
-}
-
-function safeAudit(events: Record<string, unknown>[]) {
-  const secret = /api[_-]?key|token|password|secret|credential|authorization/i;
-  return events.map((event) => Object.fromEntries(Object.entries(event).filter(([key]) => !secret.test(key))));
+function readCollapsed() {
+  try { return window.localStorage.getItem("sentinel.nav.collapsed") === "1"; } catch { return false; }
 }
 
 export function Workbench() {
-  const [availableCases, setAvailableCases] = useState<CaseOption[]>([]);
+  const [connection, setConnection] = useState<Connection>(api.isConfigured ? "checking" : "offline");
+  const [cases, setCases] = useState<CaseOption[]>([]);
   const [selected, setSelected] = useState("");
   const [data, setData] = useState<Investigation | null>(null);
-  const [tab, setTab] = useState<Tab>("Overview");
+  const [view, setView] = useState<View>("cases");
+  const [query, setQuery] = useState("");
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [connection, setConnection] = useState<"checking" | "online" | "setup" | "offline">(api.isConfigured ? "checking" : "offline");
-  const [queueFilter, setQueueFilter] = useState("");
-  const [casePackFile, setCasePackFile] = useState<File | null>(null);
-  const [responses, setResponses] = useState<Record<string, { result: string; details: string }>>({});
+  const [collapsed, setCollapsed] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (!api.isConfigured) return;
-    let active = true;
-    api.health().then((health) => {
-      if (!active) return;
-      if (!health.workflow_configured) {
-        setConnection("setup");
-        return;
-      }
-      setConnection("online");
-      return api.cases();
-    }).then((items) => {
-      if (!active || !items) return;
-      setAvailableCases(items);
-      setSelected((current) => current || items[0]?.case_id || "");
-    }).catch((caught) => {
-      if (!active) return;
-      setConnection("offline");
-      setError(caught instanceof Error ? caught.message : "Unable to connect to the investigation API.");
-    });
-    return () => { active = false; };
-  }, []);
+  useEffect(() => { setCollapsed(readCollapsed()); }, []);
+  useEffect(() => { try { window.localStorage.setItem("sentinel.nav.collapsed", collapsed ? "1" : "0"); } catch { /* storage unavailable */ } }, [collapsed]);
 
-  const filteredCases = useMemo(() => {
-    const query = queueFilter.trim().toLowerCase();
-    if (!query) return availableCases;
-    return availableCases.filter((item) => `${item.case_id} ${item.trigger_type ?? ""}`.toLowerCase().includes(query));
-  }, [availableCases, queueFilter]);
-  const usingSyntheticSample = availableCases.some((item) => item.trigger_type?.startsWith("synthetic_"));
-
-  async function retryConnection() {
-    setError(""); setConnection("checking");
+  const connect = useCallback(async () => {
+    if (!api.isConfigured) { setConnection("offline"); return; }
+    setConnection("checking"); setError("");
     try {
       const health = await api.health();
-      if (!health.workflow_configured) { setConnection("setup"); setAvailableCases([]); return; }
-      setConnection("online"); setAvailableCases(await api.cases());
-    }
-    catch (caught) { setConnection("offline"); setError(caught instanceof Error ? caught.message : "Unable to connect to the investigation API."); }
-  }
-
-  async function loadCasePack() {
-    if (!casePackFile) { setError("Choose the supplied case_pack.csv first."); return; }
-    setLoading(true); setError("");
-    try {
-      await api.uploadCasePack(casePackFile);
+      if (!health.workflow_configured) { setConnection("setup"); setCases([]); return; }
       const items = await api.cases();
-      setAvailableCases(items); setSelected(items[0]?.case_id ?? ""); setData(null); setConnection("online");
+      setCases(items); setConnection("online");
+      setSelected((current) => current || items[0]?.case_id || "");
     } catch (caught) {
-      setConnection("setup");
-      setError(caught instanceof Error ? caught.message : "Unable to load the case pack.");
-    } finally { setLoading(false); }
-  }
-
-  async function start() {
-    if (!selected) return;
-    setLoading(true); setError("");
-    try { setData(await api.start(selected)); setTab("Graph Evidence"); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to start investigation."); }
-    finally { setLoading(false); }
-  }
-
-  async function navigate(nextTab: Tab) {
-    if (!data && selected) {
-      setLoading(true); setError("");
-      try { setData(await api.start(selected)); }
-      catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to start investigation."); return; }
-      finally { setLoading(false); }
+      setConnection("offline"); setError(message(caught, "The investigation API could not be reached."));
     }
-    setTab(nextTab);
-  }
+  }, []);
+  useEffect(() => { void connect(); }, [connect]);
 
-  async function submitEvidence(request: EvidenceRequest) {
-    if (!data) return;
-    const answer = responses[request.request_id] ?? { result: "unknown", details: "" };
-    setLoading(true); setError("");
-    try { setData(await api.evidence(data.case_id, request, answer.result, answer.details)); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to submit evidence."); }
-    finally { setLoading(false); }
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); searchRef.current?.focus(); }
+      if (event.key === "Escape") setBellOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const run = useCallback(async (caseId: string) => {
+    if (!caseId) return;
+    setSelected(caseId); setBusy(true); setError("");
+    try { setData(await api.start(caseId)); setView("overview"); }
+    catch (caught) { setError(message(caught, "The investigation could not be started.")); }
+    finally { setBusy(false); }
+  }, []);
+
+  async function uploadPack(file: File) {
+    setBusy(true); setError("");
+    try {
+      await api.uploadCasePack(file);
+      const items = await api.cases();
+      setCases(items); setSelected(items[0]?.case_id ?? ""); setData(null); setConnection("online"); setView("cases");
+    } catch (caught) { setError(message(caught, "The case pack could not be loaded.")); }
+    finally { setBusy(false); if (fileRef.current) fileRef.current.value = ""; }
   }
 
   async function approve(action: string, approved: boolean) {
     if (!data) return;
-    setLoading(true); setError("");
+    setBusy(true); setError("");
     try { setData(await api.approve(data.case_id, action, approved)); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to record approval."); }
-    finally { setLoading(false); }
+    catch (caught) { setError(message(caught, "The approval decision could not be recorded.")); }
+    finally { setBusy(false); }
   }
 
-  function exportDossier() {
+  async function submitEvidence(request: EvidenceRequest, result: string, details: string) {
+    if (!data) return;
+    setBusy(true); setError("");
+    try { setData(await api.evidence(data.case_id, request, result, details)); }
+    catch (caught) { setError(message(caught, "The evidence response could not be recorded.")); }
+    finally { setBusy(false); }
+  }
+
+  function exportCase() {
     if (!data) return;
     const dossier = {
       format: "sentinel-case-dossier/v1",
@@ -140,37 +120,151 @@ export function Workbench() {
       evidence_requests: data.evidence_requests ?? [],
       evidence_responses: data.evidence_responses ?? [],
       sar: data.sar,
-      audit: safeAudit(data.audit ?? []),
-      provenance: "Generated by the Sentinel analyst workbench. Values are API-returned evidence and decisions; no browser-side fraud inference is performed.",
+      integrity: data.integrity,
+      audit: redact(data.audit ?? []),
+      provenance: "Exported from the Sentinel workbench. Every value was returned by the investigation API; the browser performs no fraud inference.",
     };
     const url = URL.createObjectURL(new Blob([JSON.stringify(dossier, null, 2)], { type: "application/json" }));
     const anchor = document.createElement("a"); anchor.href = url; anchor.download = `${data.case_id}-dossier.json`; anchor.click(); URL.revokeObjectURL(url);
   }
 
-  const requests = data?.evidence_requests ?? [];
-  const assessedCase = data?.case;
-  const connectionLabel = connection === "checking" ? "Checking API" : connection === "online" ? "System ready" : connection === "setup" ? "Setup required" : "API offline";
-  return <main className="workbench-shell">
-    <header className="topbar"><div className="brand-mark"><span className="brand-shield">◇</span><div><strong>SENTINEL</strong><small>Agentic Fraud Intelligence</small></div></div><div className="global-search"><span>⌕</span><input aria-label="Search cases, customers, transactions" placeholder="Search cases, customers, transactions…" value={queueFilter} onChange={(event) => setQueueFilter(event.target.value)} /></div><div className="topbar-right"><span className={`connection ${connection}`}><i />{connectionLabel}</span><span className="analyst-pill"><span className="analyst-avatar">AD</span><b>Analyst</b>⌄</span></div></header>
-    <div className="workbench-layout">
-      <aside className="case-queue"><nav className="side-nav" aria-label="Primary navigation"><p className="nav-label">Workspace</p><button className={`nav-item ${tab === "Overview" ? "active" : ""}`} onClick={() => navigate("Overview")} type="button">⌂ <span>Dashboard</span></button><button className={`nav-item ${data ? "active" : ""}`} onClick={() => navigate("Overview")} type="button">◉ <span>Investigations</span></button><button className="nav-item" onClick={() => document.querySelector(".queue-head")?.scrollIntoView({ behavior: "smooth" })} type="button">▣ <span>Cases</span></button><button className={`nav-item ${tab === "Graph Evidence" ? "active" : ""}`} onClick={() => navigate("Graph Evidence")} type="button">⌘ <span>Graph Explore</span></button><button className={`nav-item ${tab === "SAR" ? "active" : ""}`} onClick={() => navigate("SAR")} type="button">▤ <span>Reports</span></button><button className={`nav-item ${tab === "Audit Trail" ? "active" : ""}`} onClick={() => navigate("Audit Trail")} type="button">▥ <span>Audit Log</span></button><button className={`nav-item ${tab === "Similar Cases" ? "active" : ""}`} onClick={() => navigate("Similar Cases")} type="button">▧ <span>Knowledge Base</span></button><p className="nav-label nav-system">System</p><button className="nav-item" onClick={() => document.querySelector(".case-pack-import")?.scrollIntoView({ behavior: "smooth" })} type="button">⚙ <span>Settings</span></button></nav><section className="case-pack-import"><p className="import-label">Upload your benchmark case pack</p><strong>{casePackFile?.name || "No file selected"}</strong><label className="file-picker"><input type="file" accept=".csv,text/csv" onChange={(event) => setCasePackFile(event.target.files?.[0] ?? null)} />Choose CSV</label><button className="load-pack-button" disabled={!casePackFile || loading} onClick={loadCasePack} type="button">{loading ? "Loading…" : "Load case pack"}</button></section><div className="queue-head"><div><p className="eyebrow">Backend queue</p><h2>Case intake</h2></div><span>{availableCases.length}</span></div>{usingSyntheticSample && <p className="sample-banner">Synthetic sample data is loaded for testing. Upload your benchmark CSV to replace it.</p>}<p className="queue-copy">Select a case to open its evidence workspace.</p><div className="case-list">{filteredCases.map((item) => <button className={item.case_id === selected ? "selected" : ""} key={item.case_id} onClick={() => { setSelected(item.case_id); setData(null); }} type="button"><strong>{item.case_id}</strong><small>{item.trigger_type || "Ready"}</small></button>)}{!filteredCases.length && <div className="queue-empty">Upload your case_pack.csv to populate the investigation queue.</div>}</div><button className="start-button" disabled={loading || !selected || connection !== "online"} onClick={start} type="button">{loading ? "Opening investigation…" : `Start ${selected || "case"}`}</button>{connection !== "online" && connection !== "setup" && <button className="retry-button" onClick={retryConnection} type="button">Retry connection</button>}<div className="graph-health"><i /> <span>Investigation API<br/><b>{connectionLabel}</b></span></div></aside>
-      <section className="workspace">{error && <p className="notice error" role="alert"><strong>Connection issue</strong><span>{error}</span></p>}{!api.isConfigured && <p className="notice config"><strong>Connect the investigation API.</strong><span>Set <code>NEXT_PUBLIC_API_BASE_URL</code> in <code>frontend/.env.local</code>, then restart Next.js.</span></p>}
-        {!data ? <section className="intake-state"><div className="intake-orbit orbit-one" /><div className="intake-orbit orbit-two" /><div className="intake-icon">⌁</div><p className="eyebrow">Fraud operations command center</p><h2>{connection === "online" ? "Select a case. See the full picture." : connection === "checking" ? "Securing your investigation workspace…" : connection === "setup" ? "Upload your case pack to begin." : "Investigation API unavailable"}</h2><p>{connection === "online" ? "Start a benchmark case to assemble graph evidence, policy decisions, evidence requests, and a complete audit record in one defensible workflow." : connection === "setup" ? "Use the always-visible Upload Case Pack card in the left panel. Sentinel validates your own case_pack.csv locally and loads its real triggers—nothing is hard-coded in the browser." : "The workbench cannot reach the local API. Start the FastAPI service, then retry the connection."}</p>{connection !== "online" && connection !== "setup" && <button className="primary-cta" onClick={retryConnection} type="button">Retry connection</button>}<div className="intake-points"><span><i />Graph-grounded evidence</span><span><i />Policy-controlled actions</span><span><i />Auditable decisions</span></div></section> : <>
-          <section className="case-hero"><div><p className="eyebrow">Fraud investigation</p><h2>{data.case_id} <span className="case-status">{data.status ?? "INVESTIGATING"}</span></h2><p>{assessedCase?.summary || data.message || data.trigger_text}</p></div><div className="case-hero-actions"><button className="dossier-button" onClick={exportDossier} type="button">⇩ Export case dossier</button><div className="case-meta"><span>Customer <b>{data.customer_id || "Not returned"}</b></span><span>Card <b>{data.card_id || "Not returned"}</b></span><span>Flagged transaction <b>{data.flagged_txn_id || "Not returned"}</b></span></div></div></section>
-          <section className="case-metrics"><article><span>Bank risk score</span><strong className="risk-value">{data.risk_score ?? "Not returned"}</strong><small>Input signal only</small></article><article><span>Fraud probability</span><strong className="probability-value">{assessedCase?.fraud_probability == null ? "Not assessed" : `${Math.round(assessedCase.fraud_probability * 100)}%`}</strong><small>Deterministic evidence assessment</small></article><article><span>Exposure</span><strong>{formatExposure(assessedCase?.exposure_usd)}</strong><small>{data.timeline?.length ?? 0} transaction(s) returned</small></article><article><span>Pattern</span><strong>{assessedCase?.pattern?.replaceAll("_", " ") || "Not assessed"}</strong><small>Evidence-derived pattern</small></article><article><span>Status</span><strong>{assessedCase?.status || data.status || "Open"}</strong><small>{data.evidence_requests?.length ? "Awaiting evidence" : "Investigation state"}</small></article></section>
-          <nav className="tabs" aria-label="Case workspace views">{tabs.map((item) => <button className={tab === item ? "active" : ""} key={item} onClick={() => setTab(item)} type="button">{item}</button>)}</nav>
-          <section className="workspace-panel">
-            {tab === "Overview" && <div className="overview-stack"><div className="metric-grid"><article><span>Flagged transaction</span><strong>{data.flagged_txn_id || "Not returned"}</strong></article><article><span>Bank risk score</span><strong className="risk-value">{data.risk_score ?? "Not returned"}</strong><small>Input signal only</small></article><article><span>Fraud probability</span><strong className="probability-value">{assessedCase?.fraud_probability == null ? "Not assessed" : `${Math.round(assessedCase.fraud_probability * 100)}%`}</strong><small>Deterministic evidence assessment</small></article><article><span>Exposure</span><strong>{formatExposure(assessedCase?.exposure_usd)}</strong></article></div><CaseIntegrity evidence={assessedCase?.evidence ?? []} requests={requests} auditCount={data.audit?.length ?? 0} status={assessedCase?.status || data.status} integrity={data.integrity} /></div>}
-            {tab === "Graph Evidence" && <div className="graph-workspace"><GraphEvidence graph={data.graph} /><aside className="evidence-summary"><div className="panel-heading"><h3>Evidence Summary</h3><span>{assessedCase?.evidence?.length ?? 0}</span></div>{assessedCase?.evidence?.length ? assessedCase.evidence.map((item, index) => <article key={`${item.ref}-${index}`}><b>{item.claim}</b><small>{item.source} · {item.ref}</small></article>) : <p>No deterministic evidence returned yet.</p>}<div className="progress-card"><div className="panel-heading"><h3>Investigation Progress</h3><b>{data.status === "evidence_available" ? "Evidence available" : data.status}</b></div><div className="progress-track"><i style={{ width: data.status === "evidence_available" ? "45%" : "15%" }} /></div><small>Progress reflects returned workflow state, not a fabricated fraud outcome.</small></div></aside></div>}
-            {tab === "Transaction Timeline" && <Timeline rows={data.timeline ?? []} />}
-            {tab === "Evidence" && <div>{[...(assessedCase?.evidence ?? []), ...(data.evidence_responses ?? [])].map((item, index) => <EvidenceRow item={item} key={`${item.ref}-${index}`} />)}{requests.map((request) => <article className="request-card" key={request.request_id}><p className="panel-title">Evidence request · {request.type.replaceAll("_", " ")}</p><strong>{request.question}</strong><p>{request.reason}</p><select aria-label={`Result for ${request.request_id}`} value={responses[request.request_id]?.result ?? "unknown"} onChange={(event) => setResponses({ ...responses, [request.request_id]: { ...(responses[request.request_id] ?? { details: "" }), result: event.target.value } })}><option value="unknown">Unknown</option><option value="confirmed">Confirmed</option><option value="denied">Denied</option><option value="no_reply">No reply</option><option value="passed">Passed</option><option value="failed">Failed</option><option value="not_completed">Not completed</option></select><textarea aria-label={`Details for ${request.request_id}`} placeholder="Response details (optional)" value={responses[request.request_id]?.details ?? ""} onChange={(event) => setResponses({ ...responses, [request.request_id]: { ...(responses[request.request_id] ?? { result: "unknown" }), details: event.target.value } })} /><button disabled={loading} onClick={() => submitEvidence(request)} type="button">Submit evidence</button></article>)}</div>}
-            {tab === "Similar Cases" && <SimilarCases rows={data.similar_cases ?? []} />}
-            {tab === "Actions" && <div className="action-layout"><section className="nba-panel"><div className="panel-heading"><h3>Next Best Action</h3><span>Policy-controlled</span></div><div className="action-columns"><div><p>Initial action</p><ActionList title="Before evidence" items={data.next_best_actions?.initial} /></div><div className="action-arrow">→</div><div><p>Final action</p><ActionList title="After evidence" items={data.next_best_actions?.final} /></div></div><p className="what-changed">{data.next_best_actions?.what_changed || "No action change returned."}</p></section>{data.approval_requests?.filter((item) => item.approval_status === "pending").map((item) => <article className="approval-panel" key={item.action}><strong>{item.action} · {item.route} approval</strong><p>{item.reason}</p><button onClick={() => approve(item.action, true)} type="button">Approve</button><button onClick={() => approve(item.action, false)} type="button">Reject</button></article>)}</div>}
-            {tab === "SAR" && data.sar && <Sar sar={data.sar} pending={data.approval_requests?.some((item) => item.action === "FILE_REPORT" && item.approval_status === "pending")} />}
-            {tab === "Audit Trail" && <Audit events={data.audit ?? []} />}
-          </section>
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return cases;
+    return cases.filter((item) => Object.values(item).join(" ").toLowerCase().includes(needle));
+  }, [cases, query]);
+
+  const alerts = useMemo(() => {
+    if (!data) return [];
+    const approvals = (data.approval_requests ?? []).filter((item) => item.approval_status === "pending").map((item) => ({ key: `a-${item.action}`, text: `${humanize(item.action)} needs ${item.route} approval`, view: "actions" as View }));
+    const answered = new Set((data.evidence_responses ?? []).map((item) => (item as { request_id?: string }).request_id));
+    const requests = (data.evidence_requests ?? []).filter((item) => item.status !== "completed" && !answered.has(item.request_id)).map((item) => ({ key: `e-${item.request_id}`, text: item.question, view: "evidence" as View }));
+    return [...approvals, ...requests];
+  }, [data]);
+
+  const identity = api.identity;
+  const current = view !== "cases" && !data ? "cases" : view;
+
+  return <div className={`shell ${collapsed ? "collapsed" : ""}`}>
+    <aside className="sidebar">
+      <div className="brand"><span className="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M16 2 29 9.5v13L16 30 3 22.5v-13z" /><path d="M16 9 23 13v6l-7 4-7-4v-6z" /></svg></span><div className="brand-text"><strong>Sentinel</strong><small>Graph fraud investigation</small></div></div>
+      <nav aria-label="Workspace">
+        {nav.map((item) => <button aria-current={current === item.view ? "page" : undefined} className="nav-item" disabled={item.needsCase && !data} key={item.view} onClick={() => setView(item.view)} title={collapsed ? item.label : undefined} type="button"><Icon name={item.icon} /><span>{item.label}</span>{item.view === "cases" && cases.length > 0 && <b className="count">{cases.length}</b>}</button>)}
+      </nav>
+      <div className="sidebar-foot">
+        <button className="nav-item" onClick={() => fileRef.current?.click()} title={collapsed ? "Load case pack" : undefined} type="button"><Icon name="upload" /><span>Load case pack</span></button>
+        <button className="nav-item" onClick={() => setCollapsed(!collapsed)} type="button"><Icon name="collapse" style={{ transform: collapsed ? "rotate(180deg)" : undefined }} /><span>Collapse</span></button>
+      </div>
+      <input accept=".csv,text/csv" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadPack(file); }} ref={fileRef} type="file" />
+    </aside>
+
+    <div className="main">
+      <header className="topbar">
+        <label className="search"><Icon name="search" size={16} /><input aria-label="Search cases" onChange={(event) => { setQuery(event.target.value); if (event.target.value) setView("cases"); }} placeholder="Search cases, customers, transactions…" ref={searchRef} value={query} /><kbd>Ctrl K</kbd></label>
+        <div className="topbar-right">
+          <button className={`status ${connection}`} onClick={() => void connect()} title="Check the API connection again" type="button"><i />{connectionText[connection]}</button>
+          <div className="bell-wrap">
+            <button aria-expanded={bellOpen} aria-label={`${alerts.length} items need attention`} className="icon-button" onClick={() => setBellOpen(!bellOpen)} type="button"><Icon name="bell" />{alerts.length > 0 && <b className="badge">{alerts.length}</b>}</button>
+            {bellOpen && <div className="bell-menu" role="menu">{alerts.length ? alerts.map((alert) => <button key={alert.key} onClick={() => { setView(alert.view); setBellOpen(false); }} role="menuitem" type="button">{alert.text}</button>) : <p>Nothing needs your attention.</p>}</div>}
+          </div>
+          {(identity.name || identity.role) && <span className="who"><span className="avatar">{initials(identity.name || identity.role)}</span><span><b>{identity.name || humanize(identity.role)}</b>{identity.name && identity.role && <small>{humanize(identity.role)}</small>}</span></span>}
+        </div>
+      </header>
+
+      <main className="content">
+        {error && <div className="alert" role="alert"><strong>{error}</strong>{connection === "offline" && <button className="button ghost" onClick={() => void connect()} type="button"><Icon name="refresh" size={15} />Retry</button>}<button aria-label="Dismiss" className="icon-button small" onClick={() => setError("")} type="button"><Icon name="x" size={14} /></button></div>}
+        {!api.isConfigured && <div className="alert"><strong>Set NEXT_PUBLIC_API_BASE_URL in frontend/.env.local, then restart the workbench.</strong></div>}
+
+        {current === "cases" ? <CaseQueue busy={busy} cases={filtered} connection={connection} onLoadPack={() => fileRef.current?.click()} onRetry={() => void connect()} onRun={(id) => void run(id)} query={query} selected={selected} total={cases.length} /> : data && <>
+          <CaseHeader busy={busy} data={data} onExport={exportCase} onRun={() => void run(data.case_id)} />
+          {current === "overview" && <>
+            <KeyFigures data={data} />
+            <div className="grid">
+              <div className="col-main">
+                <RelationshipMap graph={data.graph} onExpand={() => setView("graph")} />
+                <WorkflowTimeline data={data} />
+              </div>
+              <NextBestAction busy={busy} data={data} onApprove={(action, ok) => void approve(action, ok)} onOpenEvidence={() => setView("evidence")} />
+            </div>
+            <div className="grid lower">
+              <Panel action={allEvidence(data).length > 4 ? <LinkButton onClick={() => setView("evidence")}>View all {allEvidence(data).length}</LinkButton> : undefined} icon="doc" subtitle="Grounded claims, each tied to a source and the entities it concerns" title="Evidence ledger"><EvidenceTable items={allEvidence(data)} limit={4} /></Panel>
+              <Panel action={(data.similar_cases?.length ?? 0) > 3 ? <LinkButton onClick={() => setView("evidence")}>View all</LinkButton> : undefined} icon="folder" subtitle="Closed cases retrieved by graph and text similarity" title="Similar cases"><SimilarCases limit={3} rows={data.similar_cases ?? []} /></Panel>
+            </div>
+          </>}
+          {current === "graph" && <GraphEvidence graph={data.graph} />}
+          {current === "transactions" && <Panel icon="swap" subtitle="Customer history around the flagged transaction" title="Transactions"><TransactionsTable rows={data.timeline ?? []} /></Panel>}
+          {current === "evidence" && <>
+            {(data.evidence_requests?.length ?? 0) > 0 && <Panel icon="target" subtitle="Record what the customer or step-up check returned. The workflow resumes with your answer." title="Evidence requests"><EvidenceRequests busy={busy} onSubmit={(request, result, details) => void submitEvidence(request, result, details)} requests={data.evidence_requests ?? []} responses={data.evidence_responses ?? []} /></Panel>}
+            <Panel icon="doc" subtitle="Grounded claims, each tied to a source and the entities it concerns" title="Evidence ledger"><EvidenceTable items={allEvidence(data)} /></Panel>
+            <Panel icon="folder" subtitle="Closed cases retrieved by graph and text similarity" title="Similar cases"><SimilarCases rows={data.similar_cases ?? []} /></Panel>
+          </>}
+          {current === "actions" && <ActionsView busy={busy} data={data} onApprove={(action, ok) => void approve(action, ok)} />}
+          {current === "report" && <SarView data={data} />}
+          {current === "audit" && <AuditView data={data} />}
         </>}
-      </section>
+      </main>
     </div>
-  </main>;
+  </div>;
+}
+
+function CaseHeader({ data, busy, onRun, onExport }: { data: Investigation; busy: boolean; onRun: () => void; onExport: () => void }) {
+  const row = flaggedRow(data);
+  const verdict = data.case?.verdict;
+  const tone = verdictTone(verdict);
+  const meta: [string, string | null | undefined][] = [
+    ["Customer", data.customer_id],
+    ["Card", data.card_id],
+    ["Transaction", data.flagged_txn_id],
+    ["Amount", money(row?.transaction_amt ?? row?.amount_usd)],
+    ["Time", dateTime(rowTime(row ?? {}) ?? data.opened_at)],
+    ["Channel", row?.channel ? humanize(row.channel) : null],
+    ["Region", row?.billing_region],
+  ];
+  return <section className="case-header">
+    <div className="case-title">
+      <div className="case-name"><h1>{data.case_id}</h1><span className={`verdict ${tone}`}>{verdict ? humanize(verdict) : humanize(data.case?.status ?? data.status ?? "open")}</span>{data.trigger_type && <span className="tag muted">{humanize(data.trigger_type)}</span>}</div>
+      <p>{data.case?.summary || data.message || data.trigger_text}</p>
+    </div>
+    <dl className="case-meta">{meta.filter(([, value]) => value).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+    <div className="case-actions">
+      <button className="button light" disabled={busy} onClick={onRun} type="button"><Icon name={busy ? "refresh" : "play"} size={15} className={busy ? "spin" : undefined} />{busy ? "Running…" : "Run investigation"}</button>
+      <button className="button ghost" onClick={onExport} type="button"><Icon name="download" size={15} />Export case</button>
+    </div>
+  </section>;
+}
+
+function CaseQueue({ cases, total, selected, busy, connection, query, onRun, onLoadPack, onRetry }: { cases: CaseOption[]; total: number; selected: string; busy: boolean; connection: Connection; query: string; onRun: (id: string) => void; onLoadPack: () => void; onRetry: () => void }) {
+  if (connection !== "online") {
+    const copy = connection === "checking" ? { title: "Connecting to the investigation API", body: "Checking that the API is running and has cases loaded." }
+      : connection === "setup" ? { title: "Load a case pack to begin", body: "The API is running but has no cases yet. Choose your case_pack.csv, or start the API with CASE_PACK_PATH set." }
+      : { title: "The investigation API isn't reachable", body: "Start the FastAPI service and check NEXT_PUBLIC_API_BASE_URL, then retry." };
+    return <section className="panel onboarding">
+      <span className="onboarding-mark"><Icon name={connection === "setup" ? "upload" : connection === "checking" ? "refresh" : "radar"} size={28} className={connection === "checking" ? "spin" : undefined} /></span>
+      <h1>{copy.title}</h1><p>{copy.body}</p>
+      {connection === "setup" && <button className="button primary" disabled={busy} onClick={onLoadPack} type="button"><Icon name="upload" size={16} />{busy ? "Loading…" : "Choose case_pack.csv"}</button>}
+      {connection === "offline" && <button className="button primary" onClick={onRetry} type="button"><Icon name="refresh" size={16} />Retry connection</button>}
+    </section>;
+  }
+  const risks = cases.map((item) => toNumber(item.risk_score)).filter((value): value is number => value !== null);
+  const hasRisk = risks.length > 0;
+  const maxRisk = Math.max(1, ...risks);
+  return <section className="panel queue">
+    <header className="panel-head">
+      <span className="panel-icon"><Icon name="queue" /></span>
+      <div><h2>Case queue</h2><p>{query ? `${cases.length} of ${total} cases match "${query}"` : `${total} case${total === 1 ? "" : "s"} from the loaded case pack`}</p></div>
+      <button className="button ghost" disabled={busy} onClick={onLoadPack} type="button"><Icon name="upload" size={15} />Replace case pack</button>
+    </header>
+    {!cases.length ? <p className="empty">{total ? "No cases match your search." : "The loaded case pack has no cases."}</p> : <div className="table-wrap"><table className="data-table queue-table">
+      <thead><tr><th>Case</th><th>Trigger</th><th>Opened</th><th>Flagged transaction</th><th>Customer</th>{hasRisk && <th>Risk score</th>}<th><span className="sr-only">Open</span></th></tr></thead>
+      <tbody>{cases.map((item) => { const risk = toNumber(item.risk_score); return <tr aria-selected={item.case_id === selected} key={item.case_id} onClick={() => !busy && onRun(item.case_id)}>
+        <td className="ids strong">{item.case_id}</td>
+        <td>{item.trigger_type ? humanize(item.trigger_type) : "—"}</td>
+        <td title={dateTime(item.opened_at) ?? undefined}>{relative(item.opened_at) ?? "—"}</td>
+        <td className="ids">{item.flagged_txn_id || "—"}</td>
+        <td className="ids">{item.customer_id || "—"}</td>
+        {hasRisk && <td>{risk === null ? "—" : <span className="risk-cell"><i style={{ width: `${(risk / maxRisk) * 100}%` }} />{risk.toFixed(2)}</span>}</td>}
+        <td className="num"><button className="button small" disabled={busy} onClick={(event) => { event.stopPropagation(); onRun(item.case_id); }} type="button">{busy && item.case_id === selected ? "Opening…" : "Investigate"}</button></td>
+      </tr>; })}</tbody>
+    </table></div>}
+  </section>;
 }

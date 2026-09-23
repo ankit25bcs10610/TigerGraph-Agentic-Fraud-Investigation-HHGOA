@@ -19,7 +19,8 @@ class CasePackProvider:
             self._cases = {row["case_id"]: row for row in csv.DictReader(handle)}
 
     def list(self) -> list[dict[str, Any]]:
-        return [{"case_id": row["case_id"], "trigger_type": row.get("trigger_type", ""), "opened_at": row.get("opened_at", "")} for row in self._cases.values()]
+        fields = ("case_id", "trigger_type", "opened_at", "flagged_txn_id", "customer_id", "risk_score")
+        return [{field: row.get(field, "") for field in fields} for row in self._cases.values()]
 
     def get(self, case_id: str) -> dict[str, Any]:
         if case_id not in self._cases:
@@ -27,26 +28,8 @@ class CasePackProvider:
         return dict(self._cases[case_id])
 
 
-class PreviewCaseProvider:
-    """A clearly labeled synthetic case keeps the local product demonstrable.
-
-    It is never a substitute for benchmark input and is intentionally scoped
-    to the no-case-pack local preview experience.
-    """
-    _case = {
-        "case_id": "DEMO-001", "trigger_type": "simulated_risk_signal",
-        "trigger_text": "SIMULATED DEMO: unusual device and merchant velocity signal.",
-        "opened_at": "2026-09-22T10:42:00Z", "customer_id": "DEMO-CUSTOMER-41",
-        "card_id": "DEMO-CARD-41", "flagged_txn_id": "DEMO-TXN-9031", "risk_score": 0.82,
-    }
-
-    def list(self) -> list[dict[str, Any]]:
-        return [{"case_id": self._case["case_id"], "trigger_type": "SIMULATED · risk signal", "opened_at": self._case["opened_at"]}]
-
-    def get(self, case_id: str) -> dict[str, Any]:
-        if case_id != self._case["case_id"]:
-            raise KeyError(case_id)
-        return dict(self._case)
+# Only these transaction columns are read; the rest of the wide source table is ignored.
+_TRANSACTION_FIELDS = ("TransactionID", "customer_id", "ts", "TransactionAmt", "channel", "risk_score", "addr1", "P_emaildomain", "ProductCD", "card4", "card6")
 
 
 class ReferenceWorkflow:
@@ -54,9 +37,16 @@ class ReferenceWorkflow:
     def __init__(self, transactions_path: str | None = None) -> None:
         self._states: dict[str, dict[str, Any]] = {}
         self._transactions: dict[str, dict[str, str]] = {}
+        self._by_customer: dict[str, list[str]] = {}
         if transactions_path and Path(transactions_path).exists():
             with Path(transactions_path).open(newline="", encoding="utf-8-sig") as handle:
-                self._transactions = {row["TransactionID"]: row for row in csv.DictReader(handle) if row.get("TransactionID")}
+                for row in csv.DictReader(handle):
+                    txn_id = row.get("TransactionID")
+                    if not txn_id:
+                        continue
+                    self._transactions[txn_id] = {key: row[key] for key in _TRANSACTION_FIELDS if row.get(key)}
+                    if row.get("customer_id"):
+                        self._by_customer.setdefault(row["customer_id"], []).append(txn_id)
 
     @staticmethod
     def _seal(state: dict[str, Any], event: dict[str, Any]) -> None:
@@ -85,28 +75,54 @@ class ReferenceWorkflow:
             "chain_root": ledger[0]["hash"],
         }
 
+    @staticmethod
+    def _timeline_row(txn_id: str, row: dict[str, str], flagged: bool) -> dict[str, Any]:
+        return {"transaction_id": txn_id, "ts": row.get("ts", ""), "transaction_amt": row.get("TransactionAmt", ""), "channel": row.get("channel", ""), "risk_score": row.get("risk_score", ""), "billing_region": row.get("addr1", ""), "email_domain": row.get("P_emaildomain", ""), "suspicious": flagged}
+
     def start_investigation(self, case_input: dict[str, Any]) -> dict[str, Any]:
         case_id = case_input["case_id"]
         flagged_id = case_input.get("flagged_txn_id", "")
         transaction = self._transactions.get(flagged_id)
-        nodes = [{"data": {"id": f"transaction:{flagged_id}", "label": f"Transaction {flagged_id}", "entity_type": "Transaction"}}]
+        nodes: dict[str, dict[str, Any]] = {}
         edges: list[dict[str, Any]] = []
         timeline: list[dict[str, Any]] = []
         evidence: list[dict[str, Any]] = []
+
+        def node(entity_type: str, key: str, label: str, **extra: Any) -> str:
+            node_id = f"{entity_type.lower()}:{key}"
+            nodes.setdefault(node_id, {"data": {"id": node_id, "label": label, "entity_type": entity_type, "entity_id": key, **extra}})
+            return node_id
+
+        def edge(source: str, target: str, label: str) -> None:
+            edges.append({"data": {"id": f"edge:{source}->{target}", "source": source, "target": target, "label": label}})
+
+        if flagged_id:
+            txn_node = node("Transaction", flagged_id, flagged_id, flagged=True)
+        customer_id = (transaction or {}).get("customer_id") or case_input.get("customer_id", "")
+        card_id = case_input.get("card_id", "")
+        if customer_id:
+            customer_node = node("Customer", customer_id, customer_id)
+        if card_id:
+            card_node = node("Card", card_id, card_id)
+            if customer_id:
+                edge(customer_node, card_node, "OWNS")
+            if flagged_id:
+                edge(card_node, txn_node, "MADE")
+        elif customer_id and flagged_id:
+            edge(customer_node, txn_node, "MADE")
         if transaction:
-            customer_id = transaction.get("customer_id") or case_input.get("customer_id", "")
-            nodes.extend([
-                {"data": {"id": f"customer:{customer_id}", "label": f"Customer {customer_id}", "entity_type": "Customer"}},
-                {"data": {"id": f"card:{case_input.get('card_id', '')}", "label": f"Card {case_input.get('card_id', '')}", "entity_type": "Card"}},
-            ])
-            edges.extend([
-                {"data": {"id": "edge:customer-card", "source": f"customer:{customer_id}", "target": f"card:{case_input.get('card_id', '')}", "label": "OWNS"}},
-                {"data": {"id": "edge:card-transaction", "source": f"card:{case_input.get('card_id', '')}", "target": f"transaction:{flagged_id}", "label": "MADE"}},
-            ])
-            timeline.append({"transaction_id": flagged_id, "ts": transaction.get("ts", ""), "transaction_amt": transaction.get("TransactionAmt", ""), "channel": transaction.get("channel", ""), "risk_score": transaction.get("risk_score", ""), "billing_region": transaction.get("addr1", "")})
+            if transaction.get("P_emaildomain"):
+                edge(txn_node, node("EmailDomain", transaction["P_emaildomain"], transaction["P_emaildomain"]), "USED_EMAIL")
+            if transaction.get("addr1"):
+                edge(txn_node, node("BillingRegion", transaction["addr1"], f"Region {transaction['addr1']}"), "BILLED_TO")
+            history = sorted(self._by_customer.get(customer_id, [flagged_id]), key=lambda txn: self._transactions[txn].get("ts", ""))
+            timeline = [self._timeline_row(txn, self._transactions[txn], txn == flagged_id) for txn in history]
             evidence.append({"claim": f"Transaction {flagged_id} is present in the supplied transaction dataset with customer {customer_id} and timestamp {transaction.get('ts', '')}.", "source": "graph", "ref": "local.transactions.csv", "entity_ids": [flagged_id, customer_id]})
+            if len(history) > 1:
+                evidence.append({"claim": f"Customer {customer_id} has {len(history)} transactions in the supplied dataset.", "source": "graph", "ref": "local.transactions.csv", "entity_ids": [customer_id]})
         audit_event = {"type": "local_transaction_lookup", "reference": flagged_id, "grounded": bool(transaction)}
-        state = {**case_input, "case_id": case_id, "trigger": case_input, "status": "evidence_available", "message": "Grounded local transaction context loaded. Fraud assessment remains unavailable until the configured investigation workflow runs.", "graph": {"nodes": nodes, "edges": edges}, "timeline": timeline, "case": {"evidence": evidence}, "audit": [audit_event]}
+        message = "Grounded local transaction context loaded. Fraud assessment remains unavailable until the configured investigation workflow runs." if transaction else "The flagged transaction was not found in the configured transactions file. Set TRANSACTIONS_PATH to load transaction context."
+        state = {**case_input, "case_id": case_id, "trigger": case_input, "status": "evidence_available", "message": message, "graph": {"nodes": list(nodes.values()), "edges": edges}, "timeline": timeline, "case": {"evidence": evidence}, "audit": [audit_event]}
         self._seal(state, audit_event)
         self._states[case_id] = state
         return state
@@ -133,75 +149,7 @@ class ReferenceWorkflow:
         return self._states[case_id]
 
 
-class PreviewWorkflow:
-    """Interactive synthetic preview with prominent simulation provenance."""
-    def __init__(self) -> None:
-        self._states: dict[str, dict[str, Any]] = {}
-
-    def start_investigation(self, case_input: dict[str, Any]) -> dict[str, Any]:
-        case_id = case_input["case_id"]
-        evidence = [
-            {"claim": "SIMULATED: a new device initiated an online purchase materially above the card's recent activity.", "source": "simulated", "ref": "preview:device-velocity", "entity_ids": ["DEMO-TXN-9031", "DEMO-DEVICE-77"], "simulated": True, "assumption": "Synthetic preview data; not a benchmark finding."},
-            {"claim": "SIMULATED: two cards share the same device fingerprint within a short review window.", "source": "simulated", "ref": "preview:shared-device", "entity_ids": ["DEMO-CARD-41", "DEMO-CARD-88", "DEMO-DEVICE-77"], "simulated": True, "assumption": "Synthetic preview data; not a benchmark finding."},
-        ]
-        state = {**case_input, "status": "awaiting_evidence", "simulation_mode": True,
-            "message": "Interactive synthetic preview. Load case_pack.csv to investigate benchmark triggers.",
-            "case": {"status": "escalated", "verdict": "uncertain", "fraud_probability": 0.74, "pattern": "account_takeover", "exposure_usd": 1840.0, "summary": "SIMULATED preview: device reuse and an abnormal online purchase warrant controlled verification before a block.", "evidence": evidence, "similar_prior_cases": ["SIM-CASE-018"]},
-            "graph": {"nodes": [
-                {"data": {"id": "transaction:DEMO-TXN-9031", "label": "Flagged payment", "entity_type": "Transaction"}},
-                {"data": {"id": "customer:DEMO-CUSTOMER-41", "label": "Customer 41", "entity_type": "Customer"}},
-                {"data": {"id": "card:DEMO-CARD-41", "label": "Card 41", "entity_type": "Card"}},
-                {"data": {"id": "device:DEMO-DEVICE-77", "label": "New device", "entity_type": "DeviceProfile"}},
-                {"data": {"id": "card:DEMO-CARD-88", "label": "Connected card", "entity_type": "Card"}},
-            ], "edges": [
-                {"data": {"id": "owns", "source": "customer:DEMO-CUSTOMER-41", "target": "card:DEMO-CARD-41", "label": "OWNS"}},
-                {"data": {"id": "made", "source": "card:DEMO-CARD-41", "target": "transaction:DEMO-TXN-9031", "label": "MADE"}},
-                {"data": {"id": "used", "source": "transaction:DEMO-TXN-9031", "target": "device:DEMO-DEVICE-77", "label": "USED"}},
-                {"data": {"id": "shared", "source": "card:DEMO-CARD-88", "target": "device:DEMO-DEVICE-77", "label": "SHARES"}},
-            ]},
-            "timeline": [
-                {"transaction_id": "DEMO-TXN-9029", "ts": "2026-09-22T10:21:00Z", "transaction_amt": "19.25", "channel": "online", "risk_score": "0.31", "device_profile_id": "DEMO-DEVICE-77", "billing_region": "CA"},
-                {"transaction_id": "DEMO-TXN-9030", "ts": "2026-09-22T10:33:00Z", "transaction_amt": "42.00", "channel": "online", "risk_score": "0.48", "device_profile_id": "DEMO-DEVICE-77", "billing_region": "CA"},
-                {"transaction_id": "DEMO-TXN-9031", "ts": "2026-09-22T10:42:00Z", "transaction_amt": "1840.00", "channel": "online", "risk_score": "0.82", "device_profile_id": "DEMO-DEVICE-77", "billing_region": "CA", "suspicious": True},
-            ], "similar_cases": [{"case_id": "SIM-CASE-018", "pattern": "account_takeover", "outcome": "confirmed after customer denial", "similarity_score": "0.81", "reason_for_match": "SIMULATED: new device and abrupt online amount change."}],
-            "evidence_requests": [{"request_id": "DEMO-VERIFY-01", "case_id": case_id, "type": "customer_validation", "question": "Did you authorize the $1,840.00 online purchase?", "reason": "SIMULATED preview: customer confirmation resolves the highest-impact uncertainty.", "status": "pending"}],
-            "next_best_actions": {"initial": [{"action": "VERIFY_WITH_CUSTOMER", "route": "auto", "reason": "SIMULATED preview: evidence is concerning but customer validation is still required."}, {"action": "MONITOR_CARD", "route": "auto", "reason": "SIMULATED preview: monitor while verification is pending."}], "final": [], "what_changed": "Awaiting a controlled customer-validation response."},
-            "approval_requests": [], "sar": {"file": False, "reason": "SIMULATED preview: report threshold is not met until evidence is resolved.", "narrative": "", "subjects": [], "total_amount_usd": 0, "activity_dates": []},
-            "audit": [{"type": "synthetic_preview_started", "reference": "DEMO-001", "grounded": False, "simulated": True}]}
-        ReferenceWorkflow._seal(state, state["audit"][0])
-        self._states[case_id] = state
-        return state
-
-    def resume_with_evidence(self, case_id: str, evidence: dict[str, Any]) -> dict[str, Any]:
-        state = self._states[case_id]
-        state["evidence_responses"] = [*state.get("evidence_responses", []), {**evidence, "simulated": True, "assumption": "Synthetic preview response; not customer-provided evidence."}]
-        result = evidence.get("result", "unknown")
-        state["status"] = "evidence_reviewed"
-        state["next_best_actions"]["final"] = [{"action": "ESCALATE_TO_ANALYST", "route": "L1", "reason": f"SIMULATED preview: customer validation result is {result}; analyst review is required before protected actions."}]
-        state["next_best_actions"]["what_changed"] = "A simulated evidence response was recorded and the controlled escalation route was updated."
-        state["approval_requests"] = [{"action": "ESCALATE_TO_ANALYST", "route": "L1", "reason": "SIMULATED preview: analyst must approve the escalation route.", "approval_status": "pending"}]
-        event = {"type": "synthetic_evidence_response", "result": result, "simulated": True}
-        state["audit"] = [*state["audit"], event]
-        ReferenceWorkflow._seal(state, event)
-        return state
-
-    def resume_with_approval(self, case_id: str, decision: dict[str, Any]) -> dict[str, Any]:
-        state = self._states[case_id]
-        event = {"type": "synthetic_approval_recorded", "action": decision.get("action"), "approved": bool(decision.get("approved")), "simulated": True}
-        state["audit"] = [*state["audit"], event]
-        state["approval_requests"] = [{**item, "approval_status": "approved" if decision.get("approved") else "rejected"} for item in state.get("approval_requests", [])]
-        state["message"] = "SIMULATED preview: approval decision recorded. Load case_pack.csv for real benchmark investigation."
-        ReferenceWorkflow._seal(state, event)
-        return state
-
-    def get_investigation_state(self, case_id: str) -> dict[str, Any]:
-        return self._states[case_id]
-
-
 def build_reference_runtime(path: str, transactions_path: str | None = None) -> tuple[CasePackProvider, ReferenceWorkflow]:
     transaction_path = transactions_path or os.getenv("TRANSACTIONS_PATH")
     return CasePackProvider(path), ReferenceWorkflow(transaction_path)
 
-
-def build_preview_runtime() -> tuple[PreviewCaseProvider, PreviewWorkflow]:
-    return PreviewCaseProvider(), PreviewWorkflow()
