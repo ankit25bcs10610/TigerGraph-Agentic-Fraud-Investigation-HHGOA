@@ -62,6 +62,14 @@ What *is* agentic:
 - **Memory.** Completed investigations are recalled when a later case touches the same customer, card or device.
 - **Controls and audit.** L1/L2 actions wait for a human. Every event (each graph call, assessment, request, response and approval) extends a SHA-256 hash chain, and the UI recomputes every hash to prove nothing was edited.
 
+## Three ideas we haven't seen elsewhere
+
+**1. The agent chooses its questions by value of information.** When the evidence isn't enough, most agents ask a fixed next question. Ours simulates every possible answer to every request it could make, running each through the full deterministic assessment, and asks for the evidence whose answers lead to the most different decisions. For a card-testing case, asking the customer can end in *block the card*, *close as legitimate* or *monitor*: three decisions, two of which settle the case. Step-up authentication can't settle it either way. So the agent asks the customer, says why, and shows the analyst every branch before the answer arrives.
+
+**2. Every verdict comes with its counterfactual.** A waterfall shows exactly how many points each signal added to the fraud probability and how far the result sits from each threshold. Signals whose removal alone would flip the verdict are marked *decisive*. In one of our cases the probability was 0.852 against a 0.85 threshold, so every signal was decisive, and the analyst can see that the call is close rather than being handed a confident label.
+
+**3. One alert protects the whole ring.** Once a case looks like fraud, the agent uses the shared device and the ring expansion to list every *other* card the same fraudster can reach, with its recent spend. It's the question a graph answers in one hop and a table-based system rarely asks.
+
 ## How accurate is it?
 
 We replayed the bank's closed cases through the agent, hiding the case under test and every case opened after it, and compared the agent's pattern and verdict with the analysts' conclusions.

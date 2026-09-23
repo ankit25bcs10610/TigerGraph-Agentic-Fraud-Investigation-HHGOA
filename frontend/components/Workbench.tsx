@@ -11,6 +11,7 @@ import { NoCase } from "./NoCase";
 import { Connection, sectionFor, Sidebar, View } from "./Sidebar";
 import { ActionsView, allEvidence, EvidenceLedger, EvidenceRequests, EvidenceTable, KeyFigures, LinkButton, NextBestAction, Panel, redact, SarView, SimilarCases, WorkflowTimeline } from "./Panels";
 import { AuditView } from "./Audit";
+import { BlastRadiusPanel, DecisionPaths, ScoreBreakdown } from "./Insights";
 import { AgentReasoning, Explanation, PolicyGrounding } from "./Reasoning";
 import { RelationshipMap } from "./RelationshipMap";
 import { TransactionsView } from "./Transactions";
@@ -219,14 +220,20 @@ export function Workbench() {
               <AgentReasoning data={data} />
               <Explanation data={data} />
             </div>
+            <div className={`grid lower ${data.decision_paths?.length ? "" : "single"}`}>
+              <ScoreBreakdown data={data} />
+              <DecisionPaths paths={data.decision_paths ?? []} />
+            </div>
+            <BlastRadiusPanel blast={data.blast_radius} />
             <div className="grid lower">
               <Panel action={allEvidence(data).length > 4 ? <LinkButton onClick={() => setView("evidence")}>View all {allEvidence(data).length}</LinkButton> : undefined} icon="doc" subtitle="Grounded claims, each tied to a source and the entities it concerns" title="Evidence ledger"><EvidenceTable items={allEvidence(data)} limit={4} /></Panel>
               <Panel action={(data.similar_cases?.length ?? 0) > 3 ? <LinkButton onClick={() => setView("evidence")}>View all</LinkButton> : undefined} icon="folder" subtitle="Closed cases retrieved by graph and text similarity" title="Similar cases"><SimilarCases limit={3} rows={data.similar_cases ?? []} /></Panel>
             </div>
           </>}
-          {current === "graph" && <GraphEvidence graph={data.graph} theme={theme} />}
+          {current === "graph" && <><GraphEvidence graph={data.graph} theme={theme} /><BlastRadiusPanel blast={data.blast_radius} /></>}
           {current === "transactions" && <TransactionsView data={data} />}
           {current === "evidence" && <>
+            <DecisionPaths paths={data.decision_paths ?? []} />
             {(data.evidence_requests?.length ?? 0) > 0 && <Panel icon="target" subtitle="Record what the customer or step-up check returned. The workflow resumes with your answer." title="Evidence requests"><EvidenceRequests busy={busy} onSubmit={(request, result, details) => void submitEvidence(request, result, details)} requests={data.evidence_requests ?? []} responses={data.evidence_responses ?? []} /></Panel>}
             <Panel icon="doc" subtitle="Grounded claims, each tied to a source and the entities it concerns" title="Evidence ledger"><EvidenceLedger items={allEvidence(data)} /></Panel>
             <Panel icon="folder" subtitle="Closed cases retrieved by graph and text similarity" title="Similar cases"><SimilarCases rows={data.similar_cases ?? []} /></Panel>

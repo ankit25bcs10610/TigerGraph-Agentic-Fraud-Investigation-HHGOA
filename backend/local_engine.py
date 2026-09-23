@@ -32,7 +32,7 @@ from backend.evidence_requests.models import CustomerResult, StepUpResult
 from backend.investigation.exposure import episode_exposure_usd
 from backend.investigation.fraud_probability import ScoringInputs, deterministic_fraud_probability
 from backend.investigation.patterns import PatternContext, TransactionEvidence, classify_pattern
-from backend.investigation.scoring_config import DEFAULT_STOPPING_CONFIG
+from backend.investigation.scoring_config import DEFAULT_SCORING_CONFIG, DEFAULT_STOPPING_CONFIG
 from backend.investigation.stopping import EvidenceDirection, IndependentEvidence, VerificationResponse, evaluate_stopping
 from backend.memory import CaseMemory
 from backend.models.answer import FraudPattern, PolicyAction, Verdict
@@ -45,6 +45,46 @@ from backend.sources.base import CaseDataSource, ClosedCaseRecord, RingResult, T
 PATTERN_WINDOW = timedelta(hours=48)
 NETWORK_WINDOW = timedelta(days=7)
 RING_HOPS = 2
+
+
+# Every input to the weighted fraud probability, with the weight that scales it.
+SIGNALS = (
+    ("risk_score", "Bank risk score", "risk_score_weight"),
+    ("pattern_strength", "Fraud pattern", "pattern_strength_weight"),
+    ("unusual_transaction_behavior", "Unusual amount", "unusual_behavior_weight"),
+    ("shared_device_evidence", "Shared or new device", "shared_device_weight"),
+    ("region_evidence", "New billing region", "region_evidence_weight"),
+    ("prior_confirmed_fraud_cases", "Linked confirmed fraud", "prior_confirmed_case_weight"),
+    ("customer_evidence", "Customer denial", "customer_evidence_weight"),
+    ("step_up_authentication_evidence", "Failed step-up", "step_up_weight"),
+    ("conflicting_evidence", "Conflicting evidence", "conflicting_evidence_weight"),
+)
+
+
+def _verdict_for(probability: float, customer: CustomerResponse | None) -> Verdict:
+    config = DEFAULT_STOPPING_CONFIG
+    if customer is CustomerResponse.CONFIRMED:
+        return Verdict.LEGITIMATE
+    if customer is CustomerResponse.DENIED or probability >= config.strong_fraud_threshold:
+        return Verdict.FRAUD
+    if probability <= config.strong_legitimate_threshold:
+        return Verdict.LEGITIMATE
+    return Verdict.UNCERTAIN
+
+
+def _contributions(inputs: ScoringInputs, probability: float, customer: CustomerResponse | None) -> list[dict[str, Any]]:
+    """How many points each signal added, and whether removing it alone would change the verdict."""
+    rows = []
+    for field, label, weight_name in SIGNALS:
+        value = getattr(inputs, field)
+        if not value:
+            continue
+        weight = getattr(DEFAULT_SCORING_CONFIG, weight_name)
+        points = -value * weight if field == "conflicting_evidence" else value * weight
+        without = round(max(0.0, min(1.0, probability - points)), 4)
+        rows.append({"signal": field, "label": label, "value": round(value, 4), "weight": weight, "points": round(points, 4),
+                     "without": without, "decisive": _verdict_for(without, customer) is not _verdict_for(probability, customer)})
+    return sorted(rows, key=lambda row: -abs(row["points"]))
 
 
 def _money(value: float) -> str:
@@ -267,20 +307,14 @@ class LocalInvestigationEngine(ReferenceWorkflow):
 
         risk_value = case_input.get("risk_score")
         risk = float(risk_value) if risk_value not in (None, "") else (target.risk_score or 0.0)
-        probability = deterministic_fraud_probability(ScoringInputs(
+        inputs = ScoringInputs(
             risk_score=min(1.0, max(0.0, risk)), pattern_strength=pattern.strength, unusual_transaction_behavior=unusual,
             shared_device_evidence=shared, region_evidence=region, prior_confirmed_fraud_cases=history_signal,
             customer_evidence=1.0 if customer is CustomerResponse.DENIED else 0.0, step_up_authentication_evidence=step_up, conflicting_evidence=conflicting,
-        ))
-        config = DEFAULT_STOPPING_CONFIG
-        if customer is CustomerResponse.CONFIRMED:
-            verdict = Verdict.LEGITIMATE
-        elif customer is CustomerResponse.DENIED or probability >= config.strong_fraud_threshold:
-            verdict = Verdict.FRAUD
-        elif probability <= config.strong_legitimate_threshold:
-            verdict = Verdict.LEGITIMATE
-        else:
-            verdict = Verdict.UNCERTAIN
+        )
+        probability = deterministic_fraud_probability(inputs)
+        verdict = _verdict_for(probability, customer)
+        contributions = _contributions(inputs, probability, customer)
 
         if pattern.pattern is FraudPattern.NONE:
             episode = [target]
@@ -334,7 +368,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
             known = {case.case_id for case, _ in similar}
             similar += [(case, []) for case in context.get("pattern_cases", []) if case.case_id not in known]
 
-        return {"target": target, "pattern": pattern, "probability": probability, "verdict": verdict, "exposure": exposure, "episode": episode,
+        return {"contributions": contributions, "target": target, "pattern": pattern, "probability": probability, "verdict": verdict, "exposure": exposure, "episode": episode,
                 "evidence": evidence, "stop": stop, "actions": [item.model_dump(mode="json") for item in actions], "sar": sar.model_dump(mode="json"),
                 "linked": linked, "similar": similar, "other_customers": other_customers, "connected_cards": connected_cards, "customer": customer,
                 "ring": ring, "independent_count": independent_count, "verification_settled": verification is not None,
@@ -381,20 +415,80 @@ class LocalInvestigationEngine(ReferenceWorkflow):
 
     # -------------------------------------------------------------- render
 
-    def _next_request(self, case_id: str, assessment: dict[str, Any], state: dict[str, Any]) -> dict[str, Any] | None:
+    POSSIBLE_ANSWERS = {"customer_validation": ("denied", "confirmed", "no_reply"), "step_up_auth": ("failed", "passed", "not_completed")}
+
+    def _decision_paths(self, case_input: dict[str, Any], context: dict[str, Any], responses: list[dict[str, Any]], assessment: dict[str, Any], asked: set[str]) -> list[dict[str, Any]]:
+        """Value of information: simulate every answer to every evidence request still available.
+
+        For each request the agent could make, it re-runs the full deterministic
+        assessment once per possible answer and records the verdict, probability,
+        actions and routes that answer would lead to. The request whose answers
+        lead to the most different decisions (and most often settle the case) is
+        the one worth asking first.
+        """
         if assessment["stop"].should_stop:
+            return []
+        current = tuple(sorted(item["action"] for item in assessment["actions"]))
+        paths = []
+        for request_type, answers in self.POSSIBLE_ANSWERS.items():
+            if request_type in asked or (request_type == "customer_validation" and assessment["customer"] is not None):
+                continue
+            outcomes = []
+            for answer in answers:
+                what_if = self._assess(case_input, context, [*responses, {"request_id": f"what-if:{request_type}", "type": request_type, "result": answer}])
+                outcomes.append({"answer": answer, "verdict": what_if["verdict"].value, "probability": round(what_if["probability"], 4), "settles": what_if["stop"].should_stop,
+                                 "sar": bool(what_if["sar"]["file"]), "actions": [{"action": item["action"], "route": item["route"]} for item in what_if["actions"]]})
+            decisions = {tuple(sorted(item["action"] for item in outcome["actions"])) for outcome in outcomes}
+            paths.append({"request_type": request_type, "outcomes": outcomes, "distinct_decisions": len(decisions),
+                          "changes_decision": sum(1 for outcome in outcomes if tuple(sorted(item["action"] for item in outcome["actions"])) != current),
+                          "settling_answers": sum(1 for outcome in outcomes if outcome["settles"]), "chosen": False})
+        paths.sort(key=lambda path: (-path["distinct_decisions"], -path["settling_answers"], path["request_type"] != "customer_validation"))
+        if paths:
+            paths[0]["chosen"] = True
+        return paths
+
+    def _next_request(self, case_id: str, assessment: dict[str, Any], state: dict[str, Any], paths: list[dict[str, Any]]) -> dict[str, Any] | None:
+        if assessment["stop"].should_stop or not paths:
             return None
-        asked = {item["type"] for item in state.get("evidence_requests", [])}
+        best = paths[0]
         target: Txn = assessment["target"]
-        if "customer_validation" not in asked and assessment["customer"] is None:
+        plural = lambda count, word: f"{count} {word}{'' if count == 1 else 's'}"  # noqa: E731
+        why = (f"{best['request_type'].replace('_', ' ').capitalize()} has the highest decision value: its {len(best['outcomes'])} possible answers lead to "
+               f"{plural(best['distinct_decisions'], 'different decision')}, and {best['settling_answers']} of them settle the case")
+        if len(paths) > 1:
+            other = paths[1]
+            why += f", versus {plural(other['distinct_decisions'], 'decision')} for {other['request_type'].replace('_', ' ')}"
+        reason = f"{assessment['stop'].stop_reason} {why}."
+        if best["request_type"] == "customer_validation":
             return {"request_id": f"{case_id}-customer-validation", "case_id": case_id, "type": "customer_validation",
                     "question": f"Did you make the {_money(target.amount)} {target.channel.replace('_', ' ')} purchase on {target.ts:%d %b %Y at %H:%M} (transaction {target.transaction_id})?",
-                    "reason": assessment["stop"].stop_reason + " Customer confirmation is the strongest way to settle it.", "status": "pending"}
-        if "step_up_auth" not in asked:
-            return {"request_id": f"{case_id}-step-up", "case_id": case_id, "type": "step_up_auth",
-                    "question": f"Ask the cardholder of {target.card_id or target.customer_id} to complete step-up authentication.",
-                    "reason": assessment["stop"].stop_reason + " A step-up result adds an independent signal.", "status": "pending"}
-        return None
+                    "reason": reason, "status": "pending"}
+        return {"request_id": f"{case_id}-step-up", "case_id": case_id, "type": "step_up_auth",
+                "question": f"Ask the cardholder of {target.card_id or target.customer_id} to complete step-up authentication.",
+                "reason": reason, "status": "pending"}
+
+    @staticmethod
+    def _blast_radius(context: dict[str, Any], assessment: dict[str, Any]) -> dict[str, Any] | None:
+        """Other cards the same device or ring reaches, with their recent spend on that device."""
+        if assessment["verdict"] is Verdict.LEGITIMATE:
+            return None
+        target: Txn = assessment["target"]
+        ring: RingResult | None = context["ring"]
+        cards: dict[str, dict[str, Any]] = {}
+        for item in context["network"]:
+            key = item.card_id or item.customer_id
+            entry = cards.setdefault(key, {"card_id": item.card_id, "customer_id": item.customer_id, "transactions": 0, "spend_usd": 0.0, "last_seen": "", "link": f"shared device {target.device_profile_id}"})
+            entry["transactions"] += 1
+            entry["spend_usd"] = round(entry["spend_usd"] + item.amount, 2)
+            entry["last_seen"] = max(entry["last_seen"], item.ts.isoformat())
+        for card in (ring.cards if ring else ()):
+            if card != target.card_id and card not in cards:
+                cards[card] = {"card_id": card, "customer_id": "", "transactions": 0, "spend_usd": 0.0, "last_seen": "", "link": f"fraud ring within {ring.hops} hops"}
+        if not cards:
+            return None
+        rows = sorted(cards.values(), key=lambda row: (-row["spend_usd"], row["card_id"]))
+        return {"cards": rows[:12], "card_count": len(rows), "customers": len({row["customer_id"] for row in rows if row["customer_id"]}),
+                "recent_spend_usd": round(sum(row["spend_usd"] for row in rows), 2), "confirmed_cases": list(ring.confirmed_cases) if ring else []}
 
     def _render(self, state: dict[str, Any], assessment: dict[str, Any]) -> None:
         context = self._contexts[state["case_id"]]
@@ -445,6 +539,9 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         state["message"] = summary
         state["explanation"] = self._explanation(assessment, open_requests[0] if open_requests else None)
         state["policy_grounding"] = self._grounding(assessment)
+        state["score_breakdown"] = {"probability": assessment["probability"], "contributions": assessment["contributions"],
+                                    "fraud_threshold": DEFAULT_STOPPING_CONFIG.strong_fraud_threshold, "legitimate_threshold": DEFAULT_STOPPING_CONFIG.strong_legitimate_threshold}
+        state["blast_radius"] = self._blast_radius(context, assessment)
         state["agent_trace"] = context["trace"].steps
         state["data_source"] = self.source_name
         self._render_graph(state, assessment)
@@ -605,7 +702,8 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         self._record(state, {"type": "case_opened", "trigger_type": str(case_input.get("trigger_type", "")), "flagged_txn_id": str(case_input.get("flagged_txn_id", ""))})
         assessment = self._assess(case_input, context, [], trace)
         self._seal_steps(state, assessment, "", trace, 0)
-        request = self._next_request(case_id, assessment, state)
+        state["decision_paths"] = self._decision_paths(case_input, context, [], assessment, set())
+        request = self._next_request(case_id, assessment, state, state["decision_paths"])
         if request:
             state["evidence_requests"] = [request]
             self._record(state, {"type": "evidence_requested", "request_id": request["request_id"], "request_type": request["type"]})
@@ -643,7 +741,9 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         steps_before = len(trace.steps)
         assessment = self._assess(context["input"], context, state["evidence_responses"], trace)
         self._seal_steps(state, assessment, "reassessed_", trace, steps_before)
-        follow_up = self._next_request(case_id, assessment, state)
+        asked = {item["type"] for item in state.get("evidence_requests", [])}
+        state["decision_paths"] = self._decision_paths(context["input"], context, state["evidence_responses"], assessment, asked)
+        follow_up = self._next_request(case_id, assessment, state, state["decision_paths"])
         if follow_up:
             state["evidence_requests"] = [*state["evidence_requests"], follow_up]
             self._record(state, {"type": "evidence_requested", "request_id": follow_up["request_id"], "request_type": follow_up["type"]})

@@ -96,3 +96,33 @@ def test_benchmark_runner_writes_answers_and_report(tmp_path):
     pending = json.loads((tmp_path / "answers" / "_pending_graph_write" / "SMP-001.json").read_text())
     assert pending["evidence_requests"][0]["assumed_response"] == "no_reply"
     assert pending["next_best_actions"]["initial"] != pending["next_best_actions"]["final"]
+
+
+def test_decision_paths_choose_the_most_informative_request(agent):
+    provider, engine = agent
+    state = engine.start_investigation(provider.get("SMP-001"))
+    paths = {path["request_type"]: path for path in state["decision_paths"]}
+    assert paths["customer_validation"]["chosen"] and not paths["step_up_auth"]["chosen"]
+    assert paths["customer_validation"]["distinct_decisions"] > paths["step_up_auth"]["distinct_decisions"]
+    outcomes = {outcome["answer"]: outcome for outcome in paths["customer_validation"]["outcomes"]}
+    assert outcomes["denied"]["verdict"] == "fraud" and outcomes["confirmed"]["verdict"] == "legitimate"
+    assert "highest decision value" in state["evidence_requests"][0]["reason"]
+    # Simulating answers must not change the real investigation.
+    assert state["evidence_responses"] == [] and state["case"]["verdict"] == "uncertain"
+
+
+def test_score_breakdown_adds_up_and_finds_decisive_signals(agent):
+    provider, engine = agent
+    state = engine.start_investigation(provider.get("SMP-002"))
+    breakdown = state["score_breakdown"]
+    assert abs(sum(row["points"] for row in breakdown["contributions"]) - breakdown["probability"]) < 1e-6
+    assert any(row["decisive"] for row in breakdown["contributions"])  # 0.852 sits just above the 0.85 line
+
+
+def test_blast_radius_lists_other_cards_on_the_shared_device(agent):
+    provider, engine = agent
+    state = engine.start_investigation(provider.get("SMP-002"))
+    blast = state["blast_radius"]
+    assert {row["card_id"] for row in blast["cards"]} == {"SMP-C301-K1", "SMP-C302-K1"}
+    assert blast["recent_spend_usd"] == 2010.0 and blast["confirmed_cases"] == ["SMP-CC-501"]
+    assert engine.start_investigation(provider.get("SMP-005"))["blast_radius"] is None

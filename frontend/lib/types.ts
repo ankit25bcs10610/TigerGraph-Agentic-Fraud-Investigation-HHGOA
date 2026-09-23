@@ -45,7 +45,15 @@ export type Investigation = {
   policy_grounding?: PolicyCitation[];
   data_source?: string;
   llm_usage?: { model: string; total_tokens: number };
+  decision_paths?: DecisionPath[];
+  score_breakdown?: { probability: number; fraud_threshold: number; legitimate_threshold: number; contributions: Contribution[] };
+  blast_radius?: BlastRadius | null;
 };
+
+export type DecisionPath = { request_type: string; distinct_decisions: number; settling_answers: number; changes_decision: number; chosen: boolean;
+  outcomes: { answer: string; verdict: string; probability: number; settles: boolean; sar: boolean; actions: { action: string; route: string }[] }[] };
+export type Contribution = { signal: string; label: string; value: number; weight: number; points: number; without: number; decisive: boolean };
+export type BlastRadius = { cards: { card_id: string; customer_id: string; transactions: number; spend_usd: number; last_seen: string; link: string }[]; card_count: number; customers: number; recent_spend_usd: number; confirmed_cases: string[] };
 
 export type AgentStep = { step: number; tool: string; source: string; args: Record<string, unknown>; reason: string; result: string; ok: boolean; ms: number };
 export type PolicyCitation = { ref: string; title: string; text: string; source: string; supports: string[] };

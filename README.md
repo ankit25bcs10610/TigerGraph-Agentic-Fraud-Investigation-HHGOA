@@ -18,7 +18,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Cytoscape](https://img.shields.io/badge/Cytoscape.js-graphs-F7DF1E?style=for-the-badge&logoColor=black)](https://js.cytoscape.org/)
 <br />
-[![Tests](https://img.shields.io/badge/tests-142_passing-2C8F5F?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
+[![Tests](https://img.shields.io/badge/tests-145_passing-2C8F5F?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
 [![License](https://img.shields.io/badge/license-MIT-C2611A?style=for-the-badge)](LICENSE)
 [![Hacker House Goa](https://img.shields.io/badge/Hacker_House-Goa-6F665B?style=for-the-badge)](#credits)
 
@@ -130,6 +130,12 @@ Every investigation is an explicit loop over **graph tools**. Each tool is an in
 | `recall_case_memory` | `InvestigationCase` / memory store | The agent's own earlier investigations on these entities |
 
 After the tools, the agent scores the evidence, checks the stopping rules, requests evidence if it needs more, applies policy R1–R10, cites the rule text behind each action, optionally writes a grounded LLM narrative, and writes the case back to TigerGraph.
+
+### What makes it different
+
+- **Decision paths (value of information).** Before asking for evidence, the agent simulates every possible answer to every request it could make (the customer denies, confirms or doesn't reply; step-up passes, fails or isn't completed) through the full assessment. It asks for the evidence whose answers lead to the most different decisions, and shows the analyst exactly what each answer would do before it arrives.
+- **Counterfactual scoring.** A waterfall shows how many points each signal added to the fraud probability and how close the verdict sits to each threshold. Any signal whose removal alone would change the verdict is marked **decisive**, so analysts see which facts the decision really rests on.
+- **Blast radius.** When a case looks like fraud, the agent uses the shared device and the fraud ring to list the *other* cards and customers at risk now, with their recent spend. One alert becomes protection for the whole ring.
 
 ### From dataset to submission
 
@@ -384,7 +390,7 @@ A production deployment injects the TigerGraph-backed workflow and a real identi
 ## ✅ Validation
 
 ```bash
-pytest -q                      # 142 deterministic tests
+pytest -q                      # 145 deterministic tests
 cd frontend && npm run build   # type-checked production build
 ```
 
