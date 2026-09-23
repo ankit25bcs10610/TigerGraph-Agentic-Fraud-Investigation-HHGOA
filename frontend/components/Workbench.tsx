@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { dateTime, flaggedRow, humanize, initials, money, relative, rowTime, toNumber, verdictTone } from "../lib/format";
+import { dateTime, flaggedRow, humanize, initials, money, rowTime, verdictTone } from "../lib/format";
 import { CaseOption, EvidenceRequest, Investigation } from "../lib/types";
 import { GraphEvidence } from "./GraphEvidence";
 import { Icon } from "./icons";
+import { CaseQueue } from "./CaseQueue";
 import { NoCase } from "./NoCase";
 import { Connection, Sidebar, View } from "./Sidebar";
 import { ActionsView, allEvidence, AuditView, EvidenceRequests, EvidenceTable, KeyFigures, LinkButton, NextBestAction, Panel, redact, SarView, SimilarCases, TransactionsTable, WorkflowTimeline } from "./Panels";
@@ -32,6 +33,7 @@ export function Workbench() {
   const [error, setError] = useState("");
   const [collapsed, setCollapsed] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
+  const [visited, setVisited] = useState<Set<string>>(() => new Set());
   const searchRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -65,7 +67,7 @@ export function Workbench() {
   const run = useCallback(async (caseId: string, target: View = "overview") => {
     if (!caseId) return;
     setSelected(caseId); setBusy(true); setError("");
-    try { setData(await api.start(caseId)); setView(target); }
+    try { setData(await api.start(caseId)); setVisited((seen) => new Set(seen).add(caseId)); setView(target); }
     catch (caught) { setError(message(caught, "The investigation could not be started.")); }
     finally { setBusy(false); }
   }, []);
@@ -154,7 +156,7 @@ export function Workbench() {
         {error && <div className="alert" role="alert"><strong>{error}</strong>{connection === "offline" && <button className="button ghost" onClick={() => void connect()} type="button"><Icon name="refresh" size={15} />Retry</button>}<button aria-label="Dismiss" className="icon-button small" onClick={() => setError("")} type="button"><Icon name="x" size={14} /></button></div>}
         {!api.isConfigured && <div className="alert"><strong>Set NEXT_PUBLIC_API_BASE_URL in frontend/.env.local, then restart the workbench.</strong></div>}
 
-        {current === "cases" ? <CaseQueue busy={busy} cases={filtered} connection={connection} onLoadPack={() => fileRef.current?.click()} onRetry={() => void connect()} onRun={(id) => void run(id)} query={query} selected={selected} total={cases.length} /> : !data ? <NoCase busy={busy} cases={cases} connection={connection} onLoadPack={() => fileRef.current?.click()} onOpen={(id, target) => void run(id, target)} onRetry={() => void connect()} view={current} /> : <>
+        {current === "cases" ? <CaseQueue busy={busy} cases={filtered} connection={connection} onLoadPack={() => fileRef.current?.click()} onRetry={() => void connect()} onRun={(id) => void run(id)} query={query} selected={selected} total={cases.length} visited={visited} /> : !data ? <NoCase busy={busy} cases={cases} connection={connection} onLoadPack={() => fileRef.current?.click()} onOpen={(id, target) => void run(id, target)} onRetry={() => void connect()} view={current} /> : <>
           <CaseHeader busy={busy} data={data} onExport={exportCase} onRun={() => void run(data.case_id)} />
           {current === "overview" && <>
             <KeyFigures data={data} />
@@ -213,38 +215,3 @@ function CaseHeader({ data, busy, onRun, onExport }: { data: Investigation; busy
   </section>;
 }
 
-function CaseQueue({ cases, total, selected, busy, connection, query, onRun, onLoadPack, onRetry }: { cases: CaseOption[]; total: number; selected: string; busy: boolean; connection: Connection; query: string; onRun: (id: string) => void; onLoadPack: () => void; onRetry: () => void }) {
-  if (connection !== "online") {
-    const copy = connection === "checking" ? { title: "Connecting to the investigation API", body: "Checking that the API is running and has cases loaded." }
-      : connection === "setup" ? { title: "Load a case pack to begin", body: "The API is running but has no cases yet. Choose your case_pack.csv, or start the API with CASE_PACK_PATH set." }
-      : { title: "The investigation API isn't reachable", body: "Start the FastAPI service and check NEXT_PUBLIC_API_BASE_URL, then retry." };
-    return <section className="panel onboarding">
-      <span className="onboarding-mark"><Icon name={connection === "setup" ? "upload" : connection === "checking" ? "refresh" : "radar"} size={28} className={connection === "checking" ? "spin" : undefined} /></span>
-      <h1>{copy.title}</h1><p>{copy.body}</p>
-      {connection === "setup" && <button className="button primary" disabled={busy} onClick={onLoadPack} type="button"><Icon name="upload" size={16} />{busy ? "Loading…" : "Choose case_pack.csv"}</button>}
-      {connection === "offline" && <button className="button primary" onClick={onRetry} type="button"><Icon name="refresh" size={16} />Retry connection</button>}
-    </section>;
-  }
-  const risks = cases.map((item) => toNumber(item.risk_score)).filter((value): value is number => value !== null);
-  const hasRisk = risks.length > 0;
-  const maxRisk = Math.max(1, ...risks);
-  return <section className="panel queue">
-    <header className="panel-head">
-      <span className="panel-icon"><Icon name="queue" /></span>
-      <div><h2>Case queue</h2><p>{query ? `${cases.length} of ${total} cases match "${query}"` : `${total} case${total === 1 ? "" : "s"} from the loaded case pack`}</p></div>
-      <button className="button ghost" disabled={busy} onClick={onLoadPack} type="button"><Icon name="upload" size={15} />Replace case pack</button>
-    </header>
-    {!cases.length ? <p className="empty">{total ? "No cases match your search." : "The loaded case pack has no cases."}</p> : <div className="table-wrap"><table className="data-table queue-table">
-      <thead><tr><th>Case</th><th>Trigger</th><th>Opened</th><th>Flagged transaction</th><th>Customer</th>{hasRisk && <th>Risk score</th>}<th><span className="sr-only">Open</span></th></tr></thead>
-      <tbody>{cases.map((item) => { const risk = toNumber(item.risk_score); return <tr aria-selected={item.case_id === selected} key={item.case_id} onClick={() => !busy && onRun(item.case_id)}>
-        <td className="ids strong">{item.case_id}</td>
-        <td>{item.trigger_type ? humanize(item.trigger_type) : "—"}</td>
-        <td title={dateTime(item.opened_at) ?? undefined}>{relative(item.opened_at) ?? "—"}</td>
-        <td className="ids">{item.flagged_txn_id || "—"}</td>
-        <td className="ids">{item.customer_id || "—"}</td>
-        {hasRisk && <td>{risk === null ? "—" : <span className="risk-cell"><i style={{ width: `${(risk / maxRisk) * 100}%` }} />{risk.toFixed(2)}</span>}</td>}
-        <td className="num"><button className="button small" disabled={busy} onClick={(event) => { event.stopPropagation(); onRun(item.case_id); }} type="button">{busy && item.case_id === selected ? "Opening…" : "Investigate"}</button></td>
-      </tr>; })}</tbody>
-    </table></div>}
-  </section>;
-}

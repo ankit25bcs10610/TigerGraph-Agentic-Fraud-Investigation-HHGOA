@@ -2,7 +2,7 @@ export type Route = "auto" | "L1" | "L2";
 export type Action = { action: string; route: Route; reason: string };
 export type Evidence = { claim: string; source: string; ref: string; entity_ids: string[]; simulated?: boolean; assumption?: string; result?: string; details?: string };
 export type EvidenceRequest = { request_id: string; case_id: string; type: "customer_validation" | "step_up_auth" | "analyst_info"; question: string; reason: string; status?: string };
-export type CaseOption = { case_id: string; trigger_type?: string; opened_at?: string; flagged_txn_id?: string; customer_id?: string; risk_score?: string | number };
+export type CaseOption = { case_id: string; trigger_type?: string; trigger_text?: string; opened_at?: string; flagged_txn_id?: string; customer_id?: string; card_id?: string; risk_score?: string | number };
 
 export type GraphNode = { data: { id: string; label?: string; entity_type?: string; entity_id?: string; flagged?: boolean; [key: string]: unknown } };
 export type GraphEdge = { data: { id: string; source: string; target: string; label?: string; [key: string]: unknown } };

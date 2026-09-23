@@ -19,7 +19,7 @@ class CasePackProvider:
             self._cases = {row["case_id"]: row for row in csv.DictReader(handle)}
 
     def list(self) -> list[dict[str, Any]]:
-        fields = ("case_id", "trigger_type", "opened_at", "flagged_txn_id", "customer_id", "risk_score")
+        fields = ("case_id", "trigger_type", "trigger_text", "opened_at", "flagged_txn_id", "customer_id", "card_id", "risk_score")
         return [{field: row.get(field, "") for field in fields} for row in self._cases.values()]
 
     def get(self, case_id: str) -> dict[str, Any]:
