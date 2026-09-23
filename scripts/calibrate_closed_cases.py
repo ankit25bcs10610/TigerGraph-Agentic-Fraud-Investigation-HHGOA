@@ -97,7 +97,7 @@ def main() -> int:
         if txn is None:
             skipped += 1
             continue
-        agent = LocalInvestigationEngine(_Blindfold(source, case), memory=CaseMemory())
+        agent = LocalInvestigationEngine(_Blindfold(source, case), memory=CaseMemory(), compute_decision_paths=False)
         state = agent.start_investigation({"case_id": f"CAL-{case.case_id}", "flagged_txn_id": trigger, "customer_id": txn.customer_id, "card_id": case.card_id,
                                            "trigger_type": "risk_score", "risk_score": "" if txn.risk_score is None else str(txn.risk_score), "opened_at": case.opened_at})
         if "verdict" not in state.get("case", {}):

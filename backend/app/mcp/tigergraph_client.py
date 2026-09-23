@@ -90,7 +90,11 @@ class TigerGraphMCPConfig:
     @property
     def authentication_mode(self) -> str:
         """Return the effective credential strategy without exposing credentials."""
-        return "api_token" if self.api_token else "username_password"
+        if self.api_token:
+            return "api_token"
+        if self.secret and not (self.username and self.password):
+            return "secret"
+        return "username_password"
 
     @classmethod
     def from_environment(
@@ -127,7 +131,7 @@ class TigerGraphMCPConfig:
             return values.get(name, default).strip()
 
         host = setting("TG_HOST")
-        graph_name = setting("TG_GRAPHNAME", "FraudInvestigation")
+        graph_name = setting("TG_GRAPHNAME", "FraudInvestigationGraph")
         api_token = setting("TG_API_TOKEN") or None
         username = setting("TG_USERNAME") or None
         password = setting("TG_PASSWORD") or None
@@ -139,10 +143,8 @@ class TigerGraphMCPConfig:
             )
         if not graph_name:
             raise TigerGraphMCPConfigurationError("TG_GRAPHNAME must not be empty.")
-        if not api_token and not (username and password):
-            raise TigerGraphMCPConfigurationError(
-                "Provide TG_API_TOKEN, or both TG_USERNAME and TG_PASSWORD."
-            )
+        if not api_token and not secret and not (username and password):
+            raise TigerGraphMCPConfigurationError("Provide TG_API_TOKEN, TG_SECRET, or both TG_USERNAME and TG_PASSWORD.")
         if timeout_s <= 0:
             raise TigerGraphMCPConfigurationError("timeout_s must be greater than zero.")
 

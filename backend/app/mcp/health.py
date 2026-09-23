@@ -7,7 +7,7 @@ from typing import Any, Iterable
 from .tigergraph_client import TigerGraphMCPMalformedResponseError
 
 
-EXPECTED_GRAPH_NAME = "FraudInvestigation"
+EXPECTED_GRAPH_NAME = "FraudInvestigationGraph"
 EXPECTED_VERTEX_TYPES = frozenset(
     {
         "Customer",

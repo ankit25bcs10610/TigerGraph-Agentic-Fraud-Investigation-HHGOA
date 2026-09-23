@@ -1,19 +1,15 @@
 // Agent tool: one transaction with its card, customer and device signals.
 // Returns one row per transaction; device fields come from DeviceProfile via FROM_DEVICE.
-CREATE QUERY agent_txn_profile(STRING transaction_id) FOR GRAPH FraudInvestigation SYNTAX v2 {
-  SetAccum<STRING> @@ids;
-  SumAccum<STRING> @card_id, @device_id, @device_status, @proxy_type, @match_status;
-  @@ids += transaction_id;
-  target = to_vertex_set(@@ids, "Transaction");
-  target = SELECT t FROM target:t -(<MADE)- Card:k ACCUM t.@card_id = k.card_id;
-  target = to_vertex_set(@@ids, "Transaction");
-  target = SELECT t FROM target:t -(FROM_DEVICE>)- DeviceProfile:d
-           ACCUM t.@device_id = d.device_profile_id, t.@device_status = d.device_status,
-                 t.@proxy_type = d.proxy_type, t.@match_status = d.match_status;
-  target = to_vertex_set(@@ids, "Transaction");
-  PRINT target[target.transaction_id AS transaction_id, target.customer_id AS customer_id, target.@card_id AS card_id,
-               target.ts AS ts, target.transaction_amt AS amount, target.channel AS channel, target.risk_score AS risk_score,
-               target.addr1 AS region, target.p_emaildomain AS email, target.product_cd AS product_code,
-               target.@device_id AS device_profile_id, target.@device_status AS device_status,
-               target.@proxy_type AS proxy_type, target.@match_status AS match_status] AS rows;
+CREATE QUERY agent_txn_profile(STRING transaction_id) FOR GRAPH FraudInvestigationGraph {
+  SumAccum<STRING> @card_id, @customer_id, @device_id;
+  anchor = SELECT t FROM Transaction:t WHERE t.transaction_id == transaction_id;
+  card_links = SELECT t FROM anchor:t -(<made)- Card:k ACCUM t.@card_id = k.card_id;
+  customer_links = SELECT t FROM anchor:t -(<made)- Card:k -(<OWNS)- Customer:c
+                   ACCUM t.@customer_id = c.customer_id;
+  device_links = SELECT t FROM anchor:t -(FROM_DEVICE>)- DeviceProfile:d
+                 ACCUM t.@device_id = d.device_profile_id;
+  PRINT anchor[anchor.transaction_id AS transaction_id, anchor.@customer_id AS customer_id,
+               anchor.@card_id AS card_id, anchor.ts AS ts, anchor.transaction_amt AS amount,
+               anchor.channel AS channel, anchor.risk_score AS risk_score,
+               anchor.product_cd AS product_code, anchor.@device_id AS device_profile_id] AS rows;
 }

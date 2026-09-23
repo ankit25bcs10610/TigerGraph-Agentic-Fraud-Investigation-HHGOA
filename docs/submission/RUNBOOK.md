@@ -6,6 +6,14 @@ Every command runs from the repository root with the Python environment active.
 
 ## 0. Prerequisites (15 min)
 
+Run the preflight before spending time on calibration or graph setup:
+
+```bash
+python scripts/submission_preflight.py --dataset-dir "$DATA" --require-graph
+```
+
+It must report **PREFLIGHT: PASSED**. The repository's `data/sample/` pack is only a six-case UI demo and must not be used as the 20-case submission input.
+
 1. Download the **HHGOA_IEEE** dataset folder. It must contain `transactions.csv`, `identity.csv`, `closed_cases_history.csv`, `case_pack.csv`, the dataset `README`, the fraud policy, the five fraud patterns and the regulatory references.
 2. Read the dataset README's **answer format** section and compare it with `backend/models/answer.py`. If a field differs, tell whoever maintains the answer model before running the benchmark.
 3. Create a TigerGraph Savanna workspace (<https://savanna.tgcloud.io>) with **auto-stop and auto-start enabled**, or install Community Edition.

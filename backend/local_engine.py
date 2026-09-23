@@ -134,7 +134,7 @@ class ToolTrace:
 class LocalInvestigationEngine(ReferenceWorkflow):
     """The investigation agent (kept under its original name for compatibility)."""
 
-    def __init__(self, source: CaseDataSource | None = None, *, memory: CaseMemory | None = None, knowledge: PolicyKnowledge | None = None, planner: Any = None) -> None:
+    def __init__(self, source: CaseDataSource | None = None, *, memory: CaseMemory | None = None, knowledge: PolicyKnowledge | None = None, planner: Any = None, compute_decision_paths: bool = True) -> None:
         super().__init__(None)
         self.source = source
         self.memory = memory or CaseMemory(os.getenv("CASE_MEMORY_PATH") or None)
@@ -143,6 +143,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         self._previews: dict[str, dict[str, Any]] = {}
         self.planner = planner or open_planner()
         self.executor = MockActionService()
+        self.compute_decision_paths = compute_decision_paths
         self._rag: Any = None
         self._closed_index = {case.case_id: case for case in getattr(source, "_closed", ())}
 
@@ -663,6 +664,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         context = {
             "case_id": state["case_id"], "graph_evidence": evidence,
             "retrieved_policy": [{"ref": item["ref"], "text": item["text"], "entity_ids": []} for item in state["policy_grounding"]],
+            "citation_reference_allowlist": sorted({item["ref"] for item in evidence} | {item["ref"] for item in state["policy_grounding"]}),
             "entity_ids": sorted(entity_ids), "detected_pattern": state["case"]["pattern"], "pattern_description": state["case"]["pattern_description"],
             "verdict": state["case"]["verdict"], "fraud_probability": state["case"]["fraud_probability"], "stop_reason": state["stop_reason"],
             "recommended_actions": state["next_best_actions"]["final"], "evidence_requests": state.get("evidence_requests", []),
@@ -679,7 +681,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
                 step.update(ok=False, result="LLM unavailable; deterministic explanation kept")
             else:
                 state["explanation"] = {**state["explanation"], "narrative": synthesis.case_summary, "evidence": synthesis.evidence_explanation,
-                                        "uncertainty": synthesis.uncertainty_explanation, "actions": synthesis.action_explanation, "citations": synthesis.citations}
+                                        "uncertainty": synthesis.uncertainty_explanation, "actions": synthesis.action_explanation, "citations": synthesis.citations.model_dump()}
                 state["llm_usage"] = {"model": usage.model, "total_tokens": usage.total_tokens}
                 step["result"] = f"grounded narrative, {usage.total_tokens} tokens"
         step["ms"] = round((time.perf_counter() - started) * 1000, 1)
@@ -804,7 +806,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         assessment = self._assess(case_input, context, [], trace)
         self._retrieve_grounding(context, assessment)
         self._seal_steps(state, assessment, "", trace, 0)
-        state["decision_paths"] = self._decision_paths(case_input, context, [], assessment, set())
+        state["decision_paths"] = self._decision_paths(case_input, context, [], assessment, set()) if self.compute_decision_paths else []
         request = self._next_request(case_id, assessment, state, state["decision_paths"])
         if request:
             state["evidence_requests"] = [request]

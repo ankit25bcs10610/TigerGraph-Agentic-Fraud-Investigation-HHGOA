@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import re
 from typing import Any, Mapping
 
 from backend.app.mcp.tigergraph_client import (
@@ -172,13 +174,68 @@ class TigerGraphService:
         self, query_name: str, params: Mapping[str, Any] | None = None
     ) -> dict[str, Any]:
         """Run an already-installed GSQL query through the official MCP tool."""
+        values = dict(params or {})
+        try:
+            return await self._call(
+                "tigergraph__run_installed_query",
+                {
+                    "graph_name": self.graph_name,
+                    "query_name": query_name,
+                    "params": values,
+                },
+            )
+        except Exception as exc:  # noqa: BLE001 - Savanna may expose catalog queries before REST++ routes.
+            if "404" not in str(exc):
+                raise
+            return await self._run_interpreted_query(query_name, values)
+
+    async def _run_interpreted_query(
+        self, query_name: str, params: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        query_data = await self._call(
+            "tigergraph__show_query",
+            {"graph_name": self.graph_name, "query_name": query_name},
+        )
+        query_code = query_data.get("query_code")
+        if not isinstance(query_code, str):
+            raise TigerGraphMCPMalformedResponseError(
+                f"show_query returned no source for '{query_name}'."
+            )
+        source = query_code[query_code.find("CREATE QUERY "):]
+        match = re.match(
+            r"CREATE QUERY [^(]+\(([^)]*)\) FOR GRAPH [^{]+\{(.*)\}\s*$",
+            source,
+            re.DOTALL,
+        )
+        if match is None:
+            raise TigerGraphMCPMalformedResponseError(
+                f"Cannot convert '{query_name}' to an interpreted query."
+            )
+        declarations = []
+        for declaration in match.group(1).split(","):
+            parts = declaration.strip().split()
+            if len(parts) != 2 or parts[1] not in params:
+                continue
+            type_name, parameter = parts
+            value = params[parameter]
+            if isinstance(value, bool):
+                literal = "TRUE" if value else "FALSE"
+            elif isinstance(value, (int, float)):
+                literal = str(value)
+            else:
+                literal = json.dumps(str(value))
+            declarations.append(f"{type_name} {parameter}={literal}")
+        if len(declarations) != len(params):
+            raise TigerGraphMCPMalformedResponseError(
+                f"Missing typed parameters for interpreted query '{query_name}'."
+            )
+        query_text = (
+            f"INTERPRET QUERY ({', '.join(declarations)}) FOR GRAPH {self.graph_name}"
+            f" {{{match.group(2)}}}"
+        )
         return await self._call(
-            "tigergraph__run_installed_query",
-            {
-                "graph_name": self.graph_name,
-                "query_name": query_name,
-                "params": dict(params or {}),
-            },
+            "tigergraph__run_query",
+            {"graph_name": self.graph_name, "query_text": query_text},
         )
 
     async def ensure_graph_exists(self) -> None:

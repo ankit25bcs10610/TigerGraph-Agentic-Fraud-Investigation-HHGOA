@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-GRAPH = os.getenv("TG_GRAPHNAME", "FraudInvestigation")
+GRAPH = os.getenv("TG_GRAPHNAME", "FraudInvestigationGraph")
 VERTICES = ["Customer", "Card", "Transaction", "DeviceProfile", "EmailDomain", "BillingRegion", "ClosedCase", "InvestigationCase", "KnowledgeChunk"]
 
 
@@ -56,6 +56,10 @@ def gsql(conn, text: str) -> str:
     return str(result)
 
 
+def graph_script(path: Path) -> str:
+    return path.read_text(encoding="utf-8").replace("FraudInvestigation", GRAPH)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--data-dir", type=Path, default=ROOT / "build" / "graph_data", help="folder of prepared TSVs")
@@ -64,16 +68,16 @@ def main() -> int:
     conn = connect()
 
     if "schema" not in args.skip:
-        schema = (ROOT / "tigergraph" / "schema.gsql").read_text(encoding="utf-8")
+        schema = graph_script(ROOT / "tigergraph" / "schema.gsql")
         if GRAPH in gsql(conn, "SHOW GRAPH *"):
             print(f"Graph {GRAPH} already exists; keeping it.")
         else:
             gsql(conn, schema)
     if "job" not in args.skip:
         gsql(conn, f"USE GRAPH {GRAPH}\nDROP JOB load_fraud_data")
-        gsql(conn, f"USE GRAPH {GRAPH}\n" + (ROOT / "tigergraph" / "loading_jobs.gsql").read_text(encoding="utf-8"))
+        gsql(conn, f"USE GRAPH {GRAPH}\n" + graph_script(ROOT / "tigergraph" / "loading_jobs.gsql"))
     if "load" not in args.skip:
-        job = (ROOT / "tigergraph" / "loading_jobs.gsql").read_text(encoding="utf-8")
+        job = graph_script(ROOT / "tigergraph" / "loading_jobs.gsql")
         tags = [line.split("DEFINE FILENAME", 1)[1].strip().rstrip(";") for line in job.splitlines() if "DEFINE FILENAME" in line]
         for tag in tags:
             path = args.data_dir / f"{tag.removeprefix('f_')}.tsv"
@@ -86,7 +90,7 @@ def main() -> int:
         for path in sorted((ROOT / "tigergraph" / "queries").glob("*.gsql")):
             name = path.stem
             gsql(conn, f"USE GRAPH {GRAPH}\nDROP QUERY {name}")
-            gsql(conn, f"USE GRAPH {GRAPH}\n" + path.read_text(encoding="utf-8"))
+            gsql(conn, f"USE GRAPH {GRAPH}\n" + graph_script(path))
         gsql(conn, f"USE GRAPH {GRAPH}\nINSTALL QUERY ALL")
     if "verify" not in args.skip:
         for vertex in VERTICES:

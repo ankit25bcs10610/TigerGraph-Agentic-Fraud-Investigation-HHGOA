@@ -29,6 +29,7 @@ def configured_environment(**overrides: str) -> dict[str, str]:
         "TG_HOST": "https://example.tigergraph.cloud",
         "TG_GRAPHNAME": "FraudInvestigation",
         "TG_API_TOKEN": "token-value",
+        "TG_SECRET": "",
         "TG_TGCLOUD": "true",
         "TG_SSL_PORT": "443",
     }
@@ -62,6 +63,19 @@ def test_config_accepts_username_password_when_no_token_exists() -> None:
     assert child_environment["TG_PASSWORD"] == "password"
     assert child_environment["TG_SECRET"] == "secret"
     assert "TG_API_TOKEN" not in child_environment
+
+
+def test_config_accepts_database_secret_without_token_or_password() -> None:
+    config = TigerGraphMCPConfig.from_environment(
+        environ=configured_environment(TG_API_TOKEN="", TG_SECRET="database-secret")
+    )
+
+    assert config.authentication_mode == "secret"
+    child_environment = config.subprocess_environment()
+    assert child_environment["TG_SECRET"] == "database-secret"
+    assert "TG_API_TOKEN" not in child_environment
+    assert child_environment["TG_USERNAME"] == ""
+    assert child_environment["TG_PASSWORD"] == ""
 
 
 def test_config_rejects_missing_authentication() -> None:

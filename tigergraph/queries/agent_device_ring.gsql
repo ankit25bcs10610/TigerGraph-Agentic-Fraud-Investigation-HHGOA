@@ -2,7 +2,7 @@
 // Alternates device -> transactions -> cards -> their transactions -> devices, for up to max_hops rounds,
 // and reports the ring's devices, cards, customers and any confirmed-fraud closed cases touching it.
 // This is a seeded weakly-connected-component expansion over the device/card projection of the graph.
-CREATE QUERY agent_device_ring(STRING device_profile_id, INT max_hops) FOR GRAPH FraudInvestigation SYNTAX v2 {
+CREATE QUERY agent_device_ring(STRING device_profile_id, INT max_hops) FOR GRAPH FraudInvestigationGraph {
   SetAccum<STRING> @@ids, @@devices, @@cards, @@customers, @@confirmed;
   SumAccum<INT> @@transactions;
   OrAccum @seen;
@@ -13,15 +13,16 @@ CREATE QUERY agent_device_ring(STRING device_profile_id, INT max_hops) FOR GRAPH
   WHILE frontier.size() > 0 LIMIT max_hops DO
     @@hops += 1;
     txns = SELECT t FROM frontier:d -(<FROM_DEVICE)- Transaction:t WHERE t.@seen == FALSE
-           POST-ACCUM t.@seen = TRUE, @@transactions += 1, @@customers += t.customer_id;
-    cards = SELECT k FROM txns:t -(<MADE)- Card:k WHERE k.@seen == FALSE
+           POST-ACCUM t.@seen = TRUE, @@transactions += 1;
+    cards = SELECT k FROM txns:t -(<made)- Card:k WHERE k.@seen == FALSE
             POST-ACCUM k.@seen = TRUE, @@cards += k.card_id;
-    card_txns = SELECT t FROM cards:k -(MADE>)- Transaction:t WHERE t.@seen == FALSE
-                POST-ACCUM t.@seen = TRUE, @@transactions += 1, @@customers += t.customer_id;
+    card_txns = SELECT t FROM cards:k -(made>)- Transaction:t WHERE t.@seen == FALSE
+                POST-ACCUM t.@seen = TRUE, @@transactions += 1;
     frontier = SELECT d FROM card_txns:t -(FROM_DEVICE>)- DeviceProfile:d WHERE d.@seen == FALSE
                POST-ACCUM d.@seen = TRUE, @@devices += d.device_profile_id;
   END;
   seen_txns = SELECT t FROM Transaction:t WHERE t.@seen == TRUE;
+  customers = SELECT c FROM cards:k -(<OWNS)- Customer:c POST-ACCUM @@customers += c.customer_id;
   cases = SELECT cc FROM seen_txns:t -(<INVOLVES)- ClosedCase:cc WHERE cc.outcome == "confirmed_fraud"
           ACCUM @@confirmed += cc.case_id;
   PRINT @@devices AS devices, @@cards AS cards, @@customers AS customers, @@transactions AS transactions,
