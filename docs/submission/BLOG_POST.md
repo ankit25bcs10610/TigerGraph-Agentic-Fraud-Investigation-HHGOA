@@ -57,7 +57,7 @@ What *is* agentic:
 
 - **Tool use with reasons.** The agent decides which graph questions to ask: it only expands a fraud ring when the device is shared or new, and only retrieves same-pattern cases after a pattern is found.
 - **Knowing when to stop.** The agent keeps investigating until a stopping rule is met: strong fraud or strong legitimacy with enough independent evidence, a settled customer answer, or no useful next step.
-- **Gathering evidence under control.** When uncertain, the agent requests customer validation first (the strongest single signal), then step-up authentication. Each request pauses the case until the answer is recorded.
+- **Gathering evidence under control.** When uncertain, the agent requests customer validation or step-up authentication, choosing between them by value of information (below). Each request pauses the case until the answer is recorded.
 - **Updating its recommendation.** We record the next best actions **before** any evidence and **after** it, with a sentence on what changed.
 - **Memory.** Completed investigations are recalled when a later case touches the same customer, card or device.
 - **Controls and audit.** L1/L2 actions wait for a human. Every event (each graph call, assessment, request, response and approval) extends a SHA-256 hash chain, and the UI recomputes every hash to prove nothing was edited.
