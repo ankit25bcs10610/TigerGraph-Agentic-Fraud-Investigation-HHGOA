@@ -158,7 +158,9 @@ def create_app(workflow: Workflow | None = None, case_provider: CaseInputProvide
         try:
             return dependencies()[0].resume_with_evidence(case_id, payload.evidence)
         except KeyError:
-            raise HTTPException(404, "Investigation was not found")
+            raise HTTPException(404, "Investigation or evidence request was not found")
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
 
     return app
 

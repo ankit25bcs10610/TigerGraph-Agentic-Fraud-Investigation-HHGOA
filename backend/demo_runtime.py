@@ -29,7 +29,7 @@ class CasePackProvider:
 
 
 # Only these transaction columns are read; the rest of the wide source table is ignored.
-_TRANSACTION_FIELDS = ("TransactionID", "customer_id", "ts", "TransactionAmt", "channel", "risk_score", "addr1", "P_emaildomain", "ProductCD", "card4", "card6")
+_TRANSACTION_FIELDS = ("TransactionID", "customer_id", "card_id", "ts", "TransactionAmt", "channel", "risk_score", "addr1", "P_emaildomain", "ProductCD", "card4", "card6", "device_profile_id", "id_15", "id_23", "id_34")
 
 
 class ReferenceWorkflow:
@@ -149,7 +149,7 @@ class ReferenceWorkflow:
         return self._states[case_id]
 
 
-def build_reference_runtime(path: str, transactions_path: str | None = None) -> tuple[CasePackProvider, ReferenceWorkflow]:
-    transaction_path = transactions_path or os.getenv("TRANSACTIONS_PATH")
-    return CasePackProvider(path), ReferenceWorkflow(transaction_path)
-
+def build_reference_runtime(path: str, transactions_path: str | None = None, closed_cases_path: str | None = None) -> tuple[CasePackProvider, ReferenceWorkflow]:
+    """Case pack plus the local investigation engine over the configured CSV inputs."""
+    from backend.local_engine import LocalInvestigationEngine
+    return CasePackProvider(path), LocalInvestigationEngine(transactions_path or os.getenv("TRANSACTIONS_PATH"), closed_cases_path or os.getenv("CLOSED_CASES_PATH"))

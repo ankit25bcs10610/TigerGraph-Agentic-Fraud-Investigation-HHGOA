@@ -1,0 +1,7 @@
+case_id,opened_at,trigger_type,trigger_text,flagged_txn_id,card_id,customer_id,risk_score
+SMP-001,2026-09-21T02:33:00Z,risk_score,"Real-time model scored transaction SMP-T1007 ($389.99, online) at 0.74. Review and decide.",SMP-T1007,SMP-C101-K1,SMP-C101,0.74
+SMP-002,2026-09-22T08:07:00Z,risk_score,"Real-time model scored transaction SMP-T2005 ($1,480.00, online) at 0.88. Review and decide.",SMP-T2005,SMP-C202-K1,SMP-C202,0.88
+SMP-003,2026-09-19T14:25:00Z,risk_score,"Real-time model scored transaction SMP-T3306 ($640.00, in billing region 512) at 0.66. Review and decide.",SMP-T3306,SMP-C303-K1,SMP-C303,0.66
+SMP-004,2026-09-21T03:20:00Z,risk_score,"Real-time model scored transaction SMP-T4005 ($2,750.00, online) at 0.81. Review and decide.",SMP-T4005,SMP-C404-K1,SMP-C404,0.81
+SMP-005,2026-09-20T16:48:00Z,risk_score,"Real-time model scored transaction SMP-T5006 ($58.40, online) at 0.31. Review and decide.",SMP-T5006,SMP-C505-K1,SMP-C505,0.31
+SMP-006,2026-09-22T10:30:00Z,customer_report,"Customer SMP-C606 message: 'I never made this $2,940.00 purchase. Please check my card.' Refers to SMP-T6004.",SMP-T6004,SMP-C606-K1,SMP-C606,
