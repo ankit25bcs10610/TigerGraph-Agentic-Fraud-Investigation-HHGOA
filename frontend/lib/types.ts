@@ -40,7 +40,15 @@ export type Investigation = {
   approval_requests?: ApprovalRequest[];
   evidence_requests?: EvidenceRequest[];
   evidence_responses?: Evidence[];
+  agent_trace?: AgentStep[];
+  explanation?: { verdict?: string; evidence?: string; uncertainty?: string; actions?: string; narrative?: string };
+  policy_grounding?: PolicyCitation[];
+  data_source?: string;
+  llm_usage?: { model: string; total_tokens: number };
 };
+
+export type AgentStep = { step: number; tool: string; source: string; args: Record<string, unknown>; reason: string; result: string; ok: boolean; ms: number };
+export type PolicyCitation = { ref: string; title: string; text: string; source: string; supports: string[] };
 
 export type CaseAssessment = {
   verdict: "fraud" | "uncertain" | "legitimate";
