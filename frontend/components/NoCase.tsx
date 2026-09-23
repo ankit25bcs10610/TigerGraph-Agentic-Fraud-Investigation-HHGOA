@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { humanize, relative, toNumber } from "../lib/format";
-import { CaseOption } from "../lib/types";
+import { CaseOverview } from "../lib/types";
 import { Icon } from "./icons";
 import { Connection, sectionFor, View } from "./Sidebar";
 
@@ -17,7 +17,7 @@ const previews: Partial<Record<View, string[]>> = {
   audit: ["The tamper-evident hash chain for the case", "Every tool call and workflow event, credentials removed", "Verification that no event was changed after the fact"],
 };
 
-export function NoCase({ view, cases, connection, busy, onOpen, onLoadPack, onRetry }: { view: View; cases: CaseOption[]; connection: Connection; busy: boolean; onOpen: (caseId: string, view: View) => void; onLoadPack: () => void; onRetry: () => void }) {
+export function NoCase({ view, cases, connection, busy, onOpen, onLoadPack, onRetry }: { view: View; cases: CaseOverview[]; connection: Connection; busy: boolean; onOpen: (caseId: string, view: View) => void; onLoadPack: () => void; onRetry: () => void }) {
   const section = sectionFor(view);
   const [filter, setFilter] = useState("");
   const shown = useMemo(() => {
@@ -30,7 +30,7 @@ export function NoCase({ view, cases, connection, busy, onOpen, onLoadPack, onRe
   return <section className="no-case">
     <div className="no-case-intro">
       <span className="no-case-icon"><Icon name={section.icon} size={26} /></span>
-      <h1>{section.label}</h1>
+      <h1>{section.title}</h1>
       <p>{section.hint}. Open a case to fill this view.</p>
       {previews[view] && <ul className="preview-list">{previews[view]!.map((line) => <li key={line}><Icon name="check" size={14} />{line}</li>)}</ul>}
     </div>

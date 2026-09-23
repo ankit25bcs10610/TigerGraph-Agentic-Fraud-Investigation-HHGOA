@@ -3,18 +3,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { dateTime, flaggedRow, humanize, initials, money, rowTime, verdictTone } from "../lib/format";
-import { CaseOption, EvidenceRequest, Investigation } from "../lib/types";
+import { CaseOverview, EvidenceRequest, Investigation } from "../lib/types";
 import { GraphEvidence } from "./GraphEvidence";
 import { Icon } from "./icons";
-import { CaseQueue } from "./CaseQueue";
+import { Activity, CommandCenter } from "./CommandCenter";
 import { NoCase } from "./NoCase";
-import { Connection, Sidebar, View } from "./Sidebar";
+import { Connection, sectionFor, Sidebar, View } from "./Sidebar";
 import { ActionsView, allEvidence, EvidenceLedger, EvidenceRequests, EvidenceTable, KeyFigures, LinkButton, NextBestAction, Panel, redact, SarView, SimilarCases, WorkflowTimeline } from "./Panels";
 import { AuditView } from "./Audit";
 import { RelationshipMap } from "./RelationshipMap";
 import { TransactionsView } from "./Transactions";
 
-const connectionText: Record<Connection, string> = { checking: "Connecting to API", online: "System operational", setup: "Case pack needed", offline: "API offline" };
+const connectionText: Record<Connection, string> = { checking: "Connecting", online: "System healthy", setup: "Case pack needed", offline: "API offline" };
+
+function dayRange(values: (string | undefined)[]) {
+  const stamps = values.map((value) => Date.parse(value ?? "")).filter(Number.isFinite);
+  if (!stamps.length) return null;
+  const format = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return Math.min(...stamps) === Math.max(...stamps) ? format.format(stamps[0]) : format.formatRange(Math.min(...stamps), Math.max(...stamps));
+}
 
 function message(caught: unknown, fallback: string) {
   return caught instanceof Error ? caught.message : fallback;
@@ -26,16 +33,19 @@ function readCollapsed() {
 
 export function Workbench() {
   const [connection, setConnection] = useState<Connection>(api.isConfigured ? "checking" : "offline");
-  const [cases, setCases] = useState<CaseOption[]>([]);
+  const [cases, setCases] = useState<CaseOverview[]>([]);
   const [selected, setSelected] = useState("");
   const [data, setData] = useState<Investigation | null>(null);
-  const [view, setView] = useState<View>("cases");
+  const [view, setView] = useState<View>("command");
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [collapsed, setCollapsed] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
   const [visited, setVisited] = useState<Set<string>>(() => new Set());
+  const [activity, setActivity] = useState<Activity[]>([]);
+  const log = useCallback((text: string, tone: Activity["tone"], detail?: string) => setActivity((items) => [{ id: Date.now() + Math.random(), text, detail, tone, at: Date.now() }, ...items].slice(0, 30)), []);
+  const refreshCases = useCallback(async () => { try { setCases(await api.overview()); } catch { /* keep the last list */ } }, []);
   const [toasts, setToasts] = useState<{ id: number; text: string; tone: "ok" | "warn" }[]>([]);
   const notify = useCallback((text: string, tone: "ok" | "warn" = "ok") => {
     const id = Date.now() + Math.random();
@@ -45,7 +55,7 @@ export function Workbench() {
   const searchRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [theme, setTheme] = useState<"dark" | "light">("light");
   useEffect(() => { setCollapsed(readCollapsed()); setTheme(document.documentElement.dataset.theme === "light" ? "light" : "dark"); }, []);
   function toggleTheme() {
     const next = theme === "dark" ? "light" : "dark";
@@ -61,7 +71,7 @@ export function Workbench() {
     try {
       const health = await api.health();
       if (!health.workflow_configured) { setConnection("setup"); setCases([]); return; }
-      const items = await api.cases();
+      const items = await api.overview();
       setCases(items); setConnection("online");
       setSelected((current) => current || items[0]?.case_id || "");
     } catch (caught) {
@@ -82,18 +92,24 @@ export function Workbench() {
   const run = useCallback(async (caseId: string, target: View = "overview") => {
     if (!caseId) return;
     setSelected(caseId); setBusy(true); setError("");
-    try { setData(await api.start(caseId)); setVisited((seen) => new Set(seen).add(caseId)); setView(target); }
+    try {
+      const state = await api.start(caseId);
+      setData(state); setVisited((seen) => new Set(seen).add(caseId)); setView(target);
+      log(`Investigation run on ${caseId}`, state.case?.verdict === "fraud" ? "risk" : state.case?.verdict === "uncertain" ? "warn" : "info", state.case?.verdict ? `${humanize(state.case.verdict)}, ${humanize(state.status ?? "")}` : humanize(state.status ?? ""));
+      void refreshCases();
+    }
     catch (caught) { setError(message(caught, "The investigation could not be started.")); }
     finally { setBusy(false); }
-  }, []);
+  }, [log, refreshCases]);
 
   async function uploadPack(file: File) {
     setBusy(true); setError("");
     try {
       await api.uploadCasePack(file);
-      const items = await api.cases();
-      setCases(items); setSelected(items[0]?.case_id ?? ""); setData(null); setVisited(new Set()); setConnection("online"); setView("cases");
+      const items = await api.overview();
+      setCases(items); setSelected(items[0]?.case_id ?? ""); setData(null); setVisited(new Set()); setConnection("online"); setView("command");
       notify(`Loaded ${items.length} case${items.length === 1 ? "" : "s"} from ${file.name}`);
+      log(`Case pack loaded: ${items.length} cases`, "info", file.name);
     } catch (caught) { setError(message(caught, "The case pack could not be loaded.")); }
     finally { setBusy(false); if (fileRef.current) fileRef.current.value = ""; }
   }
@@ -101,7 +117,12 @@ export function Workbench() {
   async function approve(action: string, approved: boolean) {
     if (!data) return;
     setBusy(true); setError("");
-    try { setData(await api.approve(data.case_id, action, approved)); notify(`${humanize(action)} ${approved ? "approved" : "rejected"} and sealed in the audit log`, approved ? "ok" : "warn"); }
+    try {
+      setData(await api.approve(data.case_id, action, approved));
+      notify(`${humanize(action)} ${approved ? "approved" : "rejected"} and sealed in the audit log`, approved ? "ok" : "warn");
+      log(`${humanize(action)} ${approved ? "approved" : "rejected"}`, approved ? "ok" : "warn", data.case_id);
+      void refreshCases();
+    }
     catch (caught) { setError(message(caught, "The approval decision could not be recorded.")); }
     finally { setBusy(false); }
   }
@@ -109,7 +130,12 @@ export function Workbench() {
   async function submitEvidence(request: EvidenceRequest, result: string, details: string) {
     if (!data) return;
     setBusy(true); setError("");
-    try { setData(await api.evidence(data.case_id, request, result, details)); notify(`Response recorded: ${humanize(result)}`); }
+    try {
+      setData(await api.evidence(data.case_id, request, result, details));
+      notify(`Response recorded: ${humanize(result)}`);
+      log(`${humanize(request.type)}: ${humanize(result)}`, result === "denied" || result === "failed" ? "risk" : "ok", data.case_id);
+      void refreshCases();
+    }
     catch (caught) { setError(message(caught, "The evidence response could not be recorded.")); }
     finally { setBusy(false); }
   }
@@ -134,24 +160,22 @@ export function Workbench() {
     const anchor = document.createElement("a"); anchor.href = url; anchor.download = `${data.case_id}-dossier.json`; anchor.click(); URL.revokeObjectURL(url);
   }
 
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return cases;
-    return cases.filter((item) => Object.values(item).join(" ").toLowerCase().includes(needle));
-  }, [cases, query]);
-
-  const alerts = useMemo(() => {
-    if (!data) return [];
+  const alerts = useMemo<{ key: string; text: string; view: View; caseId?: string }[]>(() => {
+    const queue = cases.filter((item) => item.assessment?.pending_approvals.length && item.case_id !== data?.case_id).map((item) => ({ key: `q-${item.case_id}`, text: `${item.case_id}: ${item.assessment!.pending_approvals.map((approval) => `${humanize(approval.action)} (${approval.route})`).join(", ")}`, view: "command" as View, caseId: item.case_id }));
+    if (!data) return queue;
     const approvals = (data.approval_requests ?? []).filter((item) => item.approval_status === "pending").map((item) => ({ key: `a-${item.action}`, text: `${humanize(item.action)} needs ${item.route} approval`, view: "actions" as View }));
     const answered = new Set((data.evidence_responses ?? []).map((item) => (item as { request_id?: string }).request_id));
     const requests = (data.evidence_requests ?? []).filter((item) => item.status !== "completed" && !answered.has(item.request_id)).map((item) => ({ key: `e-${item.request_id}`, text: item.question, view: "evidence" as View }));
-    return [...approvals, ...requests];
-  }, [data]);
+    return [...approvals, ...requests, ...queue];
+  }, [data, cases]);
 
+  const openFromQueue = useCallback((id: string) => { void run(id); }, [run]);
   const identity = api.identity;
   const position = data ? cases.findIndex((item) => item.case_id === data.case_id) : -1;
   const neighbours = { previous: position > 0 ? cases[position - 1].case_id : undefined, next: position >= 0 && position < cases.length - 1 ? cases[position + 1].case_id : undefined, position: position + 1, total: cases.length };
   const current = view;
+  const page = sectionFor(current);
+  const range = dayRange(cases.map((item) => item.opened_at));
 
   return <div className={`shell ${collapsed ? "collapsed" : ""}`}>
     <Sidebar busy={busy} caseCount={cases.length} collapsed={collapsed} connection={connection} data={data} onLoadPack={() => fileRef.current?.click()} onNavigate={setView} onRetry={() => void connect()} onToggle={() => setCollapsed(!collapsed)} view={view} />
@@ -159,13 +183,15 @@ export function Workbench() {
 
     <div className="main">
       <header className="topbar">
-        <label className="search"><Icon name="search" size={16} /><input aria-label="Search cases" onChange={(event) => { setQuery(event.target.value); if (event.target.value) setView("cases"); }} placeholder="Search cases, customers, transactions…" ref={searchRef} value={query} /><kbd>Ctrl K</kbd></label>
+        <div className="page-title"><h1>{page.title}</h1><p>{page.hint}</p></div>
+        <label className="search"><Icon name="search" size={16} /><input aria-label="Search cases" onChange={(event) => { setQuery(event.target.value); if (event.target.value) setView("command"); }} placeholder="Search cases, customers, transactions or findings…" ref={searchRef} value={query} /><kbd>Ctrl K</kbd></label>
+        {range && <span className="range-chip" title="Dates the loaded cases were opened"><Icon name="ledger" size={15} />{range}</span>}
         <div className="topbar-right">
           <button className={`status ${connection}`} onClick={() => void connect()} title="Check the API connection again" type="button"><i />{connectionText[connection]}</button>
           <button aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} className="icon-button theme-toggle" onClick={toggleTheme} title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} type="button"><Icon name={theme === "dark" ? "sun" : "moon"} /></button>
           <div className="bell-wrap">
             <button aria-expanded={bellOpen} aria-label={`${alerts.length} items need attention`} className="icon-button" onClick={() => setBellOpen(!bellOpen)} type="button"><Icon name="bell" />{alerts.length > 0 && <b className="badge">{alerts.length}</b>}</button>
-            {bellOpen && <div className="bell-menu" role="menu">{alerts.length ? alerts.map((alert) => <button key={alert.key} onClick={() => { setView(alert.view); setBellOpen(false); }} role="menuitem" type="button">{alert.text}</button>) : <p>Nothing needs your attention.</p>}</div>}
+            {bellOpen && <div className="bell-menu" role="menu">{alerts.length ? alerts.map((alert) => <button key={alert.key} onClick={() => { setBellOpen(false); if (alert.caseId) void run(alert.caseId, "actions"); else setView(alert.view); }} role="menuitem" type="button">{alert.text}</button>) : <p>Nothing needs your attention.</p>}</div>}
           </div>
           {(identity.name || identity.role) && <span className="who"><span className="avatar">{initials(identity.name || identity.role)}</span><span><b>{identity.name || humanize(identity.role)}</b>{identity.name && identity.role && <small>{humanize(identity.role)}</small>}</span></span>}
         </div>
@@ -177,7 +203,7 @@ export function Workbench() {
         {error && <div className="alert" role="alert"><strong>{error}</strong>{connection === "offline" && <button className="button ghost" onClick={() => void connect()} type="button"><Icon name="refresh" size={15} />Retry</button>}<button aria-label="Dismiss" className="icon-button small" onClick={() => setError("")} type="button"><Icon name="x" size={14} /></button></div>}
         {!api.isConfigured && <div className="alert"><strong>Set NEXT_PUBLIC_API_BASE_URL in frontend/.env.local, then restart the workbench.</strong></div>}
 
-        {current === "cases" ? <CaseQueue busy={busy} cases={filtered} connection={connection} onLoadPack={() => fileRef.current?.click()} onRetry={() => void connect()} onRun={(id) => void run(id)} query={query} selected={selected} total={cases.length} visited={visited} /> : !data ? <NoCase busy={busy} cases={cases} connection={connection} onLoadPack={() => fileRef.current?.click()} onOpen={(id, target) => void run(id, target)} onRetry={() => void connect()} view={current} /> : <>
+        {current === "command" ? <CommandCenter activity={activity} busy={busy} cases={cases} connection={connection} onLoadPack={() => fileRef.current?.click()} onOpen={openFromQueue} onRetry={() => void connect()} query={query} selected={selected} theme={theme} visited={visited} /> : !data ? <NoCase busy={busy} cases={cases} connection={connection} onLoadPack={() => fileRef.current?.click()} onOpen={(id, target) => void run(id, target)} onRetry={() => void connect()} view={current} /> : <>
           <CaseHeader busy={busy} data={data} neighbours={neighbours} onExport={exportCase} onOpen={(id) => void run(id, current)} onRun={() => void run(data.case_id, current)} />
           {current === "overview" && <>
             <KeyFigures data={data} />

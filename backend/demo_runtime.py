@@ -148,6 +148,10 @@ class ReferenceWorkflow:
     def get_investigation_state(self, case_id: str) -> dict[str, Any]:
         return self._states[case_id]
 
+    def overview(self, case_input: dict[str, Any]) -> dict[str, Any] | None:
+        """Lookup-only runtime has no assessment to summarise."""
+        return None
+
 
 def build_reference_runtime(path: str, transactions_path: str | None = None, closed_cases_path: str | None = None) -> tuple[CasePackProvider, ReferenceWorkflow]:
     """Case pack plus the local investigation engine over the configured CSV inputs."""

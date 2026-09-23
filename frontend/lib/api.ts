@@ -1,4 +1,4 @@
-import { CaseOption, EvidenceRequest, Investigation } from "./types";
+import { CaseOption, CaseOverview, EvidenceRequest, Investigation } from "./types";
 
 const configuredBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
 const apiKey = process.env.NEXT_PUBLIC_API_KEY;
@@ -34,6 +34,7 @@ export const api = {
   health: () => call<ApiHealth>("/health", { headers: { accept: "application/json" } }),
   uploadCasePack,
   cases: () => call<CaseOption[]>("/cases"),
+  overview: () => call<CaseOverview[]>("/cases/overview"),
   start: (caseId: string) => call<Investigation>("/investigations/start", { method: "POST", body: JSON.stringify({ case_id: caseId }) }),
   approve: (caseId: string, action: string, approved: boolean) => call<Investigation>(`/investigations/${caseId}/approval`, { method: "POST", body: JSON.stringify({ action, approved }) }),
   evidence: (caseId: string, request: EvidenceRequest, result: string, details: string) => call<Investigation>(`/investigations/${caseId}/evidence`, { method: "POST", body: JSON.stringify({ evidence: { request_id: request.request_id, case_id: caseId, type: request.type, result, details, source: request.type === "customer_validation" ? "customer" : request.type === "step_up_auth" ? "step_up_auth" : "analyst" } }) }),

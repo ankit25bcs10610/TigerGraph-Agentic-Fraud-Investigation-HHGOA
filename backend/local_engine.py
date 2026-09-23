@@ -302,6 +302,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         return None
 
     def _render(self, state: dict[str, Any], assessment: dict[str, Any]) -> None:
+        self._contexts[state["case_id"]]["last"] = assessment
         target: TransactionEvidence = assessment["target"]
         pattern = assessment["pattern"]
         previous = {item["action"]: item for item in state.get("approval_requests", [])}
@@ -402,6 +403,52 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         self._record(state, {"type": f"{label}fraud_probability", "fraud_probability": f"{assessment['probability']:.4f}", "verdict": assessment["verdict"].value, "evidence_items": len(assessment["evidence"])})
         self._record(state, {"type": f"{label}stopping_evaluation", "stop": assessment["stop"].should_stop, "reason_code": assessment["stop"].reason_code.value})
         self._record(state, {"type": f"{label}policy_applied", "actions": ",".join(item["action"] for item in assessment["actions"]), "exposure_usd": f"{assessment['exposure']:.2f}"})
+
+    # -------------------------------------------------------- queue overview
+
+    @staticmethod
+    def _finding(assessment: dict[str, Any]) -> str:
+        pattern = assessment["pattern"]
+        if pattern.pattern is not FraudPattern.NONE:
+            return pattern.reason
+        claims = [item["claim"] for item in assessment["evidence"]]
+        return claims[0] if claims else "No grounded signal beyond the trigger."
+
+    def overview(self, case_input: dict[str, Any]) -> dict[str, Any] | None:
+        """Summarise a case for the queue without starting or changing its investigation."""
+        case_id = case_input["case_id"]
+        state = self._states.get(case_id)
+        stored = self._contexts.get(case_id)
+        if stored and "last" in stored and state:
+            assessment, context = stored["last"], stored
+            status = state["status"]
+            approvals = [item for item in state.get("approval_requests", []) if item["approval_status"] == "pending"]
+            open_requests = len([item for item in state.get("evidence_requests", []) if item.get("status") != "resolved"])
+        else:
+            context = self._context(case_input)
+            if context is None:
+                return None
+            assessment = self._assess(case_input, context, [])
+            status = "not_started"
+            approvals = [item for item in assessment["actions"] if item["route"] in {"L1", "L2"}]
+            open_requests = 0 if assessment["stop"].should_stop else 1
+        target: TransactionEvidence = assessment["target"]
+        history = context["customer_history"]
+        return {
+            "verdict": assessment["verdict"].value, "pattern": assessment["pattern"].pattern.value,
+            "fraud_probability": assessment["probability"], "exposure_usd": assessment["exposure"],
+            "finding": self._finding(assessment), "flagged_amount": target.amount_usd, "channel": target.channel,
+            "status": status, "pending_approvals": [{"action": item["action"], "route": item["route"]} for item in approvals],
+            "open_requests": open_requests, "sar_required": bool(assessment["sar"]["file"]),
+            "entities": {
+                "customers": sorted({target.customer_id, *assessment["other_customers"]}),
+                "cards": sorted({item.card_id for item in history if item.card_id} | set(assessment["other_cards"])),
+                "devices": sorted({item.device_profile_id for item in history if item.device_profile_id}),
+                "shared_devices": [target.device_profile_id] if target.device_profile_id and assessment["other_customers"] else [],
+                "transactions": sorted({item.transaction_id for item in history} | {item.transaction_id for item in context["network"]}),
+                "closed_cases": [row["case_id"] for row, _ in assessment["linked"]],
+            },
+        }
 
     # -------------------------------------------------------- workflow API
 

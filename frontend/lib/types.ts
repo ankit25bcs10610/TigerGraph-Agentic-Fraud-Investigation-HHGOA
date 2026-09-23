@@ -41,3 +41,19 @@ export type Investigation = {
   evidence_requests?: EvidenceRequest[];
   evidence_responses?: Evidence[];
 };
+
+export type CaseAssessment = {
+  verdict: "fraud" | "uncertain" | "legitimate";
+  pattern: string;
+  fraud_probability: number;
+  exposure_usd: number;
+  finding: string;
+  flagged_amount: number;
+  channel: string;
+  status: "not_started" | "awaiting_evidence" | "awaiting_approval" | "completed" | string;
+  pending_approvals: { action: string; route: "L1" | "L2" }[];
+  open_requests: number;
+  sar_required: boolean;
+  entities: { customers: string[]; cards: string[]; devices: string[]; shared_devices: string[]; transactions: string[]; closed_cases: string[] };
+};
+export type CaseOverview = CaseOption & { assessment: CaseAssessment | null };

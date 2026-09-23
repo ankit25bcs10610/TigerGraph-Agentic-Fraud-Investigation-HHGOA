@@ -127,6 +127,14 @@ def create_app(workflow: Workflow | None = None, case_provider: CaseInputProvide
         authorize(request)
         return dependencies()[1].list()
 
+    @app.get("/cases/overview")
+    def cases_overview(request: Request) -> list[dict[str, Any]]:
+        """Every case with its current assessment, for the command center queue."""
+        authorize(request)
+        service, provider = dependencies()
+        summarise = getattr(service, "overview", None)
+        return [{**case, "assessment": summarise(provider.get(case["case_id"])) if summarise else None} for case in provider.list()]
+
     @app.post("/investigations/start")
     def start(request: Request, payload: StartRequest):
         authorize(request)

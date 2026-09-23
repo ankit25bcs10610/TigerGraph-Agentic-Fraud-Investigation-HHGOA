@@ -4,25 +4,25 @@ import { humanize, verdictTone } from "../lib/format";
 import { Investigation } from "../lib/types";
 import { Icon, IconName } from "./icons";
 
-export type View = "overview" | "cases" | "graph" | "transactions" | "evidence" | "actions" | "report" | "audit";
+export type View = "command" | "overview" | "graph" | "transactions" | "evidence" | "actions" | "report" | "audit";
 export type Connection = "checking" | "online" | "setup" | "offline";
 
-type Item = { view: View; label: string; hint: string; icon: IconName };
+type Item = { view: View; label: string; title: string; hint: string; icon: IconName };
 
 export const sections: { title: string; items: Item[] }[] = [
   { title: "Workspace", items: [
-    { view: "cases", label: "Case queue", hint: "Every case in the loaded case pack", icon: "queue" },
-    { view: "overview", label: "Investigation", hint: "The full picture for one case", icon: "radar" },
+    { view: "command", label: "Command center", title: "Case command center", hint: "Prioritise, investigate and resolve suspicious activity", icon: "grid" },
+    { view: "overview", label: "Investigation", title: "Investigation", hint: "The full picture for one case", icon: "radar" },
   ] },
   { title: "Case analysis", items: [
-    { view: "graph", label: "Graph explorer", hint: "Entities and links around the flagged transaction", icon: "graph" },
-    { view: "transactions", label: "Transactions", hint: "Customer history around the flagged transaction", icon: "swap" },
-    { view: "evidence", label: "Evidence", hint: "Grounded claims, open requests and similar cases", icon: "doc" },
-    { view: "actions", label: "Actions & approvals", hint: "Recommended actions and approval decisions", icon: "shield" },
+    { view: "graph", label: "Graph intelligence", title: "Graph intelligence", hint: "Entities and links around the flagged transaction", icon: "graph" },
+    { view: "transactions", label: "Transactions", title: "Transactions", hint: "Customer history around the flagged transaction", icon: "swap" },
+    { view: "evidence", label: "Evidence", title: "Evidence", hint: "Grounded claims, open requests and similar cases", icon: "doc" },
+    { view: "actions", label: "Decisions", title: "Decisions", hint: "Recommended actions and approval decisions", icon: "shield" },
   ] },
   { title: "Records", items: [
-    { view: "report", label: "SAR report", hint: "Suspicious activity report draft", icon: "ledger" },
-    { view: "audit", label: "Audit log", hint: "Sealed events and tool calls", icon: "pulse" },
+    { view: "report", label: "Reports", title: "Suspicious activity report", hint: "The report draft and its filing decision", icon: "ledger" },
+    { view: "audit", label: "Audit", title: "Audit", hint: "Sealed events and tool calls", icon: "pulse" },
   ] },
 ];
 
@@ -33,7 +33,7 @@ type Badge = { value: string | number; tone?: "risk" | "warn" | "ok" };
 /** Counts shown beside each section, all taken from the open investigation. */
 function badges(data: Investigation | null, caseCount: number): Partial<Record<View, Badge>> {
   const result: Partial<Record<View, Badge>> = {};
-  if (caseCount) result.cases = { value: caseCount };
+  if (caseCount) result.command = { value: caseCount };
   if (!data) return result;
   const pending = (data.approval_requests ?? []).filter((item) => item.approval_status === "pending").length;
   const answered = new Set((data.evidence_responses ?? []).map((item) => (item as { request_id?: string }).request_id));
@@ -51,7 +51,7 @@ function badges(data: Investigation | null, caseCount: number): Partial<Record<V
 
 const connectionText: Record<Connection, [string, string]> = {
   checking: ["Connecting", "Checking the investigation API"],
-  online: ["API connected", "Cases loaded and ready"],
+  online: ["System healthy", "Cases loaded and ready"],
   setup: ["Case pack needed", "API is running with no cases"],
   offline: ["API offline", "Start the API, then retry"],
 };
@@ -66,8 +66,8 @@ export function Sidebar({ view, data, caseCount, connection, collapsed, busy, on
       <div className="brand-text"><strong>Sentinel</strong><small>Graph fraud investigation</small></div>
     </div>
 
-    <button className={`active-case ${data ? "open" : ""}`} onClick={() => onNavigate(data ? "overview" : "cases")} title={collapsed ? (data ? `Open case ${data.case_id}` : "No case open") : undefined} type="button">
-      <span className={`case-dot ${tone}`} aria-hidden="true">{data ? <Icon name="radar" size={16} /> : <Icon name="queue" size={16} />}</span>
+    <button className={`active-case ${data ? "open" : ""}`} onClick={() => onNavigate(data ? "overview" : "command")} title={collapsed ? (data ? `Open case ${data.case_id}` : "No case open") : undefined} type="button">
+      <span className={`case-dot ${tone}`} aria-hidden="true">{data ? <Icon name="radar" size={16} /> : <Icon name="grid" size={16} />}</span>
       <span className="active-case-text">
         {data ? <><small>Open case</small><strong>{data.case_id}</strong><em>{data.case?.verdict ? humanize(data.case.verdict) : humanize(data.trigger_type ?? data.status ?? "In review")}</em></>
           : <><small>No case open</small><strong>{caseCount ? "Pick one from the queue" : "Load a case pack"}</strong></>}
@@ -79,7 +79,7 @@ export function Sidebar({ view, data, caseCount, connection, collapsed, busy, on
         <p className="nav-title">{group.title}</p>
         {group.items.map((item) => {
           const badge = counts[item.view];
-          return <button aria-current={view === item.view ? "page" : undefined} className={`nav-item ${!data && item.view !== "cases" ? "waiting" : ""}`} key={item.view} onClick={() => onNavigate(item.view)} title={collapsed ? item.label : item.hint} type="button">
+          return <button aria-current={view === item.view ? "page" : undefined} className={`nav-item ${!data && item.view !== "command" ? "waiting" : ""}`} key={item.view} onClick={() => onNavigate(item.view)} title={collapsed ? item.label : item.hint} type="button">
             <Icon name={item.icon} />
             <span>{item.label}</span>
             {badge && <b className={`count ${badge.tone ?? ""}`}>{badge.value}</b>}
@@ -89,6 +89,7 @@ export function Sidebar({ view, data, caseCount, connection, collapsed, busy, on
     </nav>
 
     <div className="sidebar-foot">
+      <p className="tagline">Fraud stops<br />with clarity.</p>
       <button className={`api-card ${connection}`} onClick={onRetry} title="Check the connection again" type="button">
         <i aria-hidden="true" />
         <span><strong>{status}</strong><small>{detail}</small></span>

@@ -95,7 +95,8 @@ export function RelationshipMap({ graph, onExpand }: { graph?: Graph; onExpand?:
             const flaggedLink = Boolean(from.node.data.flagged || to.node.data.flagged);
             return <g className={`map-edge ${dim ? "dim" : ""} ${flaggedLink ? "hot" : ""}`} key={edge.data.id}>
               <path d={d} markerEnd="url(#arrow)" />
-              {edge.data.label && <text x={(sx + tx) / 2} y={(sy + ty) / 2 - 8}>{humanize(edge.data.label).toLowerCase()}</text>}
+              {/* Only label edges between neighbouring columns; longer ones would run through node labels. */}
+              {edge.data.label && forward && to.layer - from.layer === 1 && <text x={(sx + tx) / 2} y={(sy + ty) / 2 - 8}>{humanize(edge.data.label).toLowerCase()}</text>}
             </g>;
           })}
           {[...placed.values()].map(({ node, x, y }) => {

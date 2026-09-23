@@ -83,3 +83,18 @@ def test_invalid_evidence_result_is_rejected(runtime):
     request = state["evidence_requests"][0]
     with pytest.raises(ValueError):
         engine.resume_with_evidence("SMP-001", {"request_id": request["request_id"], "result": "maybe"})
+
+
+def test_overview_summarises_without_starting(runtime):
+    provider, engine = runtime
+    summary = engine.overview(provider.get("SMP-002"))
+    assert summary["status"] == "not_started"
+    assert summary["verdict"] == "fraud"
+    assert summary["sar_required"] is True
+    assert summary["entities"]["shared_devices"] == ["SMP-DEV-90"]
+    assert "SMP-002" not in engine._states
+
+    state = engine.start_investigation(provider.get("SMP-001"))
+    summary = engine.overview(provider.get("SMP-001"))
+    assert summary["status"] == state["status"] == "awaiting_evidence"
+    assert summary["pending_approvals"] == [{"action": "DECLINE_TRANSACTION", "route": "L1"}]
