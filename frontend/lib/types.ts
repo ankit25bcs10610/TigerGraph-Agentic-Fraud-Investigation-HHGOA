@@ -8,7 +8,7 @@ export type GraphNode = { data: { id: string; label?: string; entity_type?: stri
 export type GraphEdge = { data: { id: string; source: string; target: string; label?: string; [key: string]: unknown } };
 export type Graph = { nodes: GraphNode[]; edges: GraphEdge[] };
 
-export type TimelineRow = { transaction_id?: string; ts?: string; timestamp?: string; transaction_amt?: string | number; amount_usd?: string | number; channel?: string; risk_score?: string | number; device_profile_id?: string; billing_region?: string; email_domain?: string; suspicious?: boolean };
+export type TimelineRow = { transaction_id?: string; ts?: string; timestamp?: string; transaction_amt?: string | number; amount_usd?: string | number; channel?: string; risk_score?: string | number; device_profile_id?: string; billing_region?: string; email_domain?: string; suspicious?: boolean; in_episode?: boolean };
 export type SimilarCase = { case_id?: string; pattern?: string; outcome?: string; similarity_score?: string | number; reason_for_match?: string; matched_text?: string };
 export type LedgerEntry = { sequence: number; event_type: string; recorded_at: string; previous_hash: string; hash: string };
 export type ApprovalRequest = { action: string; route: "L1" | "L2"; reason: string; approval_status: string };

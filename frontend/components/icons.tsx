@@ -31,6 +31,8 @@ const paths = {
   node: "M12 12m-6 0a6 6 0 1 0 12 0a6 6 0 1 0-12 0",
   chevron: "M6 9l6 6 6-6",
   more: "M5 12h.01M12 12h.01M19 12h.01",
+  sun: "M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0-8 0M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4",
+  moon: "M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z",
 } as const;
 
 export type IconName = keyof typeof paths;
@@ -53,18 +55,18 @@ export const entityIcon: Record<string, IconName> = {
   InvestigationCase: "folder",
 };
 
-/** One colour per entity type, shared by the relationship map and the graph explorer. */
+/** One mid-tone colour per entity type, legible on both themes and shared by the map and explorer. */
 export const entityColor: Record<string, string> = {
-  Customer: "#5ba8ff",
-  Card: "#2fcf8f",
-  Account: "#2fcf8f",
-  Transaction: "#f3b13f",
-  EmailDomain: "#b18cff",
-  BillingRegion: "#4fd1c5",
-  DeviceProfile: "#ff9f6b",
-  IdentityRecord: "#ff9f6b",
-  ClosedCase: "#f06fa8",
-  InvestigationCase: "#f06fa8",
+  Customer: "#3b82f6",
+  Card: "#10b981",
+  Account: "#10b981",
+  Transaction: "#eaa21a",
+  EmailDomain: "#8b5cf6",
+  BillingRegion: "#14b8a6",
+  DeviceProfile: "#f97316",
+  IdentityRecord: "#f97316",
+  ClosedCase: "#ec4899",
+  InvestigationCase: "#ec4899",
 };
 
 /** An entity icon as a data URI, for canvas renderers that cannot use inline SVG. */

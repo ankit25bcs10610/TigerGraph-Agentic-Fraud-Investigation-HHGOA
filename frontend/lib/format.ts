@@ -23,6 +23,11 @@ export function humanize(value: unknown): string {
 
 export function dateTime(value: unknown): string | null {
   if (!value) return null;
+  // A bare calendar date has no time of day; show it without shifting it through a time zone.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
+    const [year, month, day] = String(value).split("-").map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  }
   const date = new Date(String(value));
   if (Number.isNaN(date.getTime())) return String(value);
   return date.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });

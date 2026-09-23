@@ -10,7 +10,7 @@ function cssVar(name: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-export function GraphEvidence({ graph }: { graph?: Graph }) {
+export function GraphEvidence({ graph, theme }: { graph?: Graph; theme?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
   const [layout, setLayout] = useState("breadthfirst");
@@ -43,13 +43,13 @@ export function GraphEvidence({ graph }: { graph?: Graph }) {
     cy.on("tap", (event) => { if (event.target === cy) setPicked(null); });
     cyRef.current = cy;
     return () => { cy.destroy(); cyRef.current = null; };
-  }, [graph, layout]);
+  }, [graph, layout, theme]);
 
   useEffect(() => {
     const cy = cyRef.current; if (!cy) return;
     cy.nodes().forEach((node) => { node.style("display", focus === "all" || node.data("entity_type") === focus ? "element" : "none"); });
     cy.edges().forEach((edge) => { edge.style("display", edge.source().style("display") === "none" || edge.target().style("display") === "none" ? "none" : "element"); });
-  }, [focus, layout, graph]);
+  }, [focus, layout, graph, theme]);
 
   useEffect(() => {
     const cy = cyRef.current; if (!cy) return;
@@ -61,7 +61,7 @@ export function GraphEvidence({ graph }: { graph?: Graph }) {
     hits.addClass("match");
     cy.elements().not(hits.closedNeighborhood()).addClass("faded");
     cy.animate({ fit: { eles: hits.closedNeighborhood(), padding: 60 } }, { duration: 250 });
-  }, [find, graph, layout]);
+  }, [find, graph, layout, theme]);
 
   return <section className="panel explorer">
     <header className="panel-head">

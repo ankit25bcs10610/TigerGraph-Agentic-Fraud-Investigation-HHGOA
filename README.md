@@ -30,6 +30,20 @@ Open `http://127.0.0.1:3001`. A green **System operational** badge confirms that
 
 > The reference runtime intentionally uses real case triggers only. It never creates invented benchmark cases or fabricated fraud decisions when the case pack is missing.
 
+### Try it with the sample data
+
+`data/sample/` holds six clearly labelled synthetic cases (IDs start with `SMP-`) covering card testing, a shared-device fraud ring, out-of-region travel, account takeover, a routine purchase and a customer report. Nothing loads them automatically:
+
+```bash
+CASE_PACK_PATH=data/sample/case_pack.csv \
+TRANSACTIONS_PATH=data/sample/transactions.csv \
+CLOSED_CASES_PATH=data/sample/closed_cases_history.csv \
+FRONTEND_ORIGINS=http://127.0.0.1:3001 \
+python -m uvicorn backend.main:app --port 8000
+```
+
+The local investigation engine (`backend/local_engine.py`) runs the repository's deterministic pattern detectors, fraud-probability weights, stopping rules, policy R1–R10, approval routing and SAR rules over those rows, so every verdict, action and approval is computed rather than scripted. [`data/sample/README.md`](data/sample/README.md) lists what to try in each case.
+
 ### Demo checklist
 
 - Start in the case queue: filter by trigger type, sort by risk, and open a case.
@@ -41,7 +55,7 @@ Open `http://127.0.0.1:3001`. A green **System operational** badge confirms that
 
 ### Workbench sections
 
-Every section is reachable before a case is open; it explains what it will show and offers a case picker that opens straight into it.
+Every section is reachable before a case is open; it explains what it will show and offers a case picker that opens straight into it. The sun/moon button in the header switches between dark and light themes; the choice is remembered, and the system preference is used until one is made.
 
 | Section | What it shows |
 |---|---|
@@ -258,6 +272,7 @@ Use environment variables or deployment secret management for credentials. Never
 | `NEXT_PUBLIC_ANALYST_NAME` | Frontend | Optional analyst name shown in the header |
 | `CASE_PACK_PATH` | API | Case pack loaded at start-up; it can also be uploaded from the workbench |
 | `TRANSACTIONS_PATH` | API | Transactions used for the case timeline, amount chart and relationship map |
+| `CLOSED_CASES_PATH` | API | Closed cases used for linked prior fraud and similar-case retrieval |
 | `LLM_PROVIDER` | LLM layer | Selects the configured synthesis provider |
 | `LLM_MODEL` | LLM layer | Selects a provider-supported model |
 | `OPENAI_API_KEY` | Optional OpenAI provider | Authentication for LLM synthesis |

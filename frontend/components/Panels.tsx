@@ -112,7 +112,7 @@ export function NextBestAction({ data, busy, onApprove, onOpenEvidence }: { data
   const probability = percent(data.case?.fraud_probability);
   const requests = data.evidence_requests ?? [];
   return <Panel className="nba" icon="target" title="Next best action" subtitle="Selected by policy rules from the evidence">
-    {!primary ? <p className="empty">No action has been recommended yet. The policy step runs after evidence is assessed.</p> : <>
+    {!primary ? <p className="empty">{data.case?.verdict === "legitimate" ? "No action needed. The evidence closed this case as legitimate." : data.case?.verdict ? "Policy rules recommended no action for this evidence." : "No action has been recommended yet. The policy step runs after evidence is assessed."}</p> : <>
       <div className="nba-hero">
         {probability && <div className="nba-score"><strong>{probability}</strong><span>Fraud probability</span></div>}
         <div><span className={`route route-${primary.route.toLowerCase()}`}>{primary.route === "auto" ? "Auto" : primary.route}</span><h3>{humanize(primary.action)}</h3><p>{primary.reason}</p></div>
@@ -139,8 +139,11 @@ export function NextBestAction({ data, busy, onApprove, onOpenEvidence }: { data
 
 /* ---------- Evidence ---------- */
 
+/** Assessed evidence plus recorded responses, skipping responses the assessment already cites. */
 export function allEvidence(data: Investigation): Evidence[] {
-  return [...(data.case?.evidence ?? []), ...(data.evidence_responses ?? [])];
+  const assessed = data.case?.evidence ?? [];
+  const cited = new Set(assessed.map((item) => item.ref));
+  return [...assessed, ...(data.evidence_responses ?? []).filter((item) => !cited.has(item.ref))];
 }
 
 export function EvidenceTable({ items, limit }: { items: Evidence[]; limit?: number }) {
@@ -225,7 +228,7 @@ export function TransactionsTable({ rows }: { rows: TimelineRow[] }) {
   return <div className="table-wrap"><table className="data-table">
     <thead><tr><th>Transaction</th><th>Time</th><th className="num">Amount</th><th className="num">Risk score</th>{present.map(([, label]) => <th key={label}>{label}</th>)}</tr></thead>
     <tbody>{rows.map((row, index) => <tr className={row.suspicious ? "flag-row" : ""} key={String(row.transaction_id ?? index)}>
-      <td className="ids">{row.transaction_id ?? "—"}{row.suspicious && <span className="tag risk">Flagged</span>}</td>
+      <td className="ids">{row.transaction_id ?? "—"}{row.suspicious ? <span className="tag risk">Flagged</span> : row.in_episode && <span className="tag warn">In episode</span>}</td>
       <td>{dateTime(rowTime(row)) ?? "—"}</td>
       <td className="num">{money(rowAmount(row)) ?? "—"}</td>
       <td className="num">{toNumber(row.risk_score)?.toFixed(2) ?? "—"}</td>

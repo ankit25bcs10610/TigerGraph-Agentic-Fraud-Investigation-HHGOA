@@ -28,14 +28,14 @@ function ActivityChart({ rows }: { rows: TimelineRow[] }) {
   const active = hover !== null ? rows[hover] : null;
 
   return <div className="activity">
-    <div className="activity-legend"><span><i className="swatch amount" />Amount</span>{riskValues.length > 0 && <span><i className="swatch risk" />Risk score</span>}<span><i className="swatch flagged" />Flagged transaction</span></div>
+    <div className="activity-legend"><span><i className="swatch amount" />Amount</span>{riskValues.length > 0 && <span><i className="swatch risk" />Risk score</span>}{rows.some((row) => row.in_episode && !row.suspicious) && <span><i className="swatch episode" />Same fraud episode</span>}<span><i className="swatch flagged" />Flagged transaction</span></div>
     <div className="activity-frame">
       <svg aria-label={`Amounts and risk scores for ${rows.length} transactions`} onMouseLeave={() => setHover(null)} role="img" viewBox={`0 0 ${W} ${H}`}>
         {ticks.map((tick) => <g className="grid-line" key={tick}><line x1={PAD.left} x2={W - PAD.right} y1={yAmount(tick)} y2={yAmount(tick)} /><text x={PAD.left - 10} y={yAmount(tick) + 4}>{money(tick, true)}</text></g>)}
         {riskValues.length > 0 && [0, maxRisk].map((tick) => <text className="risk-axis" key={tick} x={W - PAD.right + 10} y={yRisk(tick) + 4}>{tick.toFixed(2)}</text>)}
         {rows.map((row, index) => <g key={row.transaction_id ?? index} onMouseEnter={() => setHover(index)}>
           <rect className="hit" height={innerH} width={step} x={PAD.left + step * index} y={PAD.top} />
-          <rect className={`amount-bar ${row.suspicious ? "flagged" : ""} ${hover === index ? "hover" : ""}`} height={Math.max(1, PAD.top + innerH - yAmount(amounts[index]))} rx="2" width={bar} x={x(index) - bar / 2} y={yAmount(amounts[index])} />
+          <rect className={`amount-bar ${row.suspicious ? "flagged" : row.in_episode ? "episode" : ""} ${hover === index ? "hover" : ""}`} height={Math.max(1, PAD.top + innerH - yAmount(amounts[index]))} rx="2" width={bar} x={x(index) - bar / 2} y={yAmount(amounts[index])} />
         </g>)}
         {riskPath && <path className="risk-line" d={riskPath} />}
         {risks.map((value, index) => value !== null && <circle className={`risk-dot ${rows[index].suspicious ? "flagged" : ""}`} cx={x(index)} cy={yRisk(value)} key={index} r={rows[index].suspicious ? 5 : 3} />)}
@@ -45,7 +45,7 @@ function ActivityChart({ rows }: { rows: TimelineRow[] }) {
         <strong>{active.transaction_id}</strong>
         <span>{dateTime(rowTime(active))}</span>
         <span>{money(rowAmount(active)) ?? "No amount"}{toNumber(active.risk_score) !== null && `, risk ${toNumber(active.risk_score)!.toFixed(2)}`}</span>
-        {active.suspicious && <em>Flagged transaction</em>}
+        {active.suspicious ? <em>Flagged transaction</em> : active.in_episode && <em className="episode">Part of the fraud episode</em>}
       </div>}
     </div>
   </div>;

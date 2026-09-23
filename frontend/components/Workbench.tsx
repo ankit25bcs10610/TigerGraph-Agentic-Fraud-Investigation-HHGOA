@@ -45,7 +45,14 @@ export function Workbench() {
   const searchRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { setCollapsed(readCollapsed()); }, []);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  useEffect(() => { setCollapsed(readCollapsed()); setTheme(document.documentElement.dataset.theme === "light" ? "light" : "dark"); }, []);
+  function toggleTheme() {
+    const next = theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    setTheme(next);
+    try { window.localStorage.setItem("sentinel.theme", next); } catch { /* storage unavailable */ }
+  }
   useEffect(() => { try { window.localStorage.setItem("sentinel.nav.collapsed", collapsed ? "1" : "0"); } catch { /* storage unavailable */ } }, [collapsed]);
 
   const connect = useCallback(async () => {
@@ -155,6 +162,7 @@ export function Workbench() {
         <label className="search"><Icon name="search" size={16} /><input aria-label="Search cases" onChange={(event) => { setQuery(event.target.value); if (event.target.value) setView("cases"); }} placeholder="Search cases, customers, transactions…" ref={searchRef} value={query} /><kbd>Ctrl K</kbd></label>
         <div className="topbar-right">
           <button className={`status ${connection}`} onClick={() => void connect()} title="Check the API connection again" type="button"><i />{connectionText[connection]}</button>
+          <button aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} className="icon-button theme-toggle" onClick={toggleTheme} title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} type="button"><Icon name={theme === "dark" ? "sun" : "moon"} /></button>
           <div className="bell-wrap">
             <button aria-expanded={bellOpen} aria-label={`${alerts.length} items need attention`} className="icon-button" onClick={() => setBellOpen(!bellOpen)} type="button"><Icon name="bell" />{alerts.length > 0 && <b className="badge">{alerts.length}</b>}</button>
             {bellOpen && <div className="bell-menu" role="menu">{alerts.length ? alerts.map((alert) => <button key={alert.key} onClick={() => { setView(alert.view); setBellOpen(false); }} role="menuitem" type="button">{alert.text}</button>) : <p>Nothing needs your attention.</p>}</div>}
@@ -185,7 +193,7 @@ export function Workbench() {
               <Panel action={(data.similar_cases?.length ?? 0) > 3 ? <LinkButton onClick={() => setView("evidence")}>View all</LinkButton> : undefined} icon="folder" subtitle="Closed cases retrieved by graph and text similarity" title="Similar cases"><SimilarCases limit={3} rows={data.similar_cases ?? []} /></Panel>
             </div>
           </>}
-          {current === "graph" && <GraphEvidence graph={data.graph} />}
+          {current === "graph" && <GraphEvidence graph={data.graph} theme={theme} />}
           {current === "transactions" && <TransactionsView data={data} />}
           {current === "evidence" && <>
             {(data.evidence_requests?.length ?? 0) > 0 && <Panel icon="target" subtitle="Record what the customer or step-up check returned. The workflow resumes with your answer." title="Evidence requests"><EvidenceRequests busy={busy} onSubmit={(request, result, details) => void submitEvidence(request, result, details)} requests={data.evidence_requests ?? []} responses={data.evidence_responses ?? []} /></Panel>}
