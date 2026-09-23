@@ -26,18 +26,35 @@ printf 'NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000\n' > .env.local
 npm run dev -- --port 3001
 ```
 
-Open `http://127.0.0.1:3001`. A green **System ready** badge confirms that the API and benchmark case pack are available. An amber **Setup required** badge means the API is reachable but the benchmark input has not been loaded yet; choose the supplied `case_pack.csv` in the workbench, or set `CASE_PACK_PATH` before starting the API. It is not an API outage.
+Open `http://127.0.0.1:3001`. A green **System operational** badge confirms that the API and benchmark case pack are available. An amber **Case pack needed** badge means the API is reachable but the benchmark input has not been loaded yet; choose the supplied `case_pack.csv` in the workbench, or set `CASE_PACK_PATH` before starting the API. It is not an API outage.
 
 > The reference runtime intentionally uses real case triggers only. It never creates invented benchmark cases or fabricated fraud decisions when the case pack is missing.
 
 ### Demo checklist
 
-- Start with a trigger from the case intake queue.
-- Open Graph Evidence to show relationships and grounded claims.
-- Explain the risk, pattern, exposure, confidence, and remaining uncertainty.
+- Start in the case queue: filter by trigger type, sort by risk, and open a case.
+- Walk the investigation overview: risk score, exposure, pattern, fraud probability, the relationship map and the workflow timeline.
+- Open the graph explorer and search for an entity to focus it and its neighbours.
 - Show the controlled evidence-request branch when the policy requires more information.
-- Show the Actions tab to distinguish recommendations from L1/L2 approval-required actions.
-- Finish with SAR and Audit Trail views to demonstrate compliance-grade record keeping.
+- Use Actions & approvals to distinguish recommendations from L1/L2 approval-required actions.
+- Finish with the SAR report and the audit log, where the browser recomputes every ledger hash.
+
+### Workbench sections
+
+Every section is reachable before a case is open; it explains what it will show and offers a case picker that opens straight into it.
+
+| Section | What it shows |
+|---|---|
+| Case queue | Case count, trigger mix, risk histogram and open-date range; filter by trigger and sort by case, date or risk |
+| Investigation | Key figures, relationship map, workflow timeline, next best action with policy route, evidence ledger and similar cases |
+| Graph explorer | The full returned subgraph with per-type colours and icons, layouts, entity search and property inspector |
+| Transactions | Customer history, amount and risk chart, and the flagged transaction compared with the customer's others |
+| Evidence | Evidence requests to answer, the ledger filtered by source, and similar closed cases |
+| Actions & approvals | Actions before and after evidence, and approve/reject for protected actions |
+| SAR report | Filing decision, subjects, amount, dates and narrative, with copy and download |
+| Audit log | Hash chain verified in the browser by recomputing each SHA-256 hash, plus redacted raw events |
+
+Nothing in the workbench is hard-coded: every value comes from the API response, and missing values are shown as not assessed rather than filled in.
 
 ## What it does
 
@@ -238,6 +255,9 @@ Use environment variables or deployment secret management for credentials. Never
 | Variable | Used by | Purpose |
 |---|---|---|
 | `NEXT_PUBLIC_API_BASE_URL` | Frontend | Base URL of the running investigation API |
+| `NEXT_PUBLIC_ANALYST_NAME` | Frontend | Optional analyst name shown in the header |
+| `CASE_PACK_PATH` | API | Case pack loaded at start-up; it can also be uploaded from the workbench |
+| `TRANSACTIONS_PATH` | API | Transactions used for the case timeline, amount chart and relationship map |
 | `LLM_PROVIDER` | LLM layer | Selects the configured synthesis provider |
 | `LLM_MODEL` | LLM layer | Selects a provider-supported model |
 | `OPENAI_API_KEY` | Optional OpenAI provider | Authentication for LLM synthesis |
@@ -250,8 +270,8 @@ For cost-conscious grounded summaries, use `LLM_PROVIDER=openai` and `LLM_MODEL=
 
 | What you see | Meaning | Fix |
 |---|---|---|
-| **System ready** | API and case workflow are ready. | Select a case and begin the investigation. |
-| **Setup required** | API is running, but the benchmark case pack is not configured. | Choose `case_pack.csv` in the workbench, or set `CASE_PACK_PATH` to its absolute path and restart the API. |
+| **System operational** | API and case workflow are ready. | Select a case and begin the investigation. |
+| **Case pack needed** | API is running, but the benchmark case pack is not configured. | Choose `case_pack.csv` in the workbench, or set `CASE_PACK_PATH` to its absolute path and restart the API. |
 | **API offline** | The frontend cannot reach `NEXT_PUBLIC_API_BASE_URL`. | Start the API, confirm port `8000`, and use `http://127.0.0.1:8000` in `frontend/.env.local`. |
 | `503 /ready` | The API has started without its case provider/workflow. | This is expected until `CASE_PACK_PATH` or production adapters are supplied. |
 

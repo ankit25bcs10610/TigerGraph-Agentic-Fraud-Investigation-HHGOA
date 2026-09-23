@@ -36,6 +36,12 @@ export function Workbench() {
   const [collapsed, setCollapsed] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
   const [visited, setVisited] = useState<Set<string>>(() => new Set());
+  const [toasts, setToasts] = useState<{ id: number; text: string; tone: "ok" | "warn" }[]>([]);
+  const notify = useCallback((text: string, tone: "ok" | "warn" = "ok") => {
+    const id = Date.now() + Math.random();
+    setToasts((items) => [...items.slice(-2), { id, text, tone }]);
+    window.setTimeout(() => setToasts((items) => items.filter((item) => item.id !== id)), 4000);
+  }, []);
   const searchRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -79,7 +85,8 @@ export function Workbench() {
     try {
       await api.uploadCasePack(file);
       const items = await api.cases();
-      setCases(items); setSelected(items[0]?.case_id ?? ""); setData(null); setConnection("online"); setView("cases");
+      setCases(items); setSelected(items[0]?.case_id ?? ""); setData(null); setVisited(new Set()); setConnection("online"); setView("cases");
+      notify(`Loaded ${items.length} case${items.length === 1 ? "" : "s"} from ${file.name}`);
     } catch (caught) { setError(message(caught, "The case pack could not be loaded.")); }
     finally { setBusy(false); if (fileRef.current) fileRef.current.value = ""; }
   }
@@ -87,7 +94,7 @@ export function Workbench() {
   async function approve(action: string, approved: boolean) {
     if (!data) return;
     setBusy(true); setError("");
-    try { setData(await api.approve(data.case_id, action, approved)); }
+    try { setData(await api.approve(data.case_id, action, approved)); notify(`${humanize(action)} ${approved ? "approved" : "rejected"} and sealed in the audit log`, approved ? "ok" : "warn"); }
     catch (caught) { setError(message(caught, "The approval decision could not be recorded.")); }
     finally { setBusy(false); }
   }
@@ -95,7 +102,7 @@ export function Workbench() {
   async function submitEvidence(request: EvidenceRequest, result: string, details: string) {
     if (!data) return;
     setBusy(true); setError("");
-    try { setData(await api.evidence(data.case_id, request, result, details)); }
+    try { setData(await api.evidence(data.case_id, request, result, details)); notify(`Response recorded: ${humanize(result)}`); }
     catch (caught) { setError(message(caught, "The evidence response could not be recorded.")); }
     finally { setBusy(false); }
   }
@@ -135,6 +142,8 @@ export function Workbench() {
   }, [data]);
 
   const identity = api.identity;
+  const position = data ? cases.findIndex((item) => item.case_id === data.case_id) : -1;
+  const neighbours = { previous: position > 0 ? cases[position - 1].case_id : undefined, next: position >= 0 && position < cases.length - 1 ? cases[position + 1].case_id : undefined, position: position + 1, total: cases.length };
   const current = view;
 
   return <div className={`shell ${collapsed ? "collapsed" : ""}`}>
@@ -154,12 +163,14 @@ export function Workbench() {
         </div>
       </header>
 
-      <main className="content">
+      {busy && <div aria-hidden="true" className="progress" />}
+      <div aria-live="polite" className="toasts">{toasts.map((toast) => <div className={`toast ${toast.tone}`} key={toast.id} role="status"><Icon name={toast.tone === "ok" ? "check" : "target"} size={16} />{toast.text}</div>)}</div>
+      <main aria-busy={busy} className="content">
         {error && <div className="alert" role="alert"><strong>{error}</strong>{connection === "offline" && <button className="button ghost" onClick={() => void connect()} type="button"><Icon name="refresh" size={15} />Retry</button>}<button aria-label="Dismiss" className="icon-button small" onClick={() => setError("")} type="button"><Icon name="x" size={14} /></button></div>}
         {!api.isConfigured && <div className="alert"><strong>Set NEXT_PUBLIC_API_BASE_URL in frontend/.env.local, then restart the workbench.</strong></div>}
 
         {current === "cases" ? <CaseQueue busy={busy} cases={filtered} connection={connection} onLoadPack={() => fileRef.current?.click()} onRetry={() => void connect()} onRun={(id) => void run(id)} query={query} selected={selected} total={cases.length} visited={visited} /> : !data ? <NoCase busy={busy} cases={cases} connection={connection} onLoadPack={() => fileRef.current?.click()} onOpen={(id, target) => void run(id, target)} onRetry={() => void connect()} view={current} /> : <>
-          <CaseHeader busy={busy} data={data} onExport={exportCase} onRun={() => void run(data.case_id)} />
+          <CaseHeader busy={busy} data={data} neighbours={neighbours} onExport={exportCase} onOpen={(id) => void run(id, current)} onRun={() => void run(data.case_id, current)} />
           {current === "overview" && <>
             <KeyFigures data={data} />
             <div className="grid">
@@ -190,7 +201,9 @@ export function Workbench() {
   </div>;
 }
 
-function CaseHeader({ data, busy, onRun, onExport }: { data: Investigation; busy: boolean; onRun: () => void; onExport: () => void }) {
+type Neighbours = { previous?: string; next?: string; position: number; total: number };
+
+function CaseHeader({ data, busy, neighbours, onRun, onExport, onOpen }: { data: Investigation; busy: boolean; neighbours: Neighbours; onRun: () => void; onExport: () => void; onOpen: (caseId: string) => void }) {
   const row = flaggedRow(data);
   const verdict = data.case?.verdict;
   const tone = verdictTone(verdict);
@@ -211,6 +224,11 @@ function CaseHeader({ data, busy, onRun, onExport }: { data: Investigation; busy
     </div>
     <dl className="case-meta">{meta.filter(([, value]) => value).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
     <div className="case-actions">
+      {neighbours.position > 0 && <div className="stepper" role="group" aria-label="Move between cases">
+        <button aria-label={neighbours.previous ? `Previous case, ${neighbours.previous}` : "No previous case"} className="icon-button" disabled={busy || !neighbours.previous} onClick={() => neighbours.previous && onOpen(neighbours.previous)} type="button"><Icon name="collapse" size={16} /></button>
+        <span>{neighbours.position} of {neighbours.total}</span>
+        <button aria-label={neighbours.next ? `Next case, ${neighbours.next}` : "No next case"} className="icon-button" disabled={busy || !neighbours.next} onClick={() => neighbours.next && onOpen(neighbours.next)} type="button"><Icon name="collapse" size={16} style={{ transform: "rotate(180deg)" }} /></button>
+      </div>}
       <button className="button light" disabled={busy} onClick={onRun} type="button"><Icon name={busy ? "refresh" : "play"} size={15} className={busy ? "spin" : undefined} />{busy ? "Running…" : "Run investigation"}</button>
       <button className="button ghost" onClick={onExport} type="button"><Icon name="download" size={15} />Export case</button>
     </div>
