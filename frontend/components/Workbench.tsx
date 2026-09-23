@@ -9,8 +9,10 @@ import { Icon } from "./icons";
 import { CaseQueue } from "./CaseQueue";
 import { NoCase } from "./NoCase";
 import { Connection, Sidebar, View } from "./Sidebar";
-import { ActionsView, allEvidence, AuditView, EvidenceRequests, EvidenceTable, KeyFigures, LinkButton, NextBestAction, Panel, redact, SarView, SimilarCases, TransactionsTable, WorkflowTimeline } from "./Panels";
+import { ActionsView, allEvidence, EvidenceLedger, EvidenceRequests, EvidenceTable, KeyFigures, LinkButton, NextBestAction, Panel, redact, SarView, SimilarCases, WorkflowTimeline } from "./Panels";
+import { AuditView } from "./Audit";
 import { RelationshipMap } from "./RelationshipMap";
+import { TransactionsView } from "./Transactions";
 
 const connectionText: Record<Connection, string> = { checking: "Connecting to API", online: "System operational", setup: "Case pack needed", offline: "API offline" };
 
@@ -173,10 +175,10 @@ export function Workbench() {
             </div>
           </>}
           {current === "graph" && <GraphEvidence graph={data.graph} />}
-          {current === "transactions" && <Panel icon="swap" subtitle="Customer history around the flagged transaction" title="Transactions"><TransactionsTable rows={data.timeline ?? []} /></Panel>}
+          {current === "transactions" && <TransactionsView data={data} />}
           {current === "evidence" && <>
             {(data.evidence_requests?.length ?? 0) > 0 && <Panel icon="target" subtitle="Record what the customer or step-up check returned. The workflow resumes with your answer." title="Evidence requests"><EvidenceRequests busy={busy} onSubmit={(request, result, details) => void submitEvidence(request, result, details)} requests={data.evidence_requests ?? []} responses={data.evidence_responses ?? []} /></Panel>}
-            <Panel icon="doc" subtitle="Grounded claims, each tied to a source and the entities it concerns" title="Evidence ledger"><EvidenceTable items={allEvidence(data)} /></Panel>
+            <Panel icon="doc" subtitle="Grounded claims, each tied to a source and the entities it concerns" title="Evidence ledger"><EvidenceLedger items={allEvidence(data)} /></Panel>
             <Panel icon="folder" subtitle="Closed cases retrieved by graph and text similarity" title="Similar cases"><SimilarCases rows={data.similar_cases ?? []} /></Panel>
           </>}
           {current === "actions" && <ActionsView busy={busy} data={data} onApprove={(action, ok) => void approve(action, ok)} />}

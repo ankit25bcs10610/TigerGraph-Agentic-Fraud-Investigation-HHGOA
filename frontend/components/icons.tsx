@@ -52,3 +52,23 @@ export const entityIcon: Record<string, IconName> = {
   ClosedCase: "folder",
   InvestigationCase: "folder",
 };
+
+/** One colour per entity type, shared by the relationship map and the graph explorer. */
+export const entityColor: Record<string, string> = {
+  Customer: "#5ba8ff",
+  Card: "#2fcf8f",
+  Account: "#2fcf8f",
+  Transaction: "#f3b13f",
+  EmailDomain: "#b18cff",
+  BillingRegion: "#4fd1c5",
+  DeviceProfile: "#ff9f6b",
+  IdentityRecord: "#ff9f6b",
+  ClosedCase: "#f06fa8",
+  InvestigationCase: "#f06fa8",
+};
+
+/** An entity icon as a data URI, for canvas renderers that cannot use inline SVG. */
+export function iconDataUri(type: string, color: string) {
+  const d = paths[entityIcon[type] ?? "node"];
+  return `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`)}`;
+}

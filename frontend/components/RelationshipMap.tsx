@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { humanize } from "../lib/format";
 import { Graph, GraphNode } from "../lib/types";
-import { entityIcon, Icon } from "./icons";
+import { entityColor, entityIcon, Icon } from "./icons";
 
 const COLUMN = 210;
 const ROW = 108;
@@ -72,7 +72,7 @@ export function RelationshipMap({ graph, onExpand }: { graph?: Graph; onExpand?:
       <div><h2 id="map-title">Fraud relationship map</h2><p>Entities and links the investigation returned for this case</p></div>
       <div className="map-legend" aria-label="Legend">
         <span><i className="dot flagged" />Flagged</span>
-        {types.map((type) => <span key={type}><Icon name={entityIcon[type] ?? "node"} size={13} />{humanize(type.replace(/([a-z])([A-Z])/g, "$1_$2"))}</span>)}
+        {types.map((type) => <span key={type} style={{ color: entityColor[type] }}><Icon name={entityIcon[type] ?? "node"} size={13} />{humanize(type.replace(/([a-z])([A-Z])/g, "$1_$2"))}</span>)}
       </div>
       {onExpand && <button aria-label="Open graph explorer" className="icon-button" onClick={onExpand} type="button"><Icon name="expand" size={16} /></button>}
     </header>
@@ -102,7 +102,7 @@ export function RelationshipMap({ graph, onExpand }: { graph?: Graph; onExpand?:
             const type = node.data.entity_type ?? "Entity";
             const dim = neighbours && !neighbours.has(node.data.id);
             const label = node.data.entity_id ?? node.data.label ?? node.data.id;
-            return <g aria-label={`${humanize(type)} ${label}`} className={`map-node ${node.data.flagged ? "flagged" : ""} ${dim ? "dim" : ""} ${selected === node.data.id ? "selected" : ""}`} key={node.data.id} onBlur={() => setActive(null)} onClick={() => setSelected(selected === node.data.id ? null : node.data.id)} onFocus={() => setActive(node.data.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelected(selected === node.data.id ? null : node.data.id); } }} onMouseEnter={() => setActive(node.data.id)} onMouseLeave={() => setActive(null)} role="button" tabIndex={0} transform={`translate(${x} ${y})`}>
+            return <g aria-label={`${humanize(type)} ${label}`} className={`map-node ${node.data.flagged ? "flagged" : ""} ${dim ? "dim" : ""} ${selected === node.data.id ? "selected" : ""}`} key={node.data.id} onBlur={() => setActive(null)} onClick={() => setSelected(selected === node.data.id ? null : node.data.id)} onFocus={() => setActive(node.data.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelected(selected === node.data.id ? null : node.data.id); } }} onMouseEnter={() => setActive(node.data.id)} onMouseLeave={() => setActive(null)} role="button" style={node.data.flagged ? undefined : { color: entityColor[type] }} tabIndex={0} transform={`translate(${x} ${y})`}>
               {node.data.flagged && <circle className="halo" r={RADIUS + 9} />}
               <circle className="disc" r={RADIUS} />
               <Icon name={entityIcon[type] ?? "node"} size={22} x={-11} y={-11} />

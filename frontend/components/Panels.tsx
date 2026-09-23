@@ -157,6 +157,19 @@ export function EvidenceTable({ items, limit }: { items: Evidence[]; limit?: num
   </table></div>;
 }
 
+export function EvidenceLedger({ items }: { items: Evidence[] }) {
+  const [source, setSource] = useState("all");
+  const sources = [...new Set(items.map((item) => item.source || "unknown"))];
+  const shown = source === "all" ? items : items.filter((item) => (item.source || "unknown") === source);
+  return <>
+    {sources.length > 1 && <div className="chips" role="group" aria-label="Filter by source">
+      <button aria-pressed={source === "all"} onClick={() => setSource("all")} type="button">All sources<b>{items.length}</b></button>
+      {sources.map((name) => <button aria-pressed={source === name} key={name} onClick={() => setSource(name)} type="button">{humanize(name)}<b>{items.filter((item) => (item.source || "unknown") === name).length}</b></button>)}
+    </div>}
+    <EvidenceTable items={shown} />
+  </>;
+}
+
 const resultOptions: Record<EvidenceRequest["type"], string[]> = {
   customer_validation: ["confirmed", "denied", "no_reply"],
   step_up_auth: ["passed", "failed", "not_completed"],
@@ -246,11 +259,24 @@ export function ActionsView({ data, busy, onApprove }: { data: Investigation; bu
 
 /* ---------- SAR ---------- */
 
+function sarText(data: Investigation) {
+  const sar = data.sar!;
+  return [`Suspicious activity report: case ${data.case_id}`, `Decision: ${sar.file ? "Filing required" : "No filing required"}`, `Reason: ${sar.reason}`, `Subjects: ${sar.subjects.join(", ") || "None"}`, `Amount: ${money(sar.total_amount_usd) ?? "Not stated"}`, `Activity dates: ${sar.activity_dates.join(" to ") || "Not stated"}`, "", sar.narrative].join("\n");
+}
+
 export function SarView({ data }: { data: Investigation }) {
   const sar = data.sar;
+  const [copied, setCopied] = useState(false);
   const pending = data.approval_requests?.some((item) => item.action === "FILE_REPORT" && item.approval_status === "pending");
-  return <Panel icon="doc" title="Suspicious activity report" subtitle="Generated from the investigation record">
-    {!sar ? <p className="empty">No report decision yet. The report is drafted once policy has run.</p> : <div className="sar">
+  async function copy() {
+    try { await navigator.clipboard.writeText(sarText(data)); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { setCopied(false); }
+  }
+  function download() {
+    const url = URL.createObjectURL(new Blob([sarText(data)], { type: "text/plain" }));
+    const anchor = document.createElement("a"); anchor.href = url; anchor.download = `${data.case_id}-sar.txt`; anchor.click(); URL.revokeObjectURL(url);
+  }
+  return <Panel action={sar ? <div className="panel-actions"><button className="button ghost small" onClick={() => void copy()} type="button"><Icon name={copied ? "check" : "doc"} size={14} />{copied ? "Copied" : "Copy report"}</button><button className="button ghost small" onClick={download} type="button"><Icon name="download" size={14} />Download .txt</button></div> : undefined} icon="doc" subtitle="Generated from the investigation record" title="Suspicious activity report">
+    {!sar ? <div className="missing-context"><Icon name="ledger" size={24} /><strong>No report decision yet</strong><p>The investigation workflow drafts the report after policy rules run. The local reference runtime records evidence only, so no report is produced for this case.</p></div> : <div className="sar">
       <div className="sar-status"><span className={`tag ${sar.file ? "risk" : "ok"}`}>{sar.file ? "Filing required" : "No filing required"}</span>{pending && <span className="tag warn">L2 approval pending</span>}</div>
       <p>{sar.reason}</p>
       <dl className="facts">
@@ -258,7 +284,7 @@ export function SarView({ data }: { data: Investigation }) {
         <div><dt>Amount</dt><dd>{money(sar.total_amount_usd) ?? "—"}</dd></div>
         <div><dt>Activity dates</dt><dd>{sar.activity_dates.map((date) => dateTime(date) ?? date).join(" to ") || "—"}</dd></div>
       </dl>
-      {sar.narrative && <article className="narrative">{sar.narrative}</article>}
+      {sar.narrative ? <article className="narrative">{sar.narrative}</article> : <p className="empty">No narrative was returned.</p>}
     </div>}
   </Panel>;
 }
@@ -269,23 +295,3 @@ const secret = /api[_-]?key|token|password|secret|credential|authorization/i;
 export function redact(events: Record<string, unknown>[]) {
   return events.map((event) => Object.fromEntries(Object.entries(event).filter(([key]) => !secret.test(key))));
 }
-
-export function AuditView({ data }: { data: Investigation }) {
-  const events = redact(data.audit ?? []);
-  const ledger = data.integrity_ledger ?? [];
-  return <>
-    {data.integrity && <Panel icon="shield" title="Tamper-evident ledger" subtitle="Each event hashes the one before it, so any later edit breaks the chain">
-      <dl className="facts">
-        <div><dt>Status</dt><dd>{humanize(data.integrity.status)}</dd></div>
-        <div><dt>Sealed events</dt><dd>{data.integrity.event_count}</dd></div>
-        <div><dt>Latest hash</dt><dd className="hash">{data.integrity.latest_hash}</dd></div>
-        <div><dt>Chain root</dt><dd className="hash">{data.integrity.chain_root}</dd></div>
-      </dl>
-      {ledger.length > 0 && <div className="table-wrap"><table className="data-table"><thead><tr><th>#</th><th>Event</th><th>Recorded</th><th>Hash</th></tr></thead><tbody>{ledger.map((entry) => <tr key={entry.sequence}><td>{entry.sequence}</td><td>{humanize(entry.event_type)}</td><td>{dateTime(entry.recorded_at)}</td><td className="hash">{entry.hash.slice(0, 20)}…</td></tr>)}</tbody></table></div>}
-    </Panel>}
-    <Panel icon="ledger" title="Audit events" subtitle="Tool calls and workflow events, with credentials removed">
-      {!events.length ? <p className="empty">No audit events recorded yet.</p> : <ol className="audit">{events.map((event, index) => <li key={index}><strong>{humanize(event.type ?? event.tool ?? "event")}</strong><pre>{JSON.stringify(event, null, 2)}</pre></li>)}</ol>}
-    </Panel>
-  </>;
-}
-
