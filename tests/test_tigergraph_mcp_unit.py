@@ -27,7 +27,7 @@ from backend.app.services.tigergraph_service import TigerGraphService
 def configured_environment(**overrides: str) -> dict[str, str]:
     values = {
         "TG_HOST": "https://example.tigergraph.cloud",
-        "TG_GRAPHNAME": "FraudInvestigationGraph",
+        "TG_GRAPHNAME": "FraudInvestigation",
         "TG_API_TOKEN": "token-value",
         "TG_TGCLOUD": "true",
         "TG_SSL_PORT": "443",
@@ -136,7 +136,7 @@ def test_client_starts_one_stdio_session_and_lists_tools(monkeypatch: pytest.Mon
     assert stdio_context.entered and stdio_context.exited
     assert session_context.initialized and session_context.exited
     assert captured["parameters"].command == "tigergraph-mcp"
-    assert captured["parameters"].env["TG_GRAPHNAME"] == "FraudInvestigationGraph"
+    assert captured["parameters"].env["TG_GRAPHNAME"] == "FraudInvestigation"
 
 
 def test_client_parses_documented_fenced_json_response() -> None:
@@ -160,7 +160,7 @@ def test_client_parses_documented_fenced_json_response() -> None:
 
 class _FakeMCPClient:
     def __init__(self, response_data: dict[str, Any]) -> None:
-        self.config = SimpleNamespace(graph_name="FraudInvestigationGraph")
+        self.config = SimpleNamespace(graph_name="FraudInvestigation")
         self.response_data = response_data
         self.calls: list[tuple[str, dict[str, Any]]] = []
 
@@ -185,7 +185,7 @@ def test_service_uses_only_mcp_tool_calls_for_customer_retrieval() -> None:
         (
             "tigergraph__get_node",
             {
-                "graph_name": "FraudInvestigationGraph",
+                "graph_name": "FraudInvestigation",
                 "vertex_type": "Customer",
                 "vertex_id": "C12382",
             },

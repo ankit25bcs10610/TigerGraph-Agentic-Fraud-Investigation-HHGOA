@@ -126,3 +126,43 @@ def test_blast_radius_lists_other_cards_on_the_shared_device(agent):
     assert {row["card_id"] for row in blast["cards"]} == {"SMP-C301-K1", "SMP-C302-K1"}
     assert blast["recent_spend_usd"] == 2010.0 and blast["confirmed_cases"] == ["SMP-CC-501"]
     assert engine.start_investigation(provider.get("SMP-005"))["blast_radius"] is None
+
+
+def test_graphrag_retrieval_is_traced_and_cited(agent):
+    provider, engine = agent
+    state = engine.start_investigation(provider.get("SMP-004"))
+    step = next(step for step in state["agent_trace"] if step["tool"] == "graphrag_retrieve")
+    assert step["source"] == "graphrag:tfidf" and step["ok"]
+    assert any(item["source"].startswith("graphrag") for item in state["policy_grounding"])
+    assert any(item["reason_for_match"].startswith("Narrative similarity") for item in state["similar_cases"])
+    assert set(state["case"]["similar_prior_cases"]) == {item["case_id"] for item in state["similar_cases"]}
+
+
+def test_llm_planner_steers_and_falls_back_safely():
+    import json as _json
+    from backend.planner import LLMPlanner
+
+    source = CsvSource(str(SAMPLE / "transactions.csv"), None, str(SAMPLE / "closed_cases_history.csv"))
+    replies = iter([_json.dumps({"tool": "get_device_activity", "reason": "New device behind a proxy."}),
+                    _json.dumps({"tool": "drop_graph", "reason": "not allowed"}),
+                    _json.dumps({"tool": "finish", "reason": "Enough evidence."})])
+    engine = LocalInvestigationEngine(source, memory=CaseMemory(), planner=LLMPlanner(lambda system, prompt: next(replies)))
+    state = engine.start_investigation(CasePackProvider(str(SAMPLE / "case_pack.csv")).get("SMP-004"))
+    planners = {step["tool"]: step.get("planner") for step in state["agent_trace"]}
+    assert planners["get_device_activity"] == "llm"
+    assert planners["get_customer_activity"] == "llm-fallback"  # the invalid tool name was refused
+    assert "finish_investigation" in planners and "drop_graph" not in planners
+    assert state["case"]["verdict"] in {"fraud", "uncertain", "legitimate"}
+
+
+def test_planner_failure_never_breaks_the_case():
+    from backend.planner import LLMPlanner
+
+    def broken(system, prompt):
+        raise RuntimeError("provider down")
+
+    source = CsvSource(str(SAMPLE / "transactions.csv"), None, str(SAMPLE / "closed_cases_history.csv"))
+    engine = LocalInvestigationEngine(source, memory=CaseMemory(), planner=LLMPlanner(broken))
+    state = engine.start_investigation(CasePackProvider(str(SAMPLE / "case_pack.csv")).get("SMP-002"))
+    assert state["case"]["verdict"] == "fraud"
+    assert all(step.get("planner") in {None, "rules", "llm-fallback"} for step in state["agent_trace"])

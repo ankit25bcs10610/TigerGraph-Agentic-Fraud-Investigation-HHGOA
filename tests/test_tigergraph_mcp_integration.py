@@ -34,7 +34,7 @@ def test_official_mcp_server_against_loaded_fraud_graph() -> None:
     assert CONFIG is not None
     result = asyncio.run(run_smoke_test(CONFIG))
 
-    assert result["graphs"] == ["FraudInvestigationGraph"] or "FraudInvestigationGraph" in result[
+    assert result["graphs"] == ["FraudInvestigation"] or "FraudInvestigation" in result[
         "graphs"
     ]
     assert result["tool_count"] > 0

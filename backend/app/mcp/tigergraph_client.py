@@ -127,7 +127,7 @@ class TigerGraphMCPConfig:
             return values.get(name, default).strip()
 
         host = setting("TG_HOST")
-        graph_name = setting("TG_GRAPHNAME", "FraudInvestigationGraph")
+        graph_name = setting("TG_GRAPHNAME", "FraudInvestigation")
         api_token = setting("TG_API_TOKEN") or None
         username = setting("TG_USERNAME") or None
         password = setting("TG_PASSWORD") or None

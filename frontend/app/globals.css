@@ -742,6 +742,11 @@ td > .tag:first-child, .request-head .tag:first-child, .sar-status .tag:first-ch
 .grounding-head .tag { margin-left: 0; }
 .grounding-head code { margin-left: auto; color: var(--faint); font: 11.5px var(--mono); }
 .grounding p { color: var(--soft-text); font-size: 13px; }
+.tag.graphrag { border-color: color-mix(in srgb, var(--info) 45%, transparent); background: color-mix(in srgb, var(--info) 10%, transparent); color: var(--info); }
+.planner-badge { padding: 0 7px; border-radius: 4px; font-size: 10.5px; font-weight: 600; }
+.planner-badge.p-llm { background: color-mix(in srgb, var(--violet) 16%, transparent); color: var(--violet); }
+.planner-badge.p-llm-fallback { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+.planner-badge.p-required { background: var(--surface-3); color: var(--muted); }
 
 /* ---------- Score waterfall ---------- */
 .grid.lower.single { grid-template-columns: minmax(0, 1fr); }

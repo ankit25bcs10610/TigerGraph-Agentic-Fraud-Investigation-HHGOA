@@ -34,7 +34,9 @@ from backend.investigation.fraud_probability import ScoringInputs, deterministic
 from backend.investigation.patterns import PatternContext, TransactionEvidence, classify_pattern
 from backend.investigation.scoring_config import DEFAULT_SCORING_CONFIG, DEFAULT_STOPPING_CONFIG
 from backend.investigation.stopping import EvidenceDirection, IndependentEvidence, VerificationResponse, evaluate_stopping
+from backend.graphrag import open_graphrag
 from backend.memory import CaseMemory
+from backend.planner import FINISH, ToolOption, open_planner
 from backend.models.answer import FraudPattern, PolicyAction, Verdict
 from backend.policy.approvals import get_approval_route
 from backend.policy.knowledge import PolicyKnowledge
@@ -113,14 +115,14 @@ class ToolTrace:
         self.source_name = source_name
         self.steps: list[dict[str, Any]] = []
 
-    def call(self, tool: str, args: dict[str, Any], reason: str, run: Callable[[], Any], summarise: Callable[[Any], str]) -> Any:
+    def call(self, tool: str, args: dict[str, Any], reason: str, run: Callable[[], Any], summarise: Callable[[Any], str], *, planner: str = "rules", source: str | None = None) -> Any:
         started = time.perf_counter()
         error = ""
         try:
             result = run()
         except Exception as caught:  # noqa: BLE001 - the trace records the failure; the agent continues with less evidence
             result, error = None, f"{type(caught).__name__}: {caught}"
-        self.steps.append({"step": len(self.steps) + 1, "tool": tool, "source": self.source_name, "args": args, "reason": reason,
+        self.steps.append({"step": len(self.steps) + 1, "tool": tool, "source": source or self.source_name, "args": args, "reason": reason, "planner": planner,
                            "result": error or summarise(result), "ok": not error, "ms": round((time.perf_counter() - started) * 1000, 1)})
         return result
 
@@ -131,13 +133,22 @@ class ToolTrace:
 class LocalInvestigationEngine(ReferenceWorkflow):
     """The investigation agent (kept under its original name for compatibility)."""
 
-    def __init__(self, source: CaseDataSource | None = None, *, memory: CaseMemory | None = None, knowledge: PolicyKnowledge | None = None) -> None:
+    def __init__(self, source: CaseDataSource | None = None, *, memory: CaseMemory | None = None, knowledge: PolicyKnowledge | None = None, planner: Any = None) -> None:
         super().__init__(None)
         self.source = source
         self.memory = memory or CaseMemory(os.getenv("CASE_MEMORY_PATH") or None)
         self.knowledge = knowledge or PolicyKnowledge(os.getenv("POLICY_DOCS_PATH") or None)
         self._contexts: dict[str, dict[str, Any]] = {}
         self._previews: dict[str, dict[str, Any]] = {}
+        self.planner = planner or open_planner()
+        self._rag: Any = None
+        self._closed_index = {case.case_id: case for case in getattr(source, "_closed", ())}
+
+    @property
+    def rag(self) -> Any:
+        if self._rag is None and self.source is not None:
+            self._rag = open_graphrag(self.source, self.knowledge)
+        return self._rag
 
     @property
     def source_name(self) -> str:
@@ -145,7 +156,67 @@ class LocalInvestigationEngine(ReferenceWorkflow):
 
     # ------------------------------------------------------------ investigate
 
+    MAX_TOOL_STEPS = 6
+
+    def _tool_options(self, gathered: dict[str, Any]) -> list[ToolOption]:
+        """The graph tools that make sense right now, in the investigator's default order."""
+        target: Txn = gathered["target"]
+        done = gathered["done"]
+        device = target.device_profile_id
+        options = []
+        if "get_customer_activity" not in done:
+            options.append(ToolOption("get_customer_activity", f"All transactions of customer {target.customer_id} across their cards: the behavioural baseline.", "Build the customer's baseline across every card they hold."))
+        if device and "get_device_activity" not in done:
+            options.append(ToolOption("get_device_activity", f"Every transaction seen on device {device}, whoever made it.", f"Check who else has used device {device}."))
+        if device and "get_device_activity" in done and "detect_device_ring" not in done and (gathered["network"] or (target.device_status or "").lower() == "new"):
+            options.append(ToolOption("detect_device_ring", f"Graph algorithm: bounded connected component around device {device} to find a fraud ring.", "The device is shared or new: expand the connected component around it to look for a fraud ring."))
+        if "get_linked_closed_cases" not in done:
+            options.append(ToolOption("get_linked_closed_cases", "Closed investigations on this customer, card or the customers sharing its device, with outcomes.", "Case memory: find prior investigations on this customer, card or the customers sharing its device."))
+        return options
+
+    @staticmethod
+    def _observations(gathered: dict[str, Any]) -> str:
+        target: Txn = gathered["target"]
+        lines = [f"Flagged transaction {target.transaction_id}: {_money(target.amount)} {target.channel} on card {target.card_id or 'unknown'}, region {target.region or 'unknown'}, "
+                 f"device {target.device_profile_id or 'none'} (status {target.device_status or 'unknown'}, proxy {target.proxy_type or 'none'})."]
+        if "get_customer_activity" in gathered["done"]:
+            prior = [item for item in gathered["history"] if item.ts < target.ts]
+            typical = median(item.amount for item in prior) if prior else 0
+            lines.append(f"Customer history: {len(gathered['history'])} transactions; prior median {_money(typical)}.")
+        if "get_device_activity" in gathered["done"]:
+            lines.append(f"Device shared with {len({item.customer_id for item in gathered['network']})} other customers within seven days.")
+        if gathered["ring"]:
+            ring = gathered["ring"]
+            lines.append(f"Ring: {len(ring.customers)} customers, {len(ring.cards)} cards, {len(ring.confirmed_cases)} confirmed fraud cases.")
+        if "get_linked_closed_cases" in gathered["done"]:
+            lines.append(f"Linked closed cases: {len(gathered['linked'])} ({sum(1 for case in gathered['linked'] if case.confirmed_fraud)} confirmed fraud).")
+        return "\n".join(lines)
+
+    def _run_tool(self, name: str, reason: str, planner: str, gathered: dict[str, Any], trace: ToolTrace) -> None:
+        source, target = self.source, gathered["target"]
+        gathered["done"].add(name)
+        if name == "get_customer_activity":
+            history = trace.call(name, {"customer_id": target.customer_id}, reason, lambda: source.customer_transactions(target.customer_id), lambda rows: f"{len(rows)} transactions", planner=planner) or [target]
+            if all(item.transaction_id != target.transaction_id for item in history):
+                history = sorted([*history, target], key=lambda item: item.ts)
+            gathered["history"] = history
+        elif name == "get_device_activity":
+            device = target.device_profile_id
+            on_device = trace.call(name, {"device_profile_id": device}, reason, lambda: source.device_transactions(device),
+                                   lambda rows: f"{len(rows)} transactions from {len({row.customer_id for row in rows})} customers", planner=planner) or []
+            gathered["network"] = [item for item in on_device if item.customer_id != target.customer_id and abs(item.ts - target.ts) <= NETWORK_WINDOW]
+        elif name == "detect_device_ring":
+            device = target.device_profile_id
+            gathered["ring"] = trace.call(name, {"device_profile_id": device, "max_hops": RING_HOPS}, reason, lambda: source.device_ring(device, RING_HOPS),
+                                          lambda result: f"{len(result.customers)} customers, {len(result.cards)} cards, {len(result.devices)} devices, {len(result.confirmed_cases)} confirmed cases" if result else "no ring", planner=planner)
+        elif name == "get_linked_closed_cases":
+            network = gathered["network"]
+            gathered["linked"] = trace.call(name, {"customer_id": target.customer_id, "card_id": target.card_id}, reason,
+                                            lambda: source.linked_closed_cases(target.customer_id, target.card_id, {item.customer_id for item in network}, {item.transaction_id for item in network}),
+                                            lambda rows: f"{len(rows)} closed cases", planner=planner) or []
+
     def _gather(self, case_input: dict[str, Any], trace: ToolTrace) -> dict[str, Any] | None:
+        """Investigate: the planner picks each next graph tool until the evidence is enough or the budget runs out."""
         if self.source is None:
             return None
         source = self.source
@@ -156,34 +227,45 @@ class LocalInvestigationEngine(ReferenceWorkflow):
             return None
         if not target.card_id and case_input.get("card_id") and target.customer_id == case_input.get("customer_id"):
             target = Txn(**{**target.__dict__, "card_id": case_input["card_id"]})
-        history = trace.call("get_customer_activity", {"customer_id": target.customer_id}, "Build the customer's baseline across every card they hold.",
-                             lambda: source.customer_transactions(target.customer_id), lambda rows: f"{len(rows)} transactions") or [target]
-        if all(item.transaction_id != target.transaction_id for item in history):
-            history = sorted([*history, target], key=lambda item: item.ts)
-        network: list[Txn] = []
-        ring: RingResult | None = None
-        if target.device_profile_id:
-            device = target.device_profile_id
-            on_device = trace.call("get_device_activity", {"device_profile_id": device}, f"Check who else has used device {device}.",
-                                   lambda: source.device_transactions(device), lambda rows: f"{len(rows)} transactions from {len({row.customer_id for row in rows})} customers") or []
-            network = [item for item in on_device if item.customer_id != target.customer_id and abs(item.ts - target.ts) <= NETWORK_WINDOW]
-            if network or (target.device_status or "").lower() == "new":
-                ring = trace.call("detect_device_ring", {"device_profile_id": device, "max_hops": RING_HOPS},
-                                  "The device is shared or new: expand the connected component around it to look for a fraud ring.",
-                                  lambda: source.device_ring(device, RING_HOPS),
-                                  lambda result: f"{len(result.customers)} customers, {len(result.cards)} cards, {len(result.devices)} devices, {len(result.confirmed_cases)} confirmed cases" if result else "no ring")
-        related_customers = {item.customer_id for item in network}
-        linked = trace.call("get_linked_closed_cases", {"customer_id": target.customer_id, "card_id": target.card_id},
-                            "Case memory: find prior investigations on this customer, card or the customers sharing its device.",
-                            lambda: source.linked_closed_cases(target.customer_id, target.card_id, related_customers, {item.transaction_id for item in network}),
-                            lambda rows: f"{len(rows)} closed cases") or []
+        gathered: dict[str, Any] = {"target": target, "history": [target], "network": [], "ring": None, "linked": [], "done": set()}
+        budget = self.MAX_TOOL_STEPS
+        while budget > 0:
+            options = self._tool_options(gathered)
+            choice = self.planner.choose(self._observations(gathered), options, budget)
+            if choice.tool == FINISH:
+                if options:
+                    trace.note("finish_investigation", f"planner:{choice.planner}", {"skipped": [option.name for option in options]}, choice.reason, "stopped gathering evidence")
+                break
+            self._run_tool(choice.tool, choice.reason, choice.planner, gathered, trace)
+            budget -= 1
+        if "get_customer_activity" not in gathered["done"]:
+            self._run_tool("get_customer_activity", "Required: no assessment runs without the customer's baseline.", "required", gathered, trace)
+        history = gathered["history"]
         devices = {item.device_profile_id for item in history if item.device_profile_id}
         remembered = self.memory.related(case_id=case_input["case_id"], customer_id=target.customer_id, card_id=target.card_id, devices=devices)
         if len(self.memory):
             trace.note("recall_case_memory", "case-memory", {"customer_id": target.customer_id}, "Check this agent's own earlier investigations on the same entities.", f"{len(remembered)} related investigations")
         card_history = [item for item in history if item.card_id == target.card_id] if target.card_id else history
-        return {"input": dict(case_input), "target": target, "history": history, "card_history": card_history, "network": network, "ring": ring,
-                "linked": linked, "remembered": remembered, "trace": trace}
+        return {"input": dict(case_input), "target": target, "history": history, "card_history": card_history, "network": gathered["network"], "ring": gathered["ring"],
+                "linked": gathered["linked"], "remembered": remembered, "trace": trace}
+
+    def _retrieve_grounding(self, context: dict[str, Any], assessment: dict[str, Any]) -> None:
+        """GraphRAG: retrieve the policy passages and prior-case narratives relevant to this assessment."""
+        rag = self.rag
+        if rag is None:
+            return
+        pattern = assessment["pattern"].pattern.value.replace("_", " ")
+        query = " ".join([pattern, assessment["target"].channel, *(item["claim"] for item in assessment["evidence"][:4]),
+                          *(item["action"].replace("_", " ").lower() for item in assessment["actions"])])
+        method = getattr(rag, "method", "rag")
+
+        def run() -> dict[str, Any]:
+            return {"policy": rag.retrieve(query, "policy", 3), "patterns": rag.retrieve(query, "pattern_document", 2), "cases": rag.retrieve(query, "closed_case", 3)}
+
+        context["rag"] = context["trace"].call("graphrag_retrieve", {"query": query[:80] + ("…" if len(query) > 80 else ""), "method": method},
+                                               "Ground the explanation: retrieve the policy passages and prior-case narratives closest to this case.", run,
+                                               lambda found: f"{len(found['policy']) + len(found['patterns'])} policy passages, {len(found['cases'])} case narratives ({method})" if found else "nothing retrieved",
+                                               source=f"graphrag:{method}") or {"policy": [], "patterns": [], "cases": []}
 
     @staticmethod
     def _link_reasons(case: ClosedCaseRecord, target: Txn, network: list[Txn]) -> list[str]:
@@ -389,7 +471,11 @@ class LocalInvestigationEngine(ReferenceWorkflow):
             chunk = self.knowledge.rule("approval_routes")
             if chunk:
                 cited.setdefault(chunk.ref, {"ref": chunk.ref, "title": chunk.title, "text": chunk.text, "source": chunk.source, "supports": [a["action"] for a in assessment["actions"] if a["route"] != "auto"]})
-        if self.knowledge.has_documents:
+        rag = context_rag = assessment.get("rag") or {}
+        for passage in [*context_rag.get("policy", []), *context_rag.get("patterns", [])]:
+            if passage.ref not in cited:
+                cited[passage.ref] = {"ref": passage.ref, "title": passage.title, "text": passage.text, "source": f"graphrag:{passage.method}", "supports": [], "score": passage.score}
+        if not rag and self.knowledge.has_documents:
             query = " ".join([assessment["pattern"].pattern.value.replace("_", " "), *(action["action"].replace("_", " ").lower() for action in assessment["actions"])])
             for chunk in self.knowledge.search(query, 3, documents_only=True):
                 cited.setdefault(chunk.ref, {"ref": chunk.ref, "title": chunk.title, "text": chunk.text, "source": chunk.source, "supports": []})
@@ -538,7 +624,18 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         state["status"] = status
         state["message"] = summary
         state["explanation"] = self._explanation(assessment, open_requests[0] if open_requests else None)
+        assessment["rag"] = context.get("rag")
         state["policy_grounding"] = self._grounding(assessment)
+        known = {item["case_id"] for item in state["similar_cases"]}
+        for passage in (context.get("rag") or {}).get("cases", []):
+            case_id = passage.source_id
+            if case_id in known:
+                continue
+            record = self._closed_index.get(case_id)
+            state["similar_cases"].append({"case_id": case_id, "pattern": record.pattern if record else "", "outcome": record.outcome if record else "",
+                                           "similarity_score": passage.score, "reason_for_match": f"Narrative similarity {passage.score:.2f} ({passage.method}): {passage.text[:160]}"})
+            known.add(case_id)
+        state["case"]["similar_prior_cases"] = [item["case_id"] for item in state["similar_cases"]]
         state["score_breakdown"] = {"probability": assessment["probability"], "contributions": assessment["contributions"],
                                     "fraud_threshold": DEFAULT_STOPPING_CONFIG.strong_fraud_threshold, "legitimate_threshold": DEFAULT_STOPPING_CONFIG.strong_legitimate_threshold}
         state["blast_radius"] = self._blast_radius(context, assessment)
@@ -701,6 +798,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         self._states[case_id] = state
         self._record(state, {"type": "case_opened", "trigger_type": str(case_input.get("trigger_type", "")), "flagged_txn_id": str(case_input.get("flagged_txn_id", ""))})
         assessment = self._assess(case_input, context, [], trace)
+        self._retrieve_grounding(context, assessment)
         self._seal_steps(state, assessment, "", trace, 0)
         state["decision_paths"] = self._decision_paths(case_input, context, [], assessment, set())
         request = self._next_request(case_id, assessment, state, state["decision_paths"])
@@ -740,6 +838,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         trace: ToolTrace = context["trace"]
         steps_before = len(trace.steps)
         assessment = self._assess(context["input"], context, state["evidence_responses"], trace)
+        self._retrieve_grounding(context, assessment)
         self._seal_steps(state, assessment, "reassessed_", trace, steps_before)
         asked = {item["type"] for item in state.get("evidence_requests", [])}
         state["decision_paths"] = self._decision_paths(context["input"], context, state["evidence_responses"], assessment, asked)

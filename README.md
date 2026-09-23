@@ -10,7 +10,8 @@
 
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-API-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![LangGraph](https://img.shields.io/badge/LangGraph-workflow-1C3C3C?style=for-the-badge&logo=langchain&logoColor=white)](https://langchain-ai.github.io/langgraph/)
+[![Agent](https://img.shields.io/badge/Agent-LLM_tool_planner-7C4DDE?style=for-the-badge&logo=openai&logoColor=white)](#-the-agent)
+[![GraphRAG](https://img.shields.io/badge/GraphRAG-grounded-2F6FD8?style=for-the-badge)](#-the-agent)
 [![TigerGraph](https://img.shields.io/badge/TigerGraph-GSQL-F58220?style=for-the-badge)](https://www.tigergraph.com/)
 <br />
 [![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)](https://nextjs.org/)
@@ -18,7 +19,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Cytoscape](https://img.shields.io/badge/Cytoscape.js-graphs-F7DF1E?style=for-the-badge&logoColor=black)](https://js.cytoscape.org/)
 <br />
-[![Tests](https://img.shields.io/badge/tests-145_passing-2C8F5F?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
+[![Tests](https://img.shields.io/badge/tests-148_passing-2C8F5F?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
 [![License](https://img.shields.io/badge/license-MIT-C2611A?style=for-the-badge)](LICENSE)
 [![Hacker House Goa](https://img.shields.io/badge/Hacker_House-Goa-6F665B?style=for-the-badge)](#credits)
 
@@ -128,6 +129,11 @@ Every investigation is an explicit loop over **graph tools**. Each tool is an in
 | `get_linked_closed_cases` | `agent_linked_closed_cases` | Prior investigations on the same customer, card or device users |
 | `get_closed_cases_by_pattern` | `agent_closed_cases_by_pattern` | Case memory by detected pattern, with outcomes |
 | `recall_case_memory` | `InvestigationCase` / memory store | The agent's own earlier investigations on these entities |
+| `graphrag_retrieve` | `KnowledgeChunk` vector search | Policy passages and prior-case narratives closest to this case |
+
+**Who picks the next tool.** With an OpenAI model configured, an **LLM planner** chooses each next graph tool from the tools that make sense at that moment, within a step budget, and must give a reason. It can only pick from the allow-list; an unknown tool, a malformed reply or a provider error hands the choice to the **rule planner**, and the trace says so. The planner decides *what to look at*. It never sees or sets the probability, the verdict, the actions or the approval routes. Without a model, the rule planner runs the investigator's default order.
+
+**GraphRAG.** After assessing, the agent retrieves the policy passages, pattern documents and prior-case narratives closest to the case. With TigerGraph and embeddings configured, this is vector search over `KnowledgeChunk` vertices through MCP (`scripts/index_fraud_knowledge.py` builds the index); otherwise it is TF-IDF retrieval over the same documents. Retrieved passages appear as citations and similar cases, labelled with the method that found them, and are the only material the LLM narrative may use.
 
 After the tools, the agent scores the evidence, checks the stopping rules, requests evidence if it needs more, applies policy R1–R10, cites the rule text behind each action, optionally writes a grounded LLM narrative, and writes the case back to TigerGraph.
 
@@ -217,7 +223,7 @@ flowchart LR
   end
 
   subgraph Engine[Deterministic investigation engine]
-    W[LangGraph workflow]
+    W[Agent loop\nLLM or rule tool planner]
     P[Pattern detection]
     F[Evidence + fraud probability\n+ exposure + stopping]
     POL[Policy R1–R10\n+ approval routing]
@@ -338,7 +344,7 @@ The deterministic pipeline works with no LLM configured.
 
 ```text
 backend/
-  agent/               LangGraph state, nodes, workflow, lifecycle service
+  agent/               an alternative LangGraph formulation of the workflow (not used by the runtime agent)
   investigation/       patterns, evidence, scoring, exposure, stopping
   policy/              actions, R1–R10 rules, approvals, SAR policy
   evidence_requests/   request/response models and deterministic simulation
@@ -390,7 +396,7 @@ A production deployment injects the TigerGraph-backed workflow and a real identi
 ## ✅ Validation
 
 ```bash
-pytest -q                      # 145 deterministic tests
+pytest -q                      # 148 deterministic tests
 cd frontend && npm run build   # type-checked production build
 ```
 

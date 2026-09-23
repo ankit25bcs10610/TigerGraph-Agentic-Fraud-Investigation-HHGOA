@@ -47,7 +47,7 @@ The backend is Python (FastAPI); the workbench is Next.js, React and Cytoscape.j
 - **GSQL queries are the agent's tools.** Each is a small, read-only question with a clear answer. The agent calls them through the **official TigerGraph MCP server**, and every call is recorded with the reason it was made.
 - **A graph algorithm finds rings.** `agent_device_ring` runs a seeded, bounded connected-component expansion: device → transactions → cards → their other transactions → other devices, for two rounds. It returns the ring's customers, cards and devices, and any confirmed-fraud cases touching it. That feeds both the "coordinated, undocumented abuse" detector and the shared-origin reporting rule.
 - **Case memory lives in the graph.** Each formal case becomes an `InvestigationCase` vertex linked to the flagged transaction, the customer, the card, connected cards, devices and similar closed cases.
-- **GraphRAG** grounds the explanation: the agent retrieves the relevant policy passages and similar closed cases, and the LLM may only write from what was retrieved.
+- **GraphRAG** grounds the explanation: after assessing, the agent runs vector search over `KnowledgeChunk` vertices (policy passages, pattern documents, closed-case narratives) through MCP, cites what it retrieved, and the LLM may only write from that.
 
 ## The agentic part, and where we kept it deterministic
 
@@ -55,7 +55,7 @@ We drew a hard line. The LLM never computes the probability, never picks an acti
 
 What *is* agentic:
 
-- **Tool use with reasons.** The agent decides which graph questions to ask: it only expands a fraud ring when the device is shared or new, and only retrieves same-pattern cases after a pattern is found.
+- **An LLM chooses the next tool.** An LLM planner picks each next graph query from the tools that make sense at that moment, within a step budget, and must say why. It can only choose from an allow-list; an invalid choice or a provider failure hands control to a rule planner, and the trace records it. The planner decides what to look at, never the verdict.
 - **Knowing when to stop.** The agent keeps investigating until a stopping rule is met: strong fraud or strong legitimacy with enough independent evidence, a settled customer answer, or no useful next step.
 - **Gathering evidence under control.** When uncertain, the agent requests customer validation or step-up authentication, choosing between them by value of information (below). Each request pauses the case until the answer is recorded.
 - **Updating its recommendation.** We record the next best actions **before** any evidence and **after** it, with a sentence on what changed.
@@ -86,7 +86,6 @@ The most useful number isn't raw agreement: it's how often the agent stays *unce
 
 ## What we'd do with more time
 
-- Let an LLM planner choose among the graph tools under a budget, with the deterministic planner as the safety net.
 - Vector-index every closed-case narrative for semantic similarity, alongside the structural matches.
 - Run the full weakly-connected-components and Louvain algorithms from the TigerGraph GDS library across the whole graph, and track rings over time.
 - Integrate real customer messaging and step-up providers instead of labelled simulated responses.

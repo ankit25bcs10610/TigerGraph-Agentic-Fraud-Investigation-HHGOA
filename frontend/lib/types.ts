@@ -55,8 +55,8 @@ export type DecisionPath = { request_type: string; distinct_decisions: number; s
 export type Contribution = { signal: string; label: string; value: number; weight: number; points: number; without: number; decisive: boolean };
 export type BlastRadius = { cards: { card_id: string; customer_id: string; transactions: number; spend_usd: number; last_seen: string; link: string }[]; card_count: number; customers: number; recent_spend_usd: number; confirmed_cases: string[] };
 
-export type AgentStep = { step: number; tool: string; source: string; args: Record<string, unknown>; reason: string; result: string; ok: boolean; ms: number };
-export type PolicyCitation = { ref: string; title: string; text: string; source: string; supports: string[] };
+export type AgentStep = { step: number; tool: string; source: string; args: Record<string, unknown>; reason: string; result: string; ok: boolean; ms: number; planner?: string };
+export type PolicyCitation = { ref: string; title: string; text: string; source: string; supports: string[]; score?: number };
 
 export type CaseAssessment = {
   verdict: "fraud" | "uncertain" | "legitimate";
