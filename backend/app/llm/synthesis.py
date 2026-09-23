@@ -3,9 +3,9 @@ from __future__ import annotations
 import json, time
 from typing import Any
 from .client import LLMSettings, LLMUnavailable, create_client
-from .grounding import validate_synthesis
+from .grounding import id_tokens, validate_synthesis
 from .models import LLMUsage, Synthesis
-from .prompts import SYSTEM_PROMPT
+from .prompts import CITATION_GUIDE, SYSTEM_PROMPT
 
 def _references(context: dict[str, Any]) -> tuple[set[str], set[str]]:
     refs, ids = set(), set()
@@ -21,9 +21,11 @@ class GroundedSynthesisService:
     def __init__(self, settings: LLMSettings | None = None) -> None: self.settings = settings or LLMSettings.from_environment()
     def synthesize(self, context: dict[str, Any]) -> tuple[Synthesis, LLMUsage]:
         refs, ids = _references(context)
+        # The model may mention an identifier or figure only if it appears in the supplied records.
+        ids |= id_tokens(json.dumps(context, default=str))
         if not refs: refs.add("deterministic_pipeline")
         try:
-            result, usage = create_client(self.settings).synthesize(SYSTEM_PROMPT, json.dumps(context, default=str))
+            result, usage = create_client(self.settings).synthesize(SYSTEM_PROMPT + " " + CITATION_GUIDE, json.dumps(context, default=str))
             return validate_synthesis(result, refs, ids), usage
         except LLMUnavailable:
             return self._fallback(context, refs)

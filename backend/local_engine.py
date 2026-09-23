@@ -36,7 +36,7 @@ from backend.investigation.scoring_config import DEFAULT_SCORING_CONFIG, DEFAULT
 from backend.investigation.stopping import EvidenceDirection, IndependentEvidence, VerificationResponse, evaluate_stopping
 from backend.graphrag import open_graphrag
 from backend.memory import CaseMemory
-from backend.planner import FINISH, ToolOption, open_planner
+from backend.planner import FINISH, RulePlanner, ToolOption, open_planner
 from backend.models.answer import FraudPattern, PolicyAction, Verdict
 from backend.policy.approvals import get_approval_route
 from backend.policy.knowledge import PolicyKnowledge
@@ -215,7 +215,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
                                             lambda: source.linked_closed_cases(target.customer_id, target.card_id, {item.customer_id for item in network}, {item.transaction_id for item in network}),
                                             lambda rows: f"{len(rows)} closed cases", planner=planner) or []
 
-    def _gather(self, case_input: dict[str, Any], trace: ToolTrace) -> dict[str, Any] | None:
+    def _gather(self, case_input: dict[str, Any], trace: ToolTrace, planner: Any = None) -> dict[str, Any] | None:
         """Investigate: the planner picks each next graph tool until the evidence is enough or the budget runs out."""
         if self.source is None:
             return None
@@ -231,7 +231,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         budget = self.MAX_TOOL_STEPS
         while budget > 0:
             options = self._tool_options(gathered)
-            choice = self.planner.choose(self._observations(gathered), options, budget)
+            choice = (planner or self.planner).choose(self._observations(gathered), options, budget)
             if choice.tool == FINISH:
                 if options:
                     trace.note("finish_investigation", f"planner:{choice.planner}", {"skipped": [option.name for option in options]}, choice.reason, "stopped gathering evidence")
@@ -756,7 +756,8 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         else:
             context = self._previews.get(case_id)
             if context is None:
-                context = self._gather(case_input, ToolTrace(self.source_name))
+                # Queue previews use the rule planner: no model calls just to list cases.
+                context = self._gather(case_input, ToolTrace(self.source_name), planner=RulePlanner())
                 if context is None:
                     return None
                 self._previews[case_id] = context
