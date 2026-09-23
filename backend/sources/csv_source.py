@@ -50,6 +50,7 @@ class CsvSource:
                         pattern=(row.get("pattern") or "").strip(), txn_ids=_split(row.get("txn_ids")),
                         connected_card_ids=_split(row.get("connected_card_ids")), exposure_usd=parse_float(row.get("exposure_usd")),
                         analyst_notes=(row.get("analyst_notes") or "").strip(), opened_at=(row.get("opened_at") or "").strip(),
+                        first_fraud_txn_id=(row.get("first_fraud_txn_id") or "").strip(),
                     ))
 
     def _load_transactions(self, path: Path, devices: dict[str, tuple[str, dict[str, str]]]) -> None:

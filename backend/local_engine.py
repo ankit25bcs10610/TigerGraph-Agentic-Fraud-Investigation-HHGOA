@@ -448,6 +448,45 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         state["agent_trace"] = context["trace"].steps
         state["data_source"] = self.source_name
         self._render_graph(state, assessment)
+        self._narrate(state, assessment)
+
+    def _narrate(self, state: dict[str, Any], assessment: dict[str, Any]) -> None:
+        """Optional LLM narrative, grounded: every claim must cite supplied evidence or policy.
+
+        The model only writes prose. Probability, verdict, actions and routes stay
+        deterministic, and a narrative that cites anything unsupported is discarded.
+        """
+        if os.getenv("LLM_PROVIDER", "disabled").strip().lower() in {"", "disabled"}:
+            return
+        from backend.app.llm.synthesis import GroundedSynthesisService
+
+        evidence = state["case"]["evidence"]
+        entity_ids = {state["case_id"], *(entity for item in evidence for entity in item["entity_ids"]), *state["case"]["affected_txn_ids"],
+                      *state["case"]["similar_prior_cases"], *state["case"]["connected_card_ids"]}
+        context = {
+            "case_id": state["case_id"], "graph_evidence": evidence,
+            "retrieved_policy": [{"ref": item["ref"], "text": item["text"], "entity_ids": []} for item in state["policy_grounding"]],
+            "entity_ids": sorted(entity_ids), "detected_pattern": state["case"]["pattern"], "pattern_description": state["case"]["pattern_description"],
+            "verdict": state["case"]["verdict"], "fraud_probability": state["case"]["fraud_probability"], "stop_reason": state["stop_reason"],
+            "recommended_actions": state["next_best_actions"]["final"], "evidence_requests": state.get("evidence_requests", []),
+        }
+        step = {"step": len(state["agent_trace"]) + 1, "tool": "synthesize_explanation", "source": "llm", "args": {"model": os.getenv("LLM_MODEL", "")},
+                "reason": "Write the case narrative from the cited evidence and policy only.", "ok": True, "ms": 0.0}
+        started = time.perf_counter()
+        try:
+            synthesis, usage = GroundedSynthesisService().synthesize(context)
+        except Exception as caught:  # noqa: BLE001 - grounding failures keep the deterministic explanation
+            step.update(ok=False, result=f"discarded: {type(caught).__name__}")
+        else:
+            if usage.fallback:
+                step.update(ok=False, result="LLM unavailable; deterministic explanation kept")
+            else:
+                state["explanation"] = {**state["explanation"], "narrative": synthesis.case_summary, "evidence": synthesis.evidence_explanation,
+                                        "uncertainty": synthesis.uncertainty_explanation, "actions": synthesis.action_explanation, "citations": synthesis.citations}
+                state["llm_usage"] = {"model": usage.model, "total_tokens": usage.total_tokens}
+                step["result"] = f"grounded narrative, {usage.total_tokens} tokens"
+        step["ms"] = round((time.perf_counter() - started) * 1000, 1)
+        state["agent_trace"] = [*state["agent_trace"], step]
 
     def _render_graph(self, state: dict[str, Any], assessment: dict[str, Any]) -> None:
         target: Txn = assessment["target"]

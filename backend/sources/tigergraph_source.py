@@ -168,19 +168,43 @@ class TigerGraphSource:
 
 
 class MCPGraphWriter:
-    """Writes InvestigationCase vertices and edges through TigerGraph MCP tools."""
+    """Writes InvestigationCase vertices and edges through TigerGraph MCP tools.
+
+    If the connected MCP server does not advertise a node/edge write tool, the
+    writer falls back to pyTigerGraph with the same ``TG_*`` credentials.
+    """
 
     def __init__(self, source: TigerGraphSource, graph_name: str | None = None) -> None:
         self.source = source
         self.graph_name = graph_name or source.service.graph_name
+        self._fallback: Any = None
+
+    def _rest(self) -> Any:
+        if self._fallback is None:
+            from backend.cases.service import PyTigerGraphWriter
+            from scripts.setup_tigergraph import connect
+            self._fallback = PyTigerGraphWriter(connect())
+        return self._fallback
 
     def upsert_vertex(self, vertex_type: str, vertex_id: str, attributes: Mapping[str, Any]) -> None:
+        try:
+            self._mcp_vertex(vertex_type, vertex_id, attributes)
+        except Exception:  # noqa: BLE001 - tool missing or rejected: use the REST fallback
+            self._rest().upsert_vertex(vertex_type, vertex_id, attributes)
+
+    def upsert_edge(self, source_vertex_type: str, source_vertex_id: str, edge_type: str, target_vertex_type: str, target_vertex_id: str, attributes: Mapping[str, Any] | None = None) -> None:
+        try:
+            self._mcp_edge(source_vertex_type, source_vertex_id, edge_type, target_vertex_type, target_vertex_id, attributes)
+        except Exception:  # noqa: BLE001
+            self._rest().upsert_edge(source_vertex_type, source_vertex_id, edge_type, target_vertex_type, target_vertex_id, attributes)
+
+    def _mcp_vertex(self, vertex_type: str, vertex_id: str, attributes: Mapping[str, Any]) -> None:
         self.source.call_tool("tigergraph__add_node", {
             "graph_name": self.graph_name, "node_type": vertex_type, "vertex_type": vertex_type,
             "node_id": vertex_id, "vertex_id": vertex_id, "attributes": dict(attributes),
         })
 
-    def upsert_edge(self, source_vertex_type: str, source_vertex_id: str, edge_type: str, target_vertex_type: str, target_vertex_id: str, attributes: Mapping[str, Any] | None = None) -> None:
+    def _mcp_edge(self, source_vertex_type: str, source_vertex_id: str, edge_type: str, target_vertex_type: str, target_vertex_id: str, attributes: Mapping[str, Any] | None = None) -> None:
         self.source.call_tool("tigergraph__add_edge", {
             "graph_name": self.graph_name, "source_node_type": source_vertex_type, "source_vertex_type": source_vertex_type,
             "source_node_id": source_vertex_id, "source_vertex_id": source_vertex_id, "edge_type": edge_type,

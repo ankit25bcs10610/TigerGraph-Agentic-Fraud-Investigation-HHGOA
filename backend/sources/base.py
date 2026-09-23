@@ -63,6 +63,7 @@ class ClosedCaseRecord:
     exposure_usd: float | None = None
     analyst_notes: str = ""
     opened_at: str = ""
+    first_fraud_txn_id: str = ""
 
     @property
     def confirmed_fraud(self) -> bool:
