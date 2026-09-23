@@ -79,7 +79,7 @@ export function RelationshipMap({ graph, onExpand }: { graph?: Graph; onExpand?:
     {!graph?.nodes.length ? <p className="empty">Run the investigation to see how the customer, card and transaction are connected.</p> :
     <div className="map-body">
       <div className="map-scroll">
-        <svg className="map-svg" role="img" aria-label={`Relationship map with ${graph.nodes.length} entities and ${graph.edges.length} links`} viewBox={`0 0 ${Math.max(width, 420)} ${height}`} style={{ minWidth: Math.max(width, 420) * 0.78 }}>
+        <svg className="map-svg" role="img" aria-label={`Relationship map with ${graph.nodes.length} entities and ${graph.edges.length} links`} viewBox={`0 0 ${Math.max(width, 420)} ${height}`} style={{ minWidth: Math.max(width, 420) * 0.78, maxWidth: Math.max(width, 420) * 1.08, margin: "0 auto" }}>
           <defs>
             <marker id="arrow" markerHeight="8" markerWidth="8" orient="auto-start-reverse" refX="7" refY="4" viewBox="0 0 8 8"><path d="M0 0 8 4 0 8z" fill="currentColor" /></marker>
           </defs>

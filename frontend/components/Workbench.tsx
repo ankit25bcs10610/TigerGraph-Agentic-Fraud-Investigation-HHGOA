@@ -5,23 +5,11 @@ import { api } from "../lib/api";
 import { dateTime, flaggedRow, humanize, initials, money, relative, rowTime, toNumber, verdictTone } from "../lib/format";
 import { CaseOption, EvidenceRequest, Investigation } from "../lib/types";
 import { GraphEvidence } from "./GraphEvidence";
-import { Icon, IconName } from "./icons";
+import { Icon } from "./icons";
+import { NoCase } from "./NoCase";
+import { Connection, Sidebar, View } from "./Sidebar";
 import { ActionsView, allEvidence, AuditView, EvidenceRequests, EvidenceTable, KeyFigures, LinkButton, NextBestAction, Panel, redact, SarView, SimilarCases, TransactionsTable, WorkflowTimeline } from "./Panels";
 import { RelationshipMap } from "./RelationshipMap";
-
-type View = "overview" | "cases" | "graph" | "transactions" | "evidence" | "actions" | "report" | "audit";
-type Connection = "checking" | "online" | "setup" | "offline";
-
-const nav: { view: View; label: string; icon: IconName; needsCase: boolean }[] = [
-  { view: "overview", label: "Investigation", icon: "radar", needsCase: true },
-  { view: "cases", label: "Case queue", icon: "queue", needsCase: false },
-  { view: "graph", label: "Graph explorer", icon: "graph", needsCase: true },
-  { view: "transactions", label: "Transactions", icon: "swap", needsCase: true },
-  { view: "evidence", label: "Evidence", icon: "doc", needsCase: true },
-  { view: "actions", label: "Actions & approvals", icon: "shield", needsCase: true },
-  { view: "report", label: "SAR report", icon: "ledger", needsCase: true },
-  { view: "audit", label: "Audit log", icon: "pulse", needsCase: true },
-];
 
 const connectionText: Record<Connection, string> = { checking: "Connecting to API", online: "System operational", setup: "Case pack needed", offline: "API offline" };
 
@@ -74,10 +62,10 @@ export function Workbench() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const run = useCallback(async (caseId: string) => {
+  const run = useCallback(async (caseId: string, target: View = "overview") => {
     if (!caseId) return;
     setSelected(caseId); setBusy(true); setError("");
-    try { setData(await api.start(caseId)); setView("overview"); }
+    try { setData(await api.start(caseId)); setView(target); }
     catch (caught) { setError(message(caught, "The investigation could not be started.")); }
     finally { setBusy(false); }
   }, []);
@@ -143,20 +131,11 @@ export function Workbench() {
   }, [data]);
 
   const identity = api.identity;
-  const current = view !== "cases" && !data ? "cases" : view;
+  const current = view;
 
   return <div className={`shell ${collapsed ? "collapsed" : ""}`}>
-    <aside className="sidebar">
-      <div className="brand"><span className="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M16 2 29 9.5v13L16 30 3 22.5v-13z" /><path d="M16 9 23 13v6l-7 4-7-4v-6z" /></svg></span><div className="brand-text"><strong>Sentinel</strong><small>Graph fraud investigation</small></div></div>
-      <nav aria-label="Workspace">
-        {nav.map((item) => <button aria-current={current === item.view ? "page" : undefined} className="nav-item" disabled={item.needsCase && !data} key={item.view} onClick={() => setView(item.view)} title={collapsed ? item.label : undefined} type="button"><Icon name={item.icon} /><span>{item.label}</span>{item.view === "cases" && cases.length > 0 && <b className="count">{cases.length}</b>}</button>)}
-      </nav>
-      <div className="sidebar-foot">
-        <button className="nav-item" onClick={() => fileRef.current?.click()} title={collapsed ? "Load case pack" : undefined} type="button"><Icon name="upload" /><span>Load case pack</span></button>
-        <button className="nav-item" onClick={() => setCollapsed(!collapsed)} type="button"><Icon name="collapse" style={{ transform: collapsed ? "rotate(180deg)" : undefined }} /><span>Collapse</span></button>
-      </div>
-      <input accept=".csv,text/csv" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadPack(file); }} ref={fileRef} type="file" />
-    </aside>
+    <Sidebar busy={busy} caseCount={cases.length} collapsed={collapsed} connection={connection} data={data} onLoadPack={() => fileRef.current?.click()} onNavigate={setView} onRetry={() => void connect()} onToggle={() => setCollapsed(!collapsed)} view={view} />
+    <input accept=".csv,text/csv" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadPack(file); }} ref={fileRef} type="file" />
 
     <div className="main">
       <header className="topbar">
@@ -175,7 +154,7 @@ export function Workbench() {
         {error && <div className="alert" role="alert"><strong>{error}</strong>{connection === "offline" && <button className="button ghost" onClick={() => void connect()} type="button"><Icon name="refresh" size={15} />Retry</button>}<button aria-label="Dismiss" className="icon-button small" onClick={() => setError("")} type="button"><Icon name="x" size={14} /></button></div>}
         {!api.isConfigured && <div className="alert"><strong>Set NEXT_PUBLIC_API_BASE_URL in frontend/.env.local, then restart the workbench.</strong></div>}
 
-        {current === "cases" ? <CaseQueue busy={busy} cases={filtered} connection={connection} onLoadPack={() => fileRef.current?.click()} onRetry={() => void connect()} onRun={(id) => void run(id)} query={query} selected={selected} total={cases.length} /> : data && <>
+        {current === "cases" ? <CaseQueue busy={busy} cases={filtered} connection={connection} onLoadPack={() => fileRef.current?.click()} onRetry={() => void connect()} onRun={(id) => void run(id)} query={query} selected={selected} total={cases.length} /> : !data ? <NoCase busy={busy} cases={cases} connection={connection} onLoadPack={() => fileRef.current?.click()} onOpen={(id, target) => void run(id, target)} onRetry={() => void connect()} view={current} /> : <>
           <CaseHeader busy={busy} data={data} onExport={exportCase} onRun={() => void run(data.case_id)} />
           {current === "overview" && <>
             <KeyFigures data={data} />
@@ -223,7 +202,8 @@ function CaseHeader({ data, busy, onRun, onExport }: { data: Investigation; busy
   return <section className="case-header">
     <div className="case-title">
       <div className="case-name"><h1>{data.case_id}</h1><span className={`verdict ${tone}`}>{verdict ? humanize(verdict) : humanize(data.case?.status ?? data.status ?? "open")}</span>{data.trigger_type && <span className="tag muted">{humanize(data.trigger_type)}</span>}</div>
-      <p>{data.case?.summary || data.message || data.trigger_text}</p>
+      <p>{data.case?.summary || data.trigger_text || data.message}</p>
+      {data.message && data.message !== (data.case?.summary || data.trigger_text) && <p className="case-note"><Icon name="target" size={14} />{data.message}</p>}
     </div>
     <dl className="case-meta">{meta.filter(([, value]) => value).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
     <div className="case-actions">

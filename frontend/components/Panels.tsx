@@ -33,6 +33,11 @@ function Bars({ values, highlight }: { values: number[]; highlight?: number }) {
   return <svg aria-hidden="true" className="bars" viewBox={`0 0 ${values.length * 9} 38`}>{values.map((value, index) => { const height = Math.max(2, (value / max) * 36); return <rect className={index === highlight ? "hot" : ""} height={height} key={index} rx="1" width="5" x={index * 9 + 2} y={38 - height} />; })}</svg>;
 }
 
+function Gauge({ value }: { value: number }) {
+  const clamped = Math.min(1, Math.max(0, value));
+  return <div aria-hidden="true" className="gauge"><i style={{ width: `${clamped * 100}%` }} /><b style={{ left: `${clamped * 100}%` }} /></div>;
+}
+
 function Meter({ value }: { value: number }) {
   return <div aria-hidden="true" className="meter">{Array.from({ length: 12 }, (_, index) => <i className={(index + 0.5) / 12 <= value ? "on" : ""} key={index} style={{ height: `${10 + index * 2.4}px` }} />)}</div>;
 }
@@ -55,23 +60,23 @@ export function KeyFigures({ data }: { data: Investigation }) {
       <span className="figure-label">Bank risk score</span>
       <div className="figure-row"><strong>{risk === null ? "—" : risk.toFixed(2)}</strong>{delta !== null && delta !== 0 && <em className={delta > 0 ? "up" : "down"}>{delta > 0 ? "▲" : "▼"} {Math.abs(delta).toFixed(2)}</em>}</div>
       <small>{delta !== null ? "Change from the previous transaction" : "Source input signal, not a verdict"}</small>
-      <Sparkline highlight={flagged && toNumber(flagged.risk_score) !== null ? rows.slice(0, flaggedIndex).filter((row) => toNumber(row.risk_score) !== null).length : undefined} values={risks} />
+      {risks.length > 1 ? <Sparkline highlight={flagged && toNumber(flagged.risk_score) !== null ? rows.slice(0, flaggedIndex).filter((row) => toNumber(row.risk_score) !== null).length : undefined} values={risks} /> : risk !== null && risk <= 1 && <Gauge value={risk} />}
     </article>
     <article className="figure">
       <span className="figure-label">Exposure</span>
-      <div className="figure-row"><strong>{money(assessed?.exposure_usd, true) ?? "Not assessed"}</strong></div>
+      <div className="figure-row"><strong className={money(assessed?.exposure_usd) ? "" : "pending"}>{money(assessed?.exposure_usd, true) ?? "Not assessed"}</strong></div>
       <small>{rows.length ? `${rows.length} transaction${rows.length === 1 ? "" : "s"} totalling ${money(total, true)}` : "No transaction history returned"}</small>
       <Bars highlight={flaggedIndex} values={amounts} />
     </article>
     <article className="figure">
       <span className="figure-label">Pattern</span>
-      <div className="figure-row"><strong className="figure-text">{assessed?.pattern ? humanize(assessed.pattern) : "Not assessed"}</strong></div>
+      <div className="figure-row"><strong className={assessed?.pattern ? "figure-text" : "pending"}>{assessed?.pattern ? humanize(assessed.pattern) : "Not assessed"}</strong></div>
       <small>{assessed?.verdict ? `Verdict: ${humanize(assessed.verdict)}` : "Detected from graph and behaviour evidence"}</small>
       <Icon className="figure-glyph" name="graph" size={40} />
     </article>
     <article className="figure">
       <span className="figure-label">Fraud probability</span>
-      <div className="figure-row"><strong>{percent(probability) ?? "Not assessed"}</strong></div>
+      <div className="figure-row"><strong className={probability === null ? "pending" : ""}>{percent(probability) ?? "Not assessed"}</strong></div>
       <small>{probability === null ? "Available after the full workflow runs" : "Deterministic evidence assessment"}</small>
       {probability !== null && <Meter value={probability} />}
     </article>
