@@ -189,7 +189,7 @@ function QueueTable({ rows, selected, visited, busy, onOpen }: { rows: CaseOverv
     <tbody>{rows.map((item) => {
       const verdict = verdictOf(item); const assessment = item.assessment; const status = statusOf(item);
       return <tr aria-selected={item.case_id === selected} className={`v-row v-${verdict}`} key={item.case_id} onClick={() => !busy && onOpen(item.case_id)}>
-        <td><strong className="cc-id">{item.case_id}</strong>{verdict === "fraud" && <i className="pulse-dot" aria-hidden="true" />}<small className={`v-text v-${verdict}`}>{verdictLabel[verdict]}</small>{visited.has(item.case_id) && <i className="seen-dot" title="Opened this session" />}</td>
+        <td><strong className="cc-id">{item.case_id}</strong>{verdict === "fraud" && <i className="pulse-dot" aria-hidden="true" />}{visited.has(item.case_id) && <i aria-label="Opened this session" className="seen-dot" role="img" title="Opened this session" />}<small className={`v-text v-${verdict}`}>{verdictLabel[verdict]}</small></td>
         <td><Glyph item={item} /></td>
         <td><strong>{item.trigger_type ? humanize(item.trigger_type) : "Unspecified"}</strong><small className="sub">{assessment && assessment.pattern !== "none" ? humanize(assessment.pattern) : assessment ? "No documented pattern" : "Awaiting assessment"}</small></td>
         <td className="nowrap"><strong className="mono">{item.customer_id || "—"}</strong><small className="sub mono">{item.card_id}</small></td>

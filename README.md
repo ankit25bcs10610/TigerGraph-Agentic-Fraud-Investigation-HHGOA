@@ -1,100 +1,167 @@
-# TigerGraph Agentic Fraud Investigation
+<div align="center">
 
-An evidence-first fraud-investigation system built for the Hacker House Goa challenge. It combines deterministic graph investigation, policy-controlled decisions, case memory, optional grounded LLM synthesis, and an analyst workbench.
+<img src="docs/logo.svg" alt="Sentinel logo" width="88" />
 
-The system is deliberately designed so that an LLM can explain evidence but cannot replace graph queries, change the fraud score, approve restricted actions, or fabricate facts.
+# Sentinel
 
-## Demo in five minutes
+### Agentic fraud investigation on TigerGraph
 
-The workbench is designed for a clean, explainable analyst demo: a case enters through the intake queue, the agent gathers graph-grounded context, policy determines the next best action, and the analyst can review evidence, uncertainty, approval routes, and an immutable audit trail in one place.
+**Graph evidence finds it. Deterministic policy decides it. A human approves it. The ledger proves it.**
+
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-API-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-workflow-1C3C3C?style=for-the-badge&logo=langchain&logoColor=white)](https://langchain-ai.github.io/langgraph/)
+[![TigerGraph](https://img.shields.io/badge/TigerGraph-GSQL-F58220?style=for-the-badge)](https://www.tigergraph.com/)
+<br />
+[![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Cytoscape](https://img.shields.io/badge/Cytoscape.js-graphs-F7DF1E?style=for-the-badge&logoColor=black)](https://js.cytoscape.org/)
+<br />
+[![Tests](https://img.shields.io/badge/tests-135_passing-2C8F5F?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
+[![License](https://img.shields.io/badge/license-MIT-C2611A?style=for-the-badge)](LICENSE)
+[![Hacker House Goa](https://img.shields.io/badge/Hacker_House-Goa-6F665B?style=for-the-badge)](#credits)
+
+[Quick start](#-quick-start) · [Screenshots](#-a-look-inside) · [How it works](#-how-it-works) · [Sample cases](#-try-the-sample-cases) · [API](#-api) · [Credits](#credits)
+
+<br />
+
+<img src="docs/screenshots/command-center.png" alt="Sentinel case command center: operational risk, priority brief and a ranked case queue" width="100%" />
+
+</div>
+
+<br />
+
+## ✦ Why Sentinel
+
+Most "AI fraud" demos let a language model look at a transaction and guess. Sentinel doesn't.
+
+It is an **evidence-first investigation system** built for the Hacker House Goa challenge. A trigger opens a case. Graph queries gather the facts. Deterministic detectors, scoring and policy rules make the call. Protected actions wait for a named approval level. Every step is sealed into a SHA-256 hash chain that your browser can re-verify.
+
+The language model is optional, and even when it is on it can only *explain*. It cannot invent IDs, change the fraud score, override policy or approve anything.
+
+> **Nothing on screen is hard-coded.** Every number, finding, verdict and action in the workbench comes from the API. When something hasn't been assessed, the interface says so instead of filling the gap.
+
+<br />
+
+## ✦ Highlights
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### 🧭 Case command center
+Operational risk at a glance: total exposure, verdict mix, queue health, decisions waiting and the 7-day case trend. A **priority brief** names the cases that need a decision now.
+
+</td>
+<td width="33%" valign="top">
+
+### 🕸️ Graph intelligence
+A left-to-right relationship map of customer → card → transaction → device, email and region, plus linked closed cases. A full Cytoscape explorer with search, layouts and an entity inspector.
+
+</td>
+<td width="33%" valign="top">
+
+### ⚖️ Controlled decisions
+Policy rules **R1–R10** recommend actions. `auto` actions run; **L1/L2** actions wait for a recorded human decision. Evidence requests pause the case until the customer or a step-up check answers.
+
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top">
+
+### 📈 Deterministic scoring
+A transparent weighted fraud probability from pattern strength, unusual amount, shared devices, new regions, linked confirmed cases, and customer and step-up evidence. No fitted model, no hidden labels.
+
+</td>
+<td width="33%" valign="top">
+
+### 🔏 Verifiable audit
+Every workflow event extends a SHA-256 chain. The audit view **recomputes each hash in the browser** and shows *Case record verified* only when every one matches.
+
+</td>
+<td width="33%" valign="top">
+
+### 🌗 Built for analysts
+Warm light and dark themes, keyboard search (<kbd>Ctrl</kbd> <kbd>K</kbd>), case stepping, a session activity trail, SAR copy and download, a case dossier export and a layout that works down to phone width.
+
+</td>
+</tr>
+</table>
+
+<br />
+
+## ✦ A look inside
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/investigation.png" alt="Investigation overview with key figures, relationship map and next best action" /><p align="center"><b>Investigation</b><br /><sub>Key figures, relationship map, workflow timeline and the next best action</sub></p></td>
+<td width="50%"><img src="docs/screenshots/relationship-view.png" alt="Relationship view of every case and the entities they share" /><p align="center"><b>Relationship view</b><br /><sub>Every case and the customers, devices and closed cases it touches</sub></p></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/decisions.png" alt="Decisions view with actions before and after evidence and L2 approvals" /><p align="center"><b>Decisions</b><br /><sub>How the recommendation moved after the customer denied the purchase</sub></p></td>
+<td width="50%"><img src="docs/screenshots/transactions.png" alt="Transactions view with amount and risk chart" /><p align="center"><b>Transactions</b><br /><sub>Amount and risk over time, with the fraud episode highlighted</sub></p></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/graph-intelligence.png" alt="Graph intelligence explorer" /><p align="center"><b>Graph intelligence</b><br /><sub>Explore the subgraph with type colours, icons and entity search</sub></p></td>
+<td width="50%"><img src="docs/screenshots/audit-verified.png" alt="Audit view with a verified hash chain" /><p align="center"><b>Audit</b><br /><sub>Hash chain re-verified in the browser, with redacted raw events</sub></p></td>
+</tr>
+</table>
+
+<div align="center">
+<img src="docs/screenshots/command-center-dark.png" alt="Command center in the dark theme" width="100%" />
+<p><sub>The same command center in the dark theme, one click away in the header.</sub></p>
+</div>
+
+<br />
+
+## 🚀 Quick start
+
+You need **Python 3.11+** and **Node.js 20+**.
 
 ```bash
-# 1. Create your local configuration (never commit this file).
-cp .env.example .env
+# 1. Backend dependencies
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
 
-# 2. Point this to the supplied benchmark input.
-# CASE_PACK_PATH=/absolute/path/to/case_pack.csv
-# TRANSACTIONS_PATH=/absolute/path/to/transactions.csv
-
-# 3. Start the API with the same Python environment used for dependencies.
+# 2. Start the API with the labelled sample cases
+CASE_PACK_PATH=data/sample/case_pack.csv \
+TRANSACTIONS_PATH=data/sample/transactions.csv \
+CLOSED_CASES_PATH=data/sample/closed_cases_history.csv \
+FRONTEND_ORIGINS=http://127.0.0.1:3001 \
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 
-# 4. In a second terminal, start the workbench.
+# 3. In a second terminal, start the workbench
 cd frontend
 npm install
 printf 'NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000\n' > .env.local
 npm run dev -- --port 3001
 ```
 
-Open `http://127.0.0.1:3001`. A green **System operational** badge confirms that the API and benchmark case pack are available. An amber **Case pack needed** badge means the API is reachable but the benchmark input has not been loaded yet; choose the supplied `case_pack.csv` in the workbench, or set `CASE_PACK_PATH` before starting the API. It is not an API outage.
+Open **http://127.0.0.1:3001**. A green **System healthy** badge means the API is up and cases are loaded.
 
-> The reference runtime intentionally uses real case triggers only. It never creates invented benchmark cases or fabricated fraud decisions when the case pack is missing.
+To investigate the real benchmark instead, point `CASE_PACK_PATH` and `TRANSACTIONS_PATH` at the supplied files, or upload `case_pack.csv` from the sidebar. Nothing is loaded automatically.
 
-### Try it with the sample data
+<br />
 
-`data/sample/` holds six clearly labelled synthetic cases (IDs start with `SMP-`) covering card testing, a shared-device fraud ring, out-of-region travel, account takeover, a routine purchase and a customer report. Nothing loads them automatically:
+## 🧪 Try the sample cases
 
-```bash
-CASE_PACK_PATH=data/sample/case_pack.csv \
-TRANSACTIONS_PATH=data/sample/transactions.csv \
-CLOSED_CASES_PATH=data/sample/closed_cases_history.csv \
-FRONTEND_ORIGINS=http://127.0.0.1:3001 \
-python -m uvicorn backend.main:app --port 8000
-```
+`data/sample/` holds six synthetic cases (every ID starts with `SMP-`). They are not scripted: the local investigation engine runs the real detectors, weights, stopping rules, policy and SAR rules over the rows, so changing a row changes the outcome.
 
-The local investigation engine (`backend/local_engine.py`) runs the repository's deterministic pattern detectors, fraud-probability weights, stopping rules, policy R1–R10, approval routing and SAR rules over those rows, so every verdict, action and approval is computed rather than scripted. [`data/sample/README.md`](data/sample/README.md) lists what to try in each case.
-
-### Demo checklist
-
-- Start in the case queue: filter by trigger type, sort by risk, and open a case.
-- Walk the investigation overview: risk score, exposure, pattern, fraud probability, the relationship map and the workflow timeline.
-- Open the graph explorer and search for an entity to focus it and its neighbours.
-- Show the controlled evidence-request branch when the policy requires more information.
-- Use Actions & approvals to distinguish recommendations from L1/L2 approval-required actions.
-- Finish with the SAR report and the audit log, where the browser recomputes every ledger hash.
-
-### Workbench sections
-
-Every section is reachable before a case is open; it explains what it will show and offers a case picker that opens straight into it. The sun/moon button in the header switches between dark and light themes; the choice is remembered, and the system preference is used until one is made.
-
-| Section | What it shows |
-|---|---|
-| Case queue | Case count, trigger mix, risk histogram and open-date range; filter by trigger and sort by case, date or risk |
-| Investigation | Key figures, relationship map, workflow timeline, next best action with policy route, evidence ledger and similar cases |
-| Graph explorer | The full returned subgraph with per-type colours and icons, layouts, entity search and property inspector |
-| Transactions | Customer history, amount and risk chart, and the flagged transaction compared with the customer's others |
-| Evidence | Evidence requests to answer, the ledger filtered by source, and similar closed cases |
-| Actions & approvals | Actions before and after evidence, and approve/reject for protected actions |
-| SAR report | Filing decision, subjects, amount, dates and narrative, with copy and download |
-| Audit log | Hash chain verified in the browser by recomputing each SHA-256 hash, plus redacted raw events |
-
-Nothing in the workbench is hard-coded: every value comes from the API response, and missing values are shown as not assessed rather than filled in.
-
-## What it does
-
-- Builds a TigerGraph investigation graph from transaction, identity, and historical closed-case data.
-- Uses installed GSQL queries as the source of graph evidence.
-- Detects documented fraud patterns with deterministic rules.
-- Calculates fraud probability transparently from configuration and evidence.
-- Applies R1–R10 policy rules and routes protected actions to the appropriate human approval level.
-- Supports explicit, reproducible simulated evidence for demos when real customer or analyst responses are unavailable.
-- Persists system-created `InvestigationCase` records as future case memory.
-- Produces validated JSON case outputs and an analyst-facing Next.js workbench.
-
-## Safety and decision boundaries
-
-| Component | Responsible for | Not allowed to do |
+| Case | Scenario | What to try |
 |---|---|---|
-| GSQL queries | Retrieve graph facts and relationships | Infer a verdict or approve actions |
-| Deterministic investigation layer | Patterns, fraud probability, exposure, stop conditions | Use public fraud labels or hidden benchmark outcomes |
-| Policy and approvals | R1–R10 recommendations and AUTO/L1/L2 routing | Silently execute L1/L2 actions |
-| Evidence simulator | Explicit demo assumptions only | Claim simulation is customer or analyst fact |
-| LLM synthesis | Grounded explanations and summaries | Invent IDs/facts, alter scores, override policy, or mutate the graph |
-| Frontend | Visualization and human interaction | Run fraud logic or create answers locally |
+| **SMP-001** | Three sub-$5 online authorisations, then a $389.99 purchase on a new device | Answer the customer check with **Denied**: a card block joins the L1 decline |
+| **SMP-002** | A new device shared with two other customers, one tied to a confirmed fraud case | Strong fraud straight away; the SAR needs **L2** sign-off |
+| **SMP-003** | Card-present spending in a new region while home spending continues | Answer **Confirmed** and it closes as legitimate travel |
+| **SMP-004** | Account takeover: new device, anonymous proxy, match-status change | Answer **Denied**: exposure over $2,500 routes the block to **L2** |
+| **SMP-005** | A routine purchase that matches the card's history | Closes as legitimate with nothing to approve |
+| **SMP-006** | Customer report of a $2,940 purchase at the end of an online burst | Card block (L2) and SAR (L2) are ready to approve |
 
-`risk_score` is a source input signal. It is never treated as a fraud verdict.
+More detail lives in [`data/sample/README.md`](data/sample/README.md).
 
-## Architecture
+<br />
+
+## 🧠 How it works
 
 ```mermaid
 flowchart LR
@@ -131,8 +198,8 @@ flowchart LR
 
   subgraph Experience[Analyst experience]
     API[FastAPI boundary]
-    UI[Next.js workbench\nCytoscape investigation subgraph]
-    OUT[Strict case JSON\ncases/case_id.json]
+    UI[Next.js command center\n+ Cytoscape graphs]
+    OUT[Strict case JSON]
   end
 
   T --> S
@@ -148,183 +215,201 @@ flowchart LR
   API --> UI
 ```
 
-### Investigation flow
+### The investigation, step by step
 
-1. A benchmark trigger identifies the transaction, customer, card, and risk signal to investigate.
-2. The workflow calls read-only GSQL queries for transaction, card, customer, device, region, email, connected-card, and historical-case context.
-3. Deterministic detectors evaluate evidence and calculate the fraud probability, episode exposure, and stop condition.
-4. If evidence is needed, the workflow pauses for a real response or records an explicit simulated assumption before resuming.
-5. R1–R10 produce recommendations. AUTO actions may execute automatically; L1/L2 actions remain human-approval requests.
-6. The system persists the resulting `InvestigationCase`, validates the final output, and presents the case to the analyst workbench.
+1. **Trigger.** A case-pack row names the flagged transaction, customer, card and risk signal.
+2. **Gather.** Read-only GSQL queries (or the local CSV engine) collect transaction, card, customer, device, region, email, connected-card and closed-case context.
+3. **Detect.** Deterministic detectors look for card testing, card-not-present fraud (with or without a new device), out-of-region use, account takeover and coordinated undocumented abuse.
+4. **Score.** A transparent weighted formula turns the evidence into a fraud probability, and the episode's transactions into exposure.
+5. **Stop or ask.** Stopping rules decide whether the evidence settles the case. If not, the workflow asks the customer or requests step-up authentication, then resumes.
+6. **Decide.** Policy rules R1–R10 recommend actions. `auto` actions may run; L1/L2 actions become approval requests.
+7. **Report and seal.** SAR rules decide whether a report is required and draft it from facts only. Every step is sealed into the case's hash chain.
 
-For a detailed component map and trust boundaries, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+### Safety and decision boundaries
 
-## Repository map
+| Component | Responsible for | Not allowed to do |
+|---|---|---|
+| GSQL queries | Retrieve graph facts and relationships | Infer a verdict or approve actions |
+| Deterministic investigation layer | Patterns, fraud probability, exposure, stop conditions | Use public fraud labels or hidden benchmark outcomes |
+| Policy and approvals | R1–R10 recommendations and AUTO/L1/L2 routing | Silently execute L1/L2 actions |
+| Evidence simulator | Explicit demo assumptions only | Claim simulation is customer or analyst fact |
+| LLM synthesis | Grounded explanations and summaries | Invent IDs or facts, alter scores, override policy, or change the graph |
+| Frontend | Visualisation and human interaction | Run fraud logic or create answers locally |
+
+`risk_score` is a source input signal. It is never treated as a fraud verdict.
+
+For the full component map and trust boundaries, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+<br />
+
+## 🖥️ The workbench
+
+Every section can be opened before a case is. If no case is open, the section explains what it will show and offers a risk-sorted case picker that opens straight into it.
+
+| Section | What it shows |
+|---|---|
+| **Command center** | Operational risk, priority brief, ranked queue with network glyphs and risk rings, relationship view, day-by-day timeline, live intelligence and filters |
+| **Investigation** | Key figures, relationship map, workflow timeline, next best action with policy route, evidence ledger and similar cases |
+| **Graph intelligence** | The full returned subgraph with per-type colours and icons, four layouts, entity search and an inspector |
+| **Transactions** | Customer history, amount and risk chart, and the flagged amount compared with the customer's others |
+| **Evidence** | Evidence requests to answer, the ledger filtered by source, and similar closed cases |
+| **Decisions** | Actions before and after evidence, and approve or reject for protected actions |
+| **Reports** | SAR decision, subjects, amount, dates and narrative, with copy and download |
+| **Audit** | Hash chain verified in the browser, plus redacted raw events |
+
+<br />
+
+## 🔌 API
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/health` | Liveness, and whether a workflow is configured |
+| `GET` | `/ready` | `503` until a case provider and workflow are available |
+| `POST` | `/setup/case-pack` | Load a `case_pack.csv` uploaded from the workbench |
+| `GET` | `/cases` | Cases in the loaded pack |
+| `GET` | `/cases/overview` | Every case with its current assessment, for the command center |
+| `POST` | `/investigations/start` | Run the investigation for a case |
+| `GET` | `/investigations/{case_id}` | Current investigation state |
+| `POST` | `/investigations/{case_id}/evidence` | Record a customer, step-up or analyst response |
+| `POST` | `/investigations/{case_id}/approval` | Approve or reject a protected action |
+
+Set `APP_API_KEY` to require an `x-api-key` header, `APP_APPROVER_ROLE` to require `x-user-role` on approvals, and `APP_RATE_LIMIT_PER_MINUTE` for a per-process rate limit.
+
+<br />
+
+## ⚙️ Configuration
+
+Keep credentials in environment variables or a secret manager. Never commit `.env` or `.env.local`.
+
+| Variable | Used by | Purpose |
+|---|---|---|
+| `NEXT_PUBLIC_API_BASE_URL` | Frontend | Base URL of the running investigation API |
+| `NEXT_PUBLIC_ANALYST_NAME` | Frontend | Optional analyst name shown in the header |
+| `CASE_PACK_PATH` | API | Case pack loaded at start-up (it can also be uploaded) |
+| `TRANSACTIONS_PATH` | API | Transactions for the timeline, charts, graph and assessment |
+| `CLOSED_CASES_PATH` | API | Closed cases for linked prior fraud and similar cases |
+| `FRONTEND_ORIGINS` | API | Allowed browser origins (CORS) |
+| `LLM_PROVIDER`, `LLM_MODEL` | LLM layer | Optional grounded synthesis provider and model |
+| `OPENAI_API_KEY` | Optional provider | Authentication for LLM synthesis or embeddings |
+
+The deterministic pipeline works with no LLM configured.
+
+<br />
+
+## 🗂️ Repository map
 
 ```text
 backend/
   agent/               LangGraph state, nodes, workflow, lifecycle service
   investigation/       patterns, evidence, scoring, exposure, stopping
-  policy/              actions, R1–R10 rules, approvals, report policy
+  policy/              actions, R1–R10 rules, approvals, SAR policy
   evidence_requests/   request/response models and deterministic simulation
   cases/               InvestigationCase persistence
-  app/                 TigerGraph, MCP, GraphRAG, LLM, output modules
-  main.py              thin HTTP boundary (requires injected runtime services)
-
-tigergraph/
-  schema.gsql          graph schema
-  loading_jobs.gsql    loading jobs
-  queries/             read-only GSQL investigation primitives
-
+  app/                 TigerGraph, MCP, GraphRAG, LLM and output modules
+  local_engine.py      runs the deterministic engine over CSV inputs
+  main.py              thin FastAPI boundary
+frontend/
+  components/          command center, investigation views, graphs, audit
+  lib/                 API client, types and formatting
+tigergraph/            schema, loading jobs and read-only GSQL queries
+data/sample/           labelled synthetic cases for local exploration
 scripts/               data preparation and validation commands
-docs/                  dataset, schema, loading, query, MCP, and architecture docs
-frontend/              Next.js + React + TypeScript + Tailwind + Cytoscape workbench
+docs/                  dataset, schema, loading, query, MCP and architecture docs
 tests/                 deterministic unit and integration tests
 ```
 
-## Data model
+<br />
 
-The graph contains `Customer`, `Card`, `Transaction`, `DeviceProfile`, `EmailDomain`, `BillingRegion`, `ClosedCase`, and system-created `InvestigationCase` vertices.
+## 🐯 TigerGraph
 
-Key relationships include customer/card ownership, card transactions, device/email/region context, transaction sequence, closed-case involvement, connected cards, and the minimal system-case relationships needed for an investigation.
+The graph contains `Customer`, `Card`, `Transaction`, `DeviceProfile`, `EmailDomain`, `BillingRegion`, `ClosedCase` and system-created `InvestigationCase` vertices, with ownership, transaction, device, email, region, sequence, closed-case and connected-card relationships.
 
-The supplied dataset has one direct transaction/identity join: `TransactionID`. The case files reference transactions and customers. The case `card_id` mapping must be validated from the deterministic data-preparation output; it must not be invented from opaque source fields.
-
-Read [docs/DATASET_ANALYSIS.md](docs/DATASET_ANALYSIS.md) before changing ingestion or graph design.
-
-## Setup
-
-### Prerequisites
-
-- Python 3.11+
-- Node.js 20+
-- TigerGraph instance and GSQL client for graph loading/query installation
-- Optional: an LLM provider credential for grounded synthesis only
-
-### Python environment
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-cp .env.example .env.local
-npm run dev
-```
-
-Set `NEXT_PUBLIC_API_BASE_URL` in `frontend/.env.local` to the URL of the separately running investigation API. The frontend intentionally does not fall back to locally fabricated data when the API is unavailable.
-
-### Local API reference runtime
-
-The repository includes a trigger-only reference composition. It reads the real benchmark case pack, exposes `GET /cases`, and proves the API/frontend wiring without inventing fraud results. It deliberately stops before graph-backed investigation until a production workflow is injected:
-
-```bash
-cp .env.example .env
-# Set CASE_PACK_PATH to the supplied case_pack.csv path.
-set -a && source .env && set +a
-uvicorn backend.main:app --reload --port 8000
-```
-
-The API exposes `GET /health`, `GET /ready`, `GET /cases`, investigation start/state, evidence response, and approval endpoints. Set `APP_API_KEY` to require an `x-api-key` header and `APP_APPROVER_ROLE` to require `x-user-role` on approval requests. Set `APP_RATE_LIMIT_PER_MINUTE` to a positive value to enable the per-process local rate limit. For a live frontend/API split, set `FRONTEND_ORIGINS` explicitly.
-
-### Docker reference deployment
-
-The reference API and workbench can be started with Docker after placing the supplied `case_pack.csv` in the configured data directory:
-
-```bash
-CASE_PACK_DIR=/absolute/path/to/data docker compose up --build
-```
-
-This packages the trigger-only API runtime. A production deployment must inject the real TigerGraph-backed workflow and use a proper identity provider for analyst authentication and approvals.
-
-### TigerGraph
-
-Prepare and validate source data before loading it. The scripts support a safe sample-first workflow:
+Prepare and validate the data before loading:
 
 ```bash
 python scripts/prepare_graph_data.py --sample
 python scripts/validate_data.py --sample 1000
 ```
 
-Then install the schema, loading jobs, and query files in the target TigerGraph environment. See:
+Then install the schema, loading jobs and queries in your TigerGraph environment:
 
-- [docs/TIGERGRAPH_SCHEMA.md](docs/TIGERGRAPH_SCHEMA.md)
-- [docs/DATA_LOADING.md](docs/DATA_LOADING.md)
-- [docs/GSQL_QUERIES.md](docs/GSQL_QUERIES.md)
+- [Schema](docs/TIGERGRAPH_SCHEMA.md) · [Data loading](docs/DATA_LOADING.md) · [GSQL queries](docs/GSQL_QUERIES.md) · [MCP integration](docs/TIGERGRAPH_MCP.md) · [GraphRAG](docs/GRAPHRAG.md)
 
-### Runtime composition note
+The supplied dataset has one direct transaction/identity join, `TransactionID`. Read [docs/DATASET_ANALYSIS.md](docs/DATASET_ANALYSIS.md) before changing ingestion or graph design.
 
-`backend/main.py` intentionally provides a thin FastAPI boundary. A deployer must supply a configured workflow and benchmark-case provider that use the target TigerGraph environment. This avoids embedding dataset paths, graph credentials, or investigation outcomes in application code.
+### Docker
 
-## Configuration
+```bash
+CASE_PACK_DIR=/absolute/path/to/data docker compose up --build
+```
 
-Use environment variables or deployment secret management for credentials. Never commit API keys, TigerGraph tokens, or `.env.local` files.
+A production deployment injects the TigerGraph-backed workflow and a real identity provider for analysts and approvers.
 
-| Variable | Used by | Purpose |
-|---|---|---|
-| `NEXT_PUBLIC_API_BASE_URL` | Frontend | Base URL of the running investigation API |
-| `NEXT_PUBLIC_ANALYST_NAME` | Frontend | Optional analyst name shown in the header |
-| `CASE_PACK_PATH` | API | Case pack loaded at start-up; it can also be uploaded from the workbench |
-| `TRANSACTIONS_PATH` | API | Transactions used for the case timeline, amount chart and relationship map |
-| `CLOSED_CASES_PATH` | API | Closed cases used for linked prior fraud and similar-case retrieval |
-| `LLM_PROVIDER` | LLM layer | Selects the configured synthesis provider |
-| `LLM_MODEL` | LLM layer | Selects a provider-supported model |
-| `OPENAI_API_KEY` | Optional OpenAI provider | Authentication for LLM synthesis |
+<br />
 
-The deterministic pipeline remains available if no LLM provider is configured.
+## ✅ Validation
 
-For cost-conscious grounded summaries, use `LLM_PROVIDER=openai` and `LLM_MODEL=gpt-4o-mini`. Keep `OPENAI_API_KEY` only in your ignored local `.env` or your deployment secret manager. Embeddings are configured independently with `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, and the same API key when using OpenAI embeddings.
+```bash
+pytest -q                      # 135 deterministic tests
+cd frontend && npm run build   # type-checked production build
+```
 
-## Runtime status and troubleshooting
+`scripts/validate_case_output.py` and `scripts/validate_all_cases.py` reject unknown entity IDs, invalid action routes, malformed probability or exposure values, invalid legitimate-case state and unverifiable graph writes.
+
+<br />
+
+## 🩺 Troubleshooting
 
 | What you see | Meaning | Fix |
 |---|---|---|
-| **System operational** | API and case workflow are ready. | Select a case and begin the investigation. |
-| **Case pack needed** | API is running, but the benchmark case pack is not configured. | Choose `case_pack.csv` in the workbench, or set `CASE_PACK_PATH` to its absolute path and restart the API. |
-| **API offline** | The frontend cannot reach `NEXT_PUBLIC_API_BASE_URL`. | Start the API, confirm port `8000`, and use `http://127.0.0.1:8000` in `frontend/.env.local`. |
-| `503 /ready` | The API has started without its case provider/workflow. | This is expected until `CASE_PACK_PATH` or production adapters are supplied. |
+| **System healthy** | API and cases are ready | Pick a case from the command center |
+| **Case pack needed** | The API is running with no cases | Upload `case_pack.csv` from the sidebar, or set `CASE_PACK_PATH` |
+| **API offline** | The workbench can't reach `NEXT_PUBLIC_API_BASE_URL` | Start the API on port 8000 and check `frontend/.env.local` |
+| **Not assessed** everywhere | No transactions were found for the cases | Set `TRANSACTIONS_PATH` to your `transactions.csv` |
+| Missing chunks in dev | A stale Next.js cache | Stop the dev server, delete `frontend/.next`, run `npm run dev` |
 
-If the Next.js development server reports missing generated chunks after a build or abrupt restart, stop the dev server, remove only `frontend/.next`, and run `npm run dev` again. `.next` is a generated cache and is safe to recreate.
+<br />
 
-## Validation
+## 📏 Project rules
 
-```bash
-pytest -q
-cd frontend && npm run build
-```
+- No Kaggle or public IEEE fraud labels, and no hidden case-pack answers.
+- No invented meanings for unnamed `V*`, `C*`, `D*`, `M*` or opaque identity fields.
+- No LLM override of graph evidence, scores, stopping, policy or approval routing.
+- The benchmark `case_pack.csv` is a trigger set, never historical fraud truth.
+- The historical data contains closed-case transaction/card-label mismatches. They are preserved and surfaced by validation, not hidden.
 
-Case output validators are available in `scripts/validate_case_output.py` and `scripts/validate_all_cases.py`. They reject unknown entity IDs, invalid action routes, malformed probability/exposure values, invalid legitimate-case state, and unverifiable graph writes.
+<br />
 
-## Documentation
+## 📚 Documentation
 
-- [Dataset analysis](docs/DATASET_ANALYSIS.md)
-- [TigerGraph schema](docs/TIGERGRAPH_SCHEMA.md)
-- [Data loading](docs/DATA_LOADING.md)
-- [GSQL query reference](docs/GSQL_QUERIES.md)
-- [Manual case investigation](docs/MANUAL_CASE_INVESTIGATION.md)
-- [TigerGraph MCP integration](docs/TIGERGRAPH_MCP.md)
-- [GraphRAG](docs/GRAPHRAG.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Hackathon demo playbook](docs/HACKATHON_DEMO.md)
-- [CI workflow](.github/workflows/ci.yml)
+[Dataset analysis](docs/DATASET_ANALYSIS.md) · [Preprocessing](docs/PREPROCESSING.md) · [Architecture](docs/ARCHITECTURE.md) · [Manual case investigation](docs/MANUAL_CASE_INVESTIGATION.md) · [Hackathon demo playbook](docs/HACKATHON_DEMO.md) · [CI workflow](.github/workflows/ci.yml)
 
-## Project constraints
+<br />
 
-- Do not use Kaggle/public IEEE fraud labels or hidden case-pack answers.
-- Do not infer semantic meanings for unnamed `V*`, `C*`, `D*`, `M*`, or opaque numeric identity fields.
-- Do not let an LLM override deterministic graph evidence, scores, stopping, policy, or approval routing.
-- Do not treat the benchmark `case_pack.csv` as historical fraud truth.
+## Credits
 
-## Data-quality limitation
+<table>
+<tr>
+<td align="center" width="50%">
+<a href="https://github.com/kartikeyajay2006"><img src="https://github.com/kartikeyajay2006.png?size=160" width="96" alt="Kartikeya Yadav" /></a>
+<br /><b>Kartikeya Yadav</b>
+<br /><a href="https://github.com/kartikeyajay2006">@kartikeyajay2006</a>
+<br /><sub>Case command center and analyst workbench, local investigation engine, sample dataset, tamper-evident ledger, demo playbook</sub>
+</td>
+<td align="center" width="50%">
+<a href="https://github.com/ankit25bcs10610"><img src="https://github.com/ankit25bcs10610.png?size=160" width="96" alt="Ankit Pandey" /></a>
+<br /><b>Ankit Pandey</b>
+<br /><a href="https://github.com/ankit25bcs10610">@ankit25bcs10610</a>
+<br /><sub>API runtime, readiness and rate limiting, deployment, early workbench interface</sub>
+</td>
+</tr>
+</table>
 
-The supplied historical data contains closed-case transaction/card-label mismatches. These are preserved and surfaced by validation; card-based historical conclusions must not be treated as fully reliable until the source mapping is resolved. See [docs/DATASET_ANALYSIS.md](docs/DATASET_ANALYSIS.md) and the validation reports for the observed mismatch counts.
-
-## Contributors
-
-- Ankit Pandey
+<div align="center">
+<br />
+<sub>Built for the <b>Hacker House Goa</b> challenge · Released under the <a href="LICENSE">MIT License</a></sub>
+<br /><br />
+<img src="docs/logo.svg" alt="" width="28" />
+<br />
+<sub><i>Fraud stops with clarity.</i></sub>
+</div>
