@@ -537,4 +537,15 @@ CREATE DIRECTED EDGE SIMILAR_TO_CLOSED_CASE (
     similarity_reason STRING
 );
 
+// GraphRAG knowledge chunks (policy passages, pattern documents, closed-case narratives).
+// The vector attribute is added at indexing time so its dimension matches the embedding model.
+CREATE VERTEX KnowledgeChunk (
+    PRIMARY_ID chunk_id STRING,
+    source_type STRING,
+    source_id STRING,
+    title STRING,
+    text STRING,
+    section STRING
+) WITH primary_id_as_attribute="true";
+
 CREATE GRAPH FraudInvestigation (*);

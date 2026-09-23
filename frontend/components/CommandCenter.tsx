@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import cytoscape, { Core, ElementDefinition } from "cytoscape";
 import { dateTime, humanize, money, relative, toNumber } from "../lib/format";
-import { CaseAssessment, CaseOverview } from "../lib/types";
+import { CaseAssessment, CaseOverview, Ring } from "../lib/types";
+import { api } from "../lib/api";
 import { entityColor, Icon, iconDataUri } from "./icons";
 import { Connection } from "./Sidebar";
 
 export type Activity = { id: number; text: string; detail?: string; at: number; tone: "ok" | "warn" | "risk" | "info" };
 
-type Tab = "queue" | "network" | "timeline";
+type Tab = "queue" | "network" | "timeline" | "rings";
 type SortKey = "risk" | "probability" | "exposure" | "opened" | "case";
 type Filters = { verdict: string; trigger: string; status: string; amount: string };
 const NO_FILTERS: Filters = { verdict: "all", trigger: "all", status: "all", amount: "all" };
@@ -268,6 +269,32 @@ function TimelineView({ rows, onOpen }: { rows: CaseOverview[]; onOpen: (id: str
   </li>)}</ol>;
 }
 
+/* --------------------------------------------------------------------- rings tab */
+
+function RingsView({ onOpen }: { onOpen: (id: string) => void }) {
+  const [rings, setRings] = useState<Ring[] | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => { api.rings().then(setRings).catch((caught) => setError(caught instanceof Error ? caught.message : "Rings could not be loaded.")); }, []);
+  if (error) return <p className="empty">{error}</p>;
+  if (!rings) return <p className="empty">Running community detection across the graph…</p>;
+  if (!rings.length) return <p className="empty">No card-device community spans three or more customers.</p>;
+  const candidates = rings.filter((ring) => ring.label === "candidate_undocumented").length;
+  return <div className="rings">
+    <p className="rings-intro"><Icon name="graph" size={15} />Weakly connected components over cards and devices, across the whole graph. <b>{candidates} of {rings.length}</b> match no documented pattern: candidates for the undocumented fraud the brief warns about.</p>
+    <div className="ring-grid">{rings.map((ring, index) => <article className={ring.label} key={ring.community_id}>
+      <header><strong>Ring {index + 1}</strong><span className={`tag ${ring.label === "candidate_undocumented" ? "warn" : "risk"}`}>{ring.label === "candidate_undocumented" ? "Undocumented pattern" : "Known pattern"}</span></header>
+      <dl>
+        <div><dt>Customers</dt><dd>{ring.customers}</dd></div><div><dt>Cards</dt><dd>{ring.cards}</dd></div><div><dt>Devices</dt><dd>{ring.devices}</dd></div>
+        <div><dt>Total</dt><dd>{ring.total_amount_usd !== null ? money(ring.total_amount_usd, true) : "—"}</dd></div>
+      </dl>
+      <p className="ring-facts">{[ring.online_share !== null ? `${Math.round(ring.online_share * 100)}% online` : "", ring.span_hours !== null ? `over ${ring.span_hours < 48 ? `${Math.round(ring.span_hours)} h` : `${Math.round(ring.span_hours / 24)} days`}` : "",
+        ring.confirmed_cases.length ? `${ring.confirmed_cases.length} confirmed fraud case${ring.confirmed_cases.length === 1 ? "" : "s"} (${Object.keys(ring.confirmed_patterns).map((name) => humanize(name).toLowerCase()).join(", ")})` : "no closed case touches it"].filter(Boolean).join(", ")}.</p>
+      <p className="ring-ids mono">{ring.sample_devices.join(", ")}</p>
+      {ring.benchmark_cases.length > 0 && <div className="ring-cases">{ring.benchmark_cases.map((id) => <button className="button ghost small" key={id} onClick={() => onOpen(id)} type="button">Open {id}</button>)}</div>}
+    </article>)}</div>
+  </div>;
+}
+
 /* -------------------------------------------------------------- live intelligence */
 
 function IntelGraph({ cases }: { cases: CaseOverview[] }) {
@@ -372,13 +399,14 @@ export function CommandCenter({ cases, query, selected, visited, busy, connectio
       <section className="panel queue-panel" ref={queueRef}>
         <header className="queue-bar">
           <div className="tabs-row" role="tablist">
-            {([["queue", "Queue", "queue"], ["network", "Relationship view", "graph"], ["timeline", "Timeline", "pulse"]] as const).map(([key, label, icon]) => <button aria-selected={tab === key} className="tab" key={key} onClick={() => setTab(key)} role="tab" type="button"><Icon name={icon} size={15} />{label}{key === "queue" && <b>{rows.length}</b>}</button>)}
+            {([["queue", "Queue", "queue"], ["network", "Relationship view", "graph"], ["rings", "Fraud rings", "radar"], ["timeline", "Timeline", "pulse"]] as const).map(([key, label, icon]) => <button aria-selected={tab === key} className="tab" key={key} onClick={() => setTab(key)} role="tab" type="button"><Icon name={icon} size={15} />{label}{key === "queue" && <b>{rows.length}</b>}</button>)}
           </div>
           {tab === "queue" && <label className="sort-by">Sort by<select onChange={(event) => setSort(event.target.value as SortKey)} value={sort}><option value="risk">Risk score, high to low</option><option value="probability">Fraud probability</option><option value="exposure">Exposure</option><option value="opened">Newest first</option><option value="case">Case ID</option></select></label>}
         </header>
         {tab === "queue" && <QueueTable busy={busy} onOpen={onOpen} rows={rows} selected={selected} visited={visited} />}
         {tab === "network" && <RelationshipView onOpen={onOpen} rows={rows} theme={theme} />}
         {tab === "timeline" && <TimelineView onOpen={onOpen} rows={rows} />}
+        {tab === "rings" && <RingsView onOpen={onOpen} />}
       </section>
       <aside className="command-side"><LiveIntelligence activity={activity} cases={cases} /><FilterPanel cases={cases} filters={filters} setFilters={setFilters} /></aside>
     </div>

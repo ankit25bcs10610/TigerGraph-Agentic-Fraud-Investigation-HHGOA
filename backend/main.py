@@ -135,6 +135,17 @@ def create_app(workflow: Workflow | None = None, case_provider: CaseInputProvide
         summarise = getattr(service, "overview", None)
         return [{**case, "assessment": summarise(provider.get(case["case_id"])) if summarise else None} for case in provider.list()]
 
+    @app.get("/network/rings")
+    def network_rings(request: Request, min_customers: int = 3, top_k: int = 8) -> list[dict[str, Any]]:
+        """Coordinated rings across the whole graph (weakly connected components), labelled known or undocumented."""
+        authorize(request)
+        service, provider = dependencies()
+        source = getattr(service, "source", None)
+        if source is None or not hasattr(source, "communities"):
+            return []
+        from backend.discovery import discover
+        return discover(source, provider.list(), min_customers=min_customers, top_k=top_k)
+
     @app.post("/investigations/start")
     def start(request: Request, payload: StartRequest):
         authorize(request)

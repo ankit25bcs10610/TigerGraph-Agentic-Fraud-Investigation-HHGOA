@@ -11,7 +11,7 @@ import { NoCase } from "./NoCase";
 import { Connection, sectionFor, Sidebar, View } from "./Sidebar";
 import { ActionsView, allEvidence, EvidenceLedger, EvidenceRequests, EvidenceTable, KeyFigures, LinkButton, NextBestAction, Panel, redact, SarView, SimilarCases, WorkflowTimeline } from "./Panels";
 import { AuditView } from "./Audit";
-import { BlastRadiusPanel, DecisionPaths, ScoreBreakdown } from "./Insights";
+import { ActionsTaken, BlastRadiusPanel, DecisionPaths, ScoreBreakdown } from "./Insights";
 import { AgentReasoning, Explanation, PolicyGrounding } from "./Reasoning";
 import { RelationshipMap } from "./RelationshipMap";
 import { TransactionsView } from "./Transactions";
@@ -238,7 +238,7 @@ export function Workbench() {
             <Panel icon="doc" subtitle="Grounded claims, each tied to a source and the entities it concerns" title="Evidence ledger"><EvidenceLedger items={allEvidence(data)} /></Panel>
             <Panel icon="folder" subtitle="Closed cases retrieved by graph and text similarity" title="Similar cases"><SimilarCases rows={data.similar_cases ?? []} /></Panel>
           </>}
-          {current === "actions" && <><ActionsView busy={busy} data={data} onApprove={(action, ok) => void approve(action, ok)} /><PolicyGrounding items={data.policy_grounding ?? []} /></>}
+          {current === "actions" && <><ActionsView busy={busy} data={data} onApprove={(action, ok) => void approve(action, ok)} /><ActionsTaken executions={data.executions ?? []} /><PolicyGrounding items={data.policy_grounding ?? []} /></>}
           {current === "report" && <SarView data={data} />}
           {current === "audit" && <AuditView data={data} />}
         </>}

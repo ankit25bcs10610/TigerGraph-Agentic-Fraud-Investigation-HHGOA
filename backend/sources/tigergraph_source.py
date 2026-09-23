@@ -10,7 +10,7 @@ import asyncio
 import threading
 from typing import Any, Iterable, Mapping
 
-from backend.sources.base import ClosedCaseRecord, RingResult, Txn, clean, parse_float, parse_time
+from backend.sources.base import ClosedCaseRecord, Community, RingResult, Txn, clean, parse_float, parse_time
 
 QUERIES = {
     "transaction": "agent_txn_profile",
@@ -19,6 +19,7 @@ QUERIES = {
     "linked_cases": "agent_linked_closed_cases",
     "pattern_cases": "agent_closed_cases_by_pattern",
     "ring": "agent_device_ring",
+    "communities": "agent_fraud_communities",
 }
 
 
@@ -158,6 +159,15 @@ class TigerGraphSource:
         payload = self.query(QUERIES["ring"], {"device_profile_id": device_profile_id, "max_hops": max_hops})
         values = lambda key: tuple(sorted(str(item) for item in (_first(payload, key) or [])))  # noqa: E731
         return RingResult(device_profile_id, values("devices"), values("cards"), values("customers"), int(_first(payload, "transactions") or 0), values("confirmed_cases"), int(_first(payload, "hops") or 0))
+
+    def communities(self, min_customers: int, top_k: int) -> list[Community]:
+        payload = self.query(QUERIES["communities"], {"min_customers": min_customers, "max_iterations": 20, "top_k": top_k})
+        members = lambda key, community: tuple(sorted(str(item) for item in ((_first(payload, key) or {}).get(str(community)) or (_first(payload, key) or {}).get(community) or [])))  # noqa: E731
+        found = []
+        for row in _first(payload, "communities") or []:
+            community = row.get("community")
+            found.append(Community(str(community), members("cards", community), members("devices", community), (), members("confirmed_cases", community), 0, int(row.get("customers") or 0)))
+        return found
 
     def exists(self, entity_type: str, entity_id: str) -> bool:
         try:

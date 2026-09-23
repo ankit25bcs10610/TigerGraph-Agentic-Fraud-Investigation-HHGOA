@@ -1,4 +1,6 @@
-// GraphRAG schema extension. Apply once after FraudInvestigation exists.
+// GraphRAG schema extension, for graphs created before schema.gsql included KnowledgeChunk.
+// New deployments get KnowledgeChunk from schema.gsql and do not need this file.
+// Apply once after FraudInvestigation exists.
 // The vector attribute is intentionally created through the official MCP tool:
 // its dimension must match the configured embedding provider at runtime.
 // Before applying, check that KnowledgeChunk does not already exist; do not

@@ -5,3 +5,5 @@ SMP-003,2026-09-19T14:25:00Z,risk_score,"Real-time model scored transaction SMP-
 SMP-004,2026-09-21T03:20:00Z,risk_score,"Real-time model scored transaction SMP-T4005 ($2,750.00, online) at 0.81. Review and decide.",SMP-T4005,SMP-C404-K1,SMP-C404,0.81
 SMP-005,2026-09-20T16:48:00Z,risk_score,"Real-time model scored transaction SMP-T5006 ($58.40, online) at 0.31. Review and decide.",SMP-T5006,SMP-C505-K1,SMP-C505,0.31
 SMP-006,2026-09-22T10:30:00Z,customer_report,"Customer SMP-C606 message: 'I never made this $2,940.00 purchase. Please check my card.' Refers to SMP-T6004.",SMP-T6004,SMP-C606-K1,SMP-C606,
+SMP-007,2026-09-22T07:35:00Z,risk_score,"Real-time model scored transaction SMP-T7003 ($310.00, online) at 0.69. Review and decide.",SMP-T7003,SMP-C701-K1,SMP-C701,0.69
+SMP-008,2026-09-22T11:00:00Z,analyst_request,"Analyst request: review transaction SMP-T3001 ($890.00, online); the device was seen in an earlier alert.",SMP-T3001,SMP-C301-K1,SMP-C301,0.83

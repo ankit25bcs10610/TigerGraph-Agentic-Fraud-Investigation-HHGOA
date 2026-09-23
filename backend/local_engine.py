@@ -27,6 +27,7 @@ from datetime import datetime, timedelta, timezone
 from statistics import median
 from typing import Any, Callable
 
+from backend.actions_executor import MockActionService
 from backend.demo_runtime import ReferenceWorkflow
 from backend.evidence_requests.models import CustomerResult, StepUpResult
 from backend.investigation.exposure import episode_exposure_usd
@@ -141,6 +142,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         self._contexts: dict[str, dict[str, Any]] = {}
         self._previews: dict[str, dict[str, Any]] = {}
         self.planner = planner or open_planner()
+        self.executor = MockActionService()
         self._rag: Any = None
         self._closed_index = {case.case_id: case for case in getattr(source, "_closed", ())}
 
@@ -563,17 +565,18 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         cards: dict[str, dict[str, Any]] = {}
         for item in context["network"]:
             key = item.card_id or item.customer_id
-            entry = cards.setdefault(key, {"card_id": item.card_id, "customer_id": item.customer_id, "transactions": 0, "spend_usd": 0.0, "last_seen": "", "link": f"shared device {target.device_profile_id}"})
+            entry = cards.setdefault(key, {"card_id": item.card_id, "customer_id": item.customer_id, "transactions": 0, "spend_usd": 0.0, "first_seen": item.ts.isoformat(), "last_seen": "", "link": f"shared device {target.device_profile_id}"})
             entry["transactions"] += 1
             entry["spend_usd"] = round(entry["spend_usd"] + item.amount, 2)
+            entry["first_seen"] = min(entry["first_seen"], item.ts.isoformat())
             entry["last_seen"] = max(entry["last_seen"], item.ts.isoformat())
         for card in (ring.cards if ring else ()):
             if card != target.card_id and card not in cards:
-                cards[card] = {"card_id": card, "customer_id": "", "transactions": 0, "spend_usd": 0.0, "last_seen": "", "link": f"fraud ring within {ring.hops} hops"}
+                cards[card] = {"card_id": card, "customer_id": "", "transactions": 0, "spend_usd": 0.0, "first_seen": "", "last_seen": "", "link": f"fraud ring within {ring.hops} hops"}
         if not cards:
             return None
         rows = sorted(cards.values(), key=lambda row: (-row["spend_usd"], row["card_id"]))
-        return {"cards": rows[:12], "card_count": len(rows), "customers": len({row["customer_id"] for row in rows if row["customer_id"]}),
+        return {"target": {"card_id": target.card_id, "first_seen": target.ts.isoformat(), "spend_usd": target.amount}, "cards": rows[:12], "card_count": len(rows), "customers": len({row["customer_id"] for row in rows if row["customer_id"]}),
                 "recent_spend_usd": round(sum(row["spend_usd"] for row in rows), 2), "confirmed_cases": list(ring.confirmed_cases) if ring else []}
 
     def _render(self, state: dict[str, Any], assessment: dict[str, Any]) -> None:
@@ -810,6 +813,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         self._render(state, assessment)
         if state["approval_requests"]:
             self._record(state, {"type": "approvals_routed", "pending": ",".join(item["action"] for item in state["approval_requests"])})
+        self._execute_auto(state, assessment)
         self._remember_if_done(state)
         return state
 
@@ -859,6 +863,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
             what_changed += " The recommended actions did not change."
         state["next_best_actions"] = {"initial": initial, "final": assessment["actions"], "what_changed": what_changed}
         self._render(state, assessment)
+        self._execute_auto(state, assessment)
         self._remember_if_done(state)
         return state
 
@@ -872,6 +877,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         approved = bool(decision.get("approved"))
         item["approval_status"] = "approved" if approved else "rejected"
         self._record(state, {"type": "approval_recorded", "action": item["action"], "route": item["route"], "approved": approved})
+        self._execute(state, item, approved_by=f"{item['route']} approver", rejected=not approved)
         pending = [entry for entry in state["approval_requests"] if entry["approval_status"] == "pending"]
         if not pending and not [entry for entry in state.get("evidence_requests", []) if entry.get("status") != "resolved"]:
             state["status"] = "completed"
@@ -881,6 +887,21 @@ class LocalInvestigationEngine(ReferenceWorkflow):
             self._remember_if_done(state)
         state["message"] = f"{item['action'].replace('_', ' ').capitalize()} {'approved' if approved else 'rejected'} at {item['route']}" + (f"; {len(pending)} approval(s) still pending." if pending else "; no approvals pending.")
         return state
+
+    def _execute(self, state: dict[str, Any], action: dict[str, Any], *, approved_by: str = "", rejected: bool = False) -> dict[str, Any]:
+        executions = state.setdefault("executions", [])
+        receipt = (self.executor.reject if rejected else self.executor.execute)(state["case_id"], action, sequence=len(executions) + 1, **({} if rejected else {"approved_by": approved_by}))
+        executions.append(receipt)
+        self._record(state, {"type": "action_executed" if not rejected else "action_not_executed", "action": receipt["action"], "system": receipt["system"],
+                             "receipt_id": receipt["receipt_id"], "simulated": True})
+        return receipt
+
+    def _execute_auto(self, state: dict[str, Any], assessment: dict[str, Any]) -> None:
+        """Automatic actions run as soon as policy recommends them; each runs once per case."""
+        done = {item["action"] for item in state.get("executions", []) if item["status"] == "executed"}
+        for action in assessment["actions"]:
+            if action["route"] == "auto" and action["action"] not in done:
+                self._execute(state, action)
 
     def _remember_if_done(self, state: dict[str, Any]) -> None:
         """Completed investigations become case memory for later ones."""

@@ -19,7 +19,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Cytoscape](https://img.shields.io/badge/Cytoscape.js-graphs-F7DF1E?style=for-the-badge&logoColor=black)](https://js.cytoscape.org/)
 <br />
-[![Tests](https://img.shields.io/badge/tests-148_passing-2C8F5F?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
+[![Tests](https://img.shields.io/badge/tests-155_passing-2C8F5F?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
 [![License](https://img.shields.io/badge/license-MIT-C2611A?style=for-the-badge)](LICENSE)
 [![Hacker House Goa](https://img.shields.io/badge/Hacker_House-Goa-6F665B?style=for-the-badge)](#credits)
 
@@ -130,6 +130,7 @@ Every investigation is an explicit loop over **graph tools**. Each tool is an in
 | `get_closed_cases_by_pattern` | `agent_closed_cases_by_pattern` | Case memory by detected pattern, with outcomes |
 | `recall_case_memory` | `InvestigationCase` / memory store | The agent's own earlier investigations on these entities |
 | `graphrag_retrieve` | `KnowledgeChunk` vector search | Policy passages and prior-case narratives closest to this case |
+| *(queue level)* | `agent_fraud_communities` | Weakly connected components across the whole graph, to find rings and undocumented patterns |
 
 **Who picks the next tool.** With an OpenAI model configured, an **LLM planner** chooses each next graph tool from the tools that make sense at that moment, within a step budget, and must give a reason. It can only pick from the allow-list; an unknown tool, a malformed reply or a provider error hands the choice to the **rule planner**, and the trace says so. The planner decides *what to look at*. It never sees or sets the probability, the verdict, the actions or the approval routes. Without a model, the rule planner runs the investigator's default order.
 
@@ -141,6 +142,8 @@ After the tools, the agent scores the evidence, checks the stopping rules, reque
 
 - **Decision paths (value of information).** Before asking for evidence, the agent simulates every possible answer to every request it could make (the customer denies, confirms or doesn't reply; step-up passes, fails or isn't completed) through the full assessment. It asks for the evidence whose answers lead to the most different decisions, and shows the analyst exactly what each answer would do before it arrives.
 - **Counterfactual scoring.** A waterfall shows how many points each signal added to the fraud probability and how close the verdict sits to each threshold. Any signal whose removal alone would change the verdict is marked **decisive**, so analysts see which facts the decision really rests on.
+- **Actions are carried out, not just recommended.** Automatic actions run through simulated bank systems (card platform, customer messaging, case management, regulatory filing, monitoring) as soon as policy recommends them; L1/L2 actions run only after approval. Every execution returns a receipt that is sealed into the case's hash chain.
+- **Undocumented patterns, found across the whole graph.** `agent_fraud_communities` runs weakly connected components over the card, transaction and device graph. The Fraud rings tab lists every ring spanning three or more customers, labelled *known pattern* when it touches confirmed fraud of a documented type, or *undocumented pattern* when nothing documented explains it.
 - **Blast radius.** When a case looks like fraud, the agent uses the shared device and the fraud ring to list the *other* cards and customers at risk now, with their recent spend. One alert becomes protection for the whole ring.
 
 ### From dataset to submission
@@ -150,6 +153,8 @@ After the tools, the agent scores the evidence, checks the stopping rules, reque
 | `scripts/setup_tigergraph.py` | Creates the schema and loading job, loads the data and installs every query (works on Savanna over REST) |
 | `scripts/calibrate_closed_cases.py` | Replays closed cases through the agent with no label leakage and reports pattern and verdict agreement |
 | `scripts/run_benchmark.py` | Answers every benchmark case: actions before and after evidence, labelled assumed responses, graph write, validation, report |
+| `scripts/check_card_mapping.py` | Confirms the derived card IDs match the labels the case pack and closed cases use |
+| `scripts/discover_patterns.py` | Lists every fraud ring in the graph and flags the ones no documented pattern explains |
 
 The full order of operations, down to the submission form, is in [docs/submission/RUNBOOK.md](docs/submission/RUNBOOK.md), alongside the [demo script](docs/submission/DEMO_SCRIPT.md), [blog post](docs/submission/BLOG_POST.md) and [social posts](docs/submission/SOCIAL_POSTS.md).
 
@@ -308,6 +313,7 @@ Every section can be opened before a case is. If no case is open, the section ex
 | `POST` | `/setup/case-pack` | Load a `case_pack.csv` uploaded from the workbench |
 | `GET` | `/cases` | Cases in the loaded pack |
 | `GET` | `/cases/overview` | Every case with its current assessment, for the command center |
+| `GET` | `/network/rings` | Fraud rings across the whole graph, labelled known or undocumented |
 | `POST` | `/investigations/start` | Run the investigation for a case |
 | `GET` | `/investigations/{case_id}` | Current investigation state |
 | `POST` | `/investigations/{case_id}/evidence` | Record a customer, step-up or analyst response |
@@ -396,7 +402,7 @@ A production deployment injects the TigerGraph-backed workflow and a real identi
 ## ✅ Validation
 
 ```bash
-pytest -q                      # 148 deterministic tests
+pytest -q                      # 155 deterministic tests
 cd frontend && npm run build   # type-checked production build
 ```
 

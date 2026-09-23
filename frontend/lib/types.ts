@@ -48,12 +48,17 @@ export type Investigation = {
   decision_paths?: DecisionPath[];
   score_breakdown?: { probability: number; fraud_threshold: number; legitimate_threshold: number; contributions: Contribution[] };
   blast_radius?: BlastRadius | null;
+  executions?: Execution[];
 };
+
+export type Execution = { receipt_id: string; action: string; route: string; status: "executed" | "rejected"; system: string; detail: string; approved_by: string; executed_at: string; simulated: boolean };
 
 export type DecisionPath = { request_type: string; distinct_decisions: number; settling_answers: number; changes_decision: number; chosen: boolean;
   outcomes: { answer: string; verdict: string; probability: number; settles: boolean; sar: boolean; actions: { action: string; route: string }[] }[] };
 export type Contribution = { signal: string; label: string; value: number; weight: number; points: number; without: number; decisive: boolean };
-export type BlastRadius = { cards: { card_id: string; customer_id: string; transactions: number; spend_usd: number; last_seen: string; link: string }[]; card_count: number; customers: number; recent_spend_usd: number; confirmed_cases: string[] };
+export type BlastRadius = { target?: { card_id: string; first_seen: string; spend_usd: number }; cards: { card_id: string; customer_id: string; transactions: number; spend_usd: number; first_seen?: string; last_seen: string; link: string }[]; card_count: number; customers: number; recent_spend_usd: number; confirmed_cases: string[] };
+export type Ring = { community_id: string; label: "known_ring" | "candidate_undocumented"; customers: number; cards: number; devices: number; transactions: number; confirmed_cases: string[];
+  confirmed_patterns: Record<string, number>; online_share: number | null; total_amount_usd: number | null; span_hours: number | null; benchmark_cases: string[]; sample_cards: string[]; sample_devices: string[] };
 
 export type AgentStep = { step: number; tool: string; source: string; args: Record<string, unknown>; reason: string; result: string; ok: boolean; ms: number; planner?: string };
 export type PolicyCitation = { ref: string; title: string; text: string; source: string; supports: string[]; score?: number };

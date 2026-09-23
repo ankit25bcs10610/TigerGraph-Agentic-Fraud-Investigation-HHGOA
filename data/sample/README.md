@@ -28,3 +28,5 @@ routing and SAR rules over these rows, so changing a row changes the result.
 | SMP-004 | Mixed-channel activity with a new device, an anonymous proxy and a match-status change | Answer **Denied**: exposure over $2,500 routes the card block to L2 |
 | SMP-005 | A routine purchase that matches the card's history and known device | Closes as legitimate with no action needed |
 | SMP-006 | Customer report of a $2,940 purchase at the end of an online burst | Customer denial already settles it: block card (L2) and file the SAR (L2) |
+| SMP-007 | Three customers on one proxied device with near-identical online amounts, and no closed case | Detected as an **undocumented pattern**; the Fraud rings tab labels its ring a candidate |
+| SMP-008 | Analyst request on another customer of SMP-002's device | Close SMP-002 first (approve its actions), then open SMP-008: the agent recalls SMP-002 from case memory |

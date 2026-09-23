@@ -59,7 +59,8 @@ class LLMPlanner:
     def _openai(system: str, prompt: str) -> str:
         from openai import OpenAI
 
-        client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+        # Tight timeout: a slow planner call falls back to the rule planner instead of stalling the case.
+        client = OpenAI(api_key=os.environ["OPENAI_API_KEY"], timeout=float(os.getenv("LLM_PLANNER_TIMEOUT", "20")), max_retries=1)
         response = client.chat.completions.create(model=os.getenv("LLM_MODEL", "gpt-4o-mini"), temperature=0,
                                                   response_format={"type": "json_object"},
                                                   messages=[{"role": "system", "content": system}, {"role": "user", "content": prompt}])

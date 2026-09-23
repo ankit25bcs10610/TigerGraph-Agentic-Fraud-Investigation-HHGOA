@@ -26,7 +26,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 GRAPH = os.getenv("TG_GRAPHNAME", "FraudInvestigation")
-VERTICES = ["Customer", "Card", "Transaction", "DeviceProfile", "EmailDomain", "BillingRegion", "ClosedCase", "InvestigationCase"]
+VERTICES = ["Customer", "Card", "Transaction", "DeviceProfile", "EmailDomain", "BillingRegion", "ClosedCase", "InvestigationCase", "KnowledgeChunk"]
 
 
 def connect():

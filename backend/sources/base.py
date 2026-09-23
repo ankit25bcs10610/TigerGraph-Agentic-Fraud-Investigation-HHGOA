@@ -84,6 +84,23 @@ class RingResult:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class Community:
+    """A connected group of cards and devices (cards linked through shared devices)."""
+
+    community_id: str
+    cards: tuple[str, ...]
+    devices: tuple[str, ...]
+    customers: tuple[str, ...]
+    confirmed_cases: tuple[str, ...] = ()
+    transactions: int = 0
+    customer_count: int = 0
+
+    @property
+    def size(self) -> int:
+        return self.customer_count or len(self.customers)
+
+
 class CaseDataSource(Protocol):
     """Questions the agent may ask the graph. Each is exposed as one tool."""
 
@@ -95,4 +112,5 @@ class CaseDataSource(Protocol):
     def linked_closed_cases(self, customer_id: str, card_id: str, related_customers: set[str], related_txns: set[str]) -> list[ClosedCaseRecord]: ...
     def closed_cases_by_pattern(self, pattern: str, limit: int) -> list[ClosedCaseRecord]: ...
     def device_ring(self, device_profile_id: str, max_hops: int) -> RingResult: ...
+    def communities(self, min_customers: int, top_k: int) -> list[Community]: ...
     def exists(self, entity_type: str, entity_id: str) -> bool: ...

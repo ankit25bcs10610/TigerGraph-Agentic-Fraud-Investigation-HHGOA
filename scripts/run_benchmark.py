@@ -67,7 +67,7 @@ def answer_case(state: dict[str, Any], requests: list[EvidenceRequest], graph_ca
         "next_best_actions": state["next_best_actions"],
         "sar": state["sar"],
         "stop_reason": state["stop_reason"],
-        "tool_calls": state.get("agent_trace", []),
+        "tool_calls": [*state.get("agent_trace", []), *({"tool": "execute_action", **receipt} for receipt in state.get("executions", []))],
         "tokens": int(state.get("llm_usage", {}).get("total_tokens", 0)),
         "latency_s": round(latency, 3),
     })

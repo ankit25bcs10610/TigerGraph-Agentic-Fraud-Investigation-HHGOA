@@ -50,7 +50,7 @@ class OpenAIStructuredLLM:
         try:
             from openai import OpenAI
         except ImportError as error: raise LLMUnavailable("OpenAI SDK is unavailable.") from error
-        self.client, self.settings = OpenAI(api_key=settings.api_key), settings
+        self.client, self.settings = OpenAI(api_key=settings.api_key, timeout=float(os.getenv("LLM_TIMEOUT", "45")), max_retries=1), settings
     def synthesize(self, system_prompt: str, context: str) -> tuple[Synthesis, LLMUsage]:
         started = time.perf_counter()
         parsed, response, last_error = None, None, None

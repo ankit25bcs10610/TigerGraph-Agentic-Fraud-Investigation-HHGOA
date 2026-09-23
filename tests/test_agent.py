@@ -166,3 +166,59 @@ def test_planner_failure_never_breaks_the_case():
     state = engine.start_investigation(CasePackProvider(str(SAMPLE / "case_pack.csv")).get("SMP-002"))
     assert state["case"]["verdict"] == "fraud"
     assert all(step.get("planner") in {None, "rules", "llm-fallback"} for step in state["agent_trace"])
+
+
+def test_auto_actions_execute_and_protected_ones_wait_for_approval(agent):
+    provider, engine = agent
+    state = engine.start_investigation(provider.get("SMP-006"))
+    executed = {item["action"]: item for item in state["executions"]}
+    assert executed["CREATE_CASE"]["status"] == "executed" and executed["CREATE_CASE"]["receipt_id"].startswith("MOCK-")
+    assert "BLOCK_CARD" not in executed  # L2: waits for a human
+    state = engine.resume_with_approval("SMP-006", {"action": "BLOCK_CARD", "approved": True})
+    state = engine.resume_with_approval("SMP-006", {"action": "FILE_REPORT", "approved": False})
+    outcome = {item["action"]: item["status"] for item in state["executions"]}
+    assert outcome["BLOCK_CARD"] == "executed" and outcome["FILE_REPORT"] == "rejected"
+    assert sum(1 for event in state["audit"] if event["type"] in {"action_executed", "action_not_executed"}) == len(state["executions"])
+
+
+def test_undocumented_coordinated_ring_is_detected(agent):
+    provider, engine = agent
+    state = engine.start_investigation(provider.get("SMP-007"))
+    assert state["case"]["pattern"] == "undocumented" and state["case"]["pattern_description"]
+    assert "ESCALATE_TO_ANALYST" in {item["action"] for item in state["next_best_actions"]["final"]}
+
+
+def test_memory_recalls_an_earlier_case_on_the_same_device(agent):
+    provider, engine = agent
+    before = engine.start_investigation(provider.get("SMP-008"))
+    assert not any(item["ref"] == "case_memory" for item in before["case"]["evidence"])
+    state = engine.start_investigation(provider.get("SMP-002"))
+    for item in list(state["approval_requests"]):
+        state = engine.resume_with_approval("SMP-002", {"action": item["action"], "approved": True})
+    after = engine.start_investigation(provider.get("SMP-008"))
+    assert any(item["ref"] == "case_memory" and "SMP-002" in item["claim"] for item in after["case"]["evidence"])
+
+
+def test_communities_and_discovery_label_known_and_undocumented_rings():
+    from backend.discovery import discover
+
+    source = CsvSource(str(SAMPLE / "transactions.csv"), None, str(SAMPLE / "closed_cases_history.csv"))
+    rings = {tuple(ring["benchmark_cases"]): ring for ring in discover(source, CasePackProvider(str(SAMPLE / "case_pack.csv")).list(), min_customers=3)}
+    assert rings[("SMP-002", "SMP-008")]["label"] == "known_ring"
+    assert rings[("SMP-007",)]["label"] == "candidate_undocumented" and rings[("SMP-007",)]["customers"] == 3
+
+
+def test_card_mapping_check_passes_on_sample():
+    result = subprocess.run([sys.executable, str(ROOT / "scripts" / "check_card_mapping.py"), "--transactions", str(SAMPLE / "transactions.csv"),
+                             "--case-pack", str(SAMPLE / "case_pack.csv"), "--closed-cases", str(SAMPLE / "closed_cases_history.csv")], capture_output=True, text=True, cwd=ROOT)
+    assert result.returncode == 0 and "Mismatched: 0" in result.stdout
+
+
+def test_rings_endpoint_returns_labelled_rings():
+    from fastapi.testclient import TestClient
+    from backend.main import create_app
+
+    source = CsvSource(str(SAMPLE / "transactions.csv"), None, str(SAMPLE / "closed_cases_history.csv"))
+    app = create_app(workflow=LocalInvestigationEngine(source, memory=CaseMemory()), case_provider=CasePackProvider(str(SAMPLE / "case_pack.csv")))
+    rings = TestClient(app).get("/network/rings").json()
+    assert {ring["label"] for ring in rings} == {"known_ring", "candidate_undocumented"}

@@ -1,7 +1,7 @@
 "use client";
 
 import { dateTime, humanize, money } from "../lib/format";
-import { BlastRadius as Blast, DecisionPath, Investigation } from "../lib/types";
+import { BlastRadius as Blast, DecisionPath, Execution, Investigation } from "../lib/types";
 import { Icon } from "./icons";
 import { Panel } from "./Panels";
 
@@ -71,6 +71,7 @@ export function BlastRadiusPanel({ blast }: { blast: Blast | null | undefined })
       <div><strong>{money(blast.recent_spend_usd, true)}</strong><span>recent spend on the shared device</span></div>
       <div><strong className={blast.confirmed_cases.length ? "hot" : ""}>{blast.confirmed_cases.length}</strong><span>confirmed fraud cases in the ring</span></div>
     </div>
+    <RingTimeline blast={blast} />
     <div className="table-wrap"><table className="data-table">
       <thead><tr><th>Card</th><th>Customer</th><th>Linked by</th><th className="num">Transactions</th><th className="num">Spend</th><th>Last seen</th></tr></thead>
       <tbody>{blast.cards.map((row) => <tr key={row.card_id || row.customer_id}>
@@ -79,4 +80,41 @@ export function BlastRadiusPanel({ blast }: { blast: Blast | null | undefined })
       </tr>)}</tbody>
     </table></div>
   </Panel>;
+}
+
+const systemLabel: Record<string, string> = { "card-platform": "Card platform", "customer-messaging": "Customer messaging", "case-management": "Case management",
+  "regulatory-filing": "Regulatory filing", "transaction-monitoring": "Transaction monitoring", payments: "Payments", identity: "Identity" };
+
+/** What the agent actually did, through simulated bank systems, with a receipt for each action. */
+export function ActionsTaken({ executions }: { executions: Execution[] }) {
+  if (!executions.length) return null;
+  return <Panel icon="check" subtitle="Automatic actions run when recommended; protected actions run only after approval. All systems are simulated." title="Actions taken">
+    <ol className="executions">{executions.map((item, index) => <li className={item.status} key={`${item.action}-${index}`}>
+      <span className="exec-icon"><Icon name={item.status === "executed" ? "check" : "x"} size={14} /></span>
+      <div>
+        <div className="exec-head"><strong>{humanize(item.action)}</strong><span className={`chip route-${item.route.toLowerCase()}`}>{item.route === "auto" ? "Auto" : item.route}</span>{item.status === "rejected" && <span className="tag risk">Not executed</span>}</div>
+        <p>{item.detail}</p>
+        <small>{item.status === "executed" ? (item.route === "auto" ? "Ran automatically under policy" : `Approved by ${item.approved_by}`) : "Rejected by the approver"}, {systemLabel[item.system] ?? item.system}{item.receipt_id ? `, receipt ${item.receipt_id}` : ""}, {dateTime(item.executed_at)}</small>
+      </div>
+    </li>)}</ol>
+  </Panel>;
+}
+
+/** When each card in the ring was first touched, relative to the flagged transaction. */
+function RingTimeline({ blast }: { blast: Blast }) {
+  const points = [
+    ...blast.cards.filter((row) => row.first_seen).map((row) => ({ label: row.card_id || row.customer_id, time: Date.parse(row.first_seen!), spend: row.spend_usd, flagged: false })),
+    ...(blast.target?.first_seen ? [{ label: blast.target.card_id, time: Date.parse(blast.target.first_seen), spend: blast.target.spend_usd, flagged: true }] : []),
+  ].filter((point) => Number.isFinite(point.time)).sort((a, b) => a.time - b.time);
+  if (points.length < 2) return null;
+  const start = points[0].time; const span = Math.max(1, points[points.length - 1].time - start);
+  const hours = span / 3600000;
+  return <div className="ring-timeline" aria-label="Ring timeline">
+    <div className="rt-head"><strong>Ring timeline</strong><small>{points.length} cards touched within {hours < 48 ? `${Math.round(hours)} hours` : `${Math.round(hours / 24)} days`}</small></div>
+    <div className="rt-track">
+      {points.map((point, index) => <span className={`rt-point ${point.flagged ? "flagged" : ""} ${index % 2 ? "below" : ""}`} key={point.label} style={{ left: `${((point.time - start) / span) * 100}%` }} title={`${point.label}, ${dateTime(new Date(point.time).toISOString())}`}>
+        <i /><em>{point.label}</em><b>{dateTime(new Date(point.time).toISOString())}</b>
+      </span>)}
+    </div>
+  </div>;
 }

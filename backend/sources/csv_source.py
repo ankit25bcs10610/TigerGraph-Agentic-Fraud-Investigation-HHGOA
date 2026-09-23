@@ -10,7 +10,7 @@ import csv
 from collections import defaultdict
 from pathlib import Path
 
-from backend.sources.base import ClosedCaseRecord, RingResult, Txn, clean, parse_float, parse_time
+from backend.sources.base import ClosedCaseRecord, Community, RingResult, Txn, clean, parse_float, parse_time
 from scripts.prepare_graph_data import CARD_FIELDS, card_id as loader_card_id, device_profile
 
 MAX_RING_ENTITIES = 400
@@ -134,6 +134,39 @@ class CsvSource:
         customers = {self._txns[txn].customer_id for txn in txns}
         confirmed = sorted(case.case_id for case in self._closed if case.confirmed_fraud and (case.customer_id in customers or set(case.txn_ids) & txns))
         return RingResult(device_profile_id, tuple(sorted(devices)), tuple(sorted(cards)), tuple(sorted(customers)), len(txns), tuple(confirmed), hops)
+
+    def communities(self, min_customers: int, top_k: int) -> list[Community]:
+        """Weakly connected components over card <-> device links (union-find)."""
+        parent: dict[str, str] = {}
+
+        def find(node: str) -> str:
+            while parent.setdefault(node, node) != node:
+                parent[node] = parent[parent[node]]
+                node = parent[node]
+            return node
+
+        for txn in self._txns.values():
+            if txn.card_id and txn.device_profile_id:
+                left, right = find("card:" + txn.card_id), find("device:" + txn.device_profile_id)
+                if left != right:
+                    parent[max(left, right)] = min(left, right)
+        groups: dict[str, dict[str, set[str]]] = defaultdict(lambda: {"cards": set(), "devices": set(), "customers": set(), "txns": set()})
+        for txn in self._txns.values():
+            if not txn.card_id or "card:" + txn.card_id not in parent:
+                continue
+            group = groups[find("card:" + txn.card_id)]
+            group["cards"].add(txn.card_id)
+            group["customers"].add(txn.customer_id)
+            group["txns"].add(txn.transaction_id)
+            if txn.device_profile_id:
+                group["devices"].add(txn.device_profile_id)
+        found = []
+        for root, group in groups.items():
+            if len(group["customers"]) < min_customers:
+                continue
+            confirmed = sorted(case.case_id for case in self._closed if case.confirmed_fraud and (set(case.txn_ids) & group["txns"] or case.customer_id in group["customers"]))
+            found.append(Community(root, tuple(sorted(group["cards"])), tuple(sorted(group["devices"])), tuple(sorted(group["customers"])), tuple(confirmed), len(group["txns"]), len(group["customers"])))
+        return sorted(found, key=lambda item: (-len(item.customers), -len(item.confirmed_cases)))[:top_k]
 
     def exists(self, entity_type: str, entity_id: str) -> bool:
         if entity_type == "Transaction":

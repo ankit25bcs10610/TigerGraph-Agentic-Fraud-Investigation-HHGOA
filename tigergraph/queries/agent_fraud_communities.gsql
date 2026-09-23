@@ -1,0 +1,39 @@
+// Graph algorithm: weakly connected components over the card-transaction-device projection.
+// Label propagation (minimum vertex id) along MADE and FROM_DEVICE in both directions groups every
+// card with the devices it used and every other card seen on those devices. Communities that span
+// at least min_customers customers are returned, largest first, with their confirmed-fraud cases.
+// Used to surface coordinated activity that no documented pattern describes.
+CREATE QUERY agent_fraud_communities(INT min_customers, INT max_iterations, INT top_k) FOR GRAPH FraudInvestigation SYNTAX v2 {
+  TYPEDEF TUPLE<INT community, INT customers, INT cards, INT devices, INT confirmed_cases> Community;
+  MinAccum<INT> @cc;
+  MapAccum<INT, SetAccum<STRING>> @@customers, @@cards, @@devices, @@confirmed;
+  HeapAccum<Community>(top_k, customers DESC, confirmed_cases DESC) @@largest;
+  MapAccum<INT, ListAccum<STRING>> @@card_members, @@device_members, @@case_members;
+
+  members = {Card.*, Transaction.*, DeviceProfile.*};
+  members = SELECT v FROM members:v POST-ACCUM v.@cc = getvid(v);
+  active = members;
+  WHILE active.size() > 0 LIMIT max_iterations DO
+    active = SELECT t FROM active:s -(MADE>|<MADE|FROM_DEVICE>|<FROM_DEVICE)- :t
+             WHERE s.@cc < t.@cc
+             ACCUM t.@cc += s.@cc;
+  END;
+
+  cards = SELECT c FROM Card:c ACCUM @@cards += (c.@cc -> c.card_id), @@customers += (c.@cc -> c.customer_id);
+  devices = SELECT d FROM DeviceProfile:d ACCUM @@devices += (d.@cc -> d.device_profile_id);
+  confirmed = SELECT t FROM ClosedCase:cc -(INVOLVES>)- Transaction:t
+              WHERE cc.outcome == "confirmed_fraud"
+              ACCUM @@confirmed += (t.@cc -> cc.case_id);
+
+  FOREACH (community, people) IN @@customers DO
+    IF people.size() >= min_customers THEN
+      @@largest += Community(community, people.size(), @@cards.get(community).size(), @@devices.get(community).size(), @@confirmed.get(community).size());
+    END;
+  END;
+  FOREACH item IN @@largest DO
+    FOREACH card IN @@cards.get(item.community) DO @@card_members += (item.community -> card); END;
+    FOREACH device IN @@devices.get(item.community) DO @@device_members += (item.community -> device); END;
+    FOREACH case_id IN @@confirmed.get(item.community) DO @@case_members += (item.community -> case_id); END;
+  END;
+  PRINT @@largest AS communities, @@card_members AS cards, @@device_members AS devices, @@case_members AS confirmed_cases;
+}

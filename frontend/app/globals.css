@@ -797,6 +797,46 @@ td > .tag:first-child, .request-head .tag:first-child, .sar-status .tag:first-ch
 .blast-stats strong.hot { color: var(--risk); }
 .blast-stats span { color: var(--muted); font-size: 12px; }
 
+/* ---------- Actions taken ---------- */
+.executions { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.executions li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); }
+.exec-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+.executions li.rejected .exec-icon { background: color-mix(in srgb, var(--risk) 14%, transparent); color: var(--risk); }
+.exec-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.executions p { color: var(--soft-text); font-size: 13px; }
+.executions small { color: var(--muted); font-size: 12px; }
+
+/* ---------- Fraud rings ---------- */
+.rings { display: grid; gap: 14px; }
+.rings-intro { display: flex; align-items: center; gap: 8px; color: var(--soft-text); font-size: 13px; }
+.rings-intro b { color: var(--text); }
+.ring-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.ring-grid article { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: inset 4px 0 var(--risk); }
+.ring-grid article.candidate_undocumented { box-shadow: inset 4px 0 var(--warn); }
+.ring-grid header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ring-grid header .tag { margin-left: 0; }
+.ring-grid dl { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0; }
+.ring-grid dt { color: var(--muted); font-size: 11.5px; }
+.ring-grid dd { margin: 0; font-size: 18px; font-weight: 600; }
+.ring-facts { color: var(--soft-text); font-size: 12.5px; }
+.ring-ids { overflow: hidden; color: var(--faint); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.ring-cases { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ---------- Ring timeline ---------- */
+.ring-timeline { margin-bottom: 16px; padding: 12px 16px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); }
+.rt-head { display: flex; align-items: baseline; gap: 10px; }
+.rt-head small { color: var(--muted); font-size: 12px; }
+.rt-track { position: relative; height: 92px; margin: 8px 70px 0; }
+.rt-track::before { content: ""; position: absolute; left: 0; right: 0; top: 46px; height: 2px; background: var(--line-strong); }
+.rt-point { position: absolute; top: 0; display: grid; justify-items: center; gap: 2px; transform: translateX(-50%); white-space: nowrap; }
+.rt-point i { order: 2; width: 12px; height: 12px; margin-top: 34px; border: 2px solid var(--surface-2); border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 2px var(--warn); }
+.rt-point.flagged i { background: var(--risk); box-shadow: 0 0 0 2px var(--risk); }
+.rt-point em { order: 1; position: absolute; top: 4px; color: var(--soft-text); font: 500 11.5px var(--mono); font-style: normal; }
+.rt-point b { order: 3; position: absolute; top: 18px; color: var(--muted); font-size: 11px; font-weight: 400; }
+.rt-point.below em { top: 58px; } .rt-point.below b { top: 72px; }
+.rt-track { height: 96px; }
+.rt-point.flagged em { color: var(--risk); font-weight: 600; }
+
 /* ---------- Onboarding ---------- */
 .onboarding { display: grid; justify-items: center; gap: 12px; padding: 64px 24px; text-align: center; }
 .onboarding h1 { font-size: 22px; font-weight: 600; }

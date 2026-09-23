@@ -25,7 +25,23 @@ export CASE_MEMORY_PATH=outputs/case_memory.jsonl
 
 If the policy documents are PDFs, convert them to `.txt` first (for example `pdftotext policy.pdf policy.txt`) so the grounding can cite them.
 
-## 1. Measure before touching TigerGraph (30 min)
+## 1. Check the card mapping (5 min)
+
+```bash
+python scripts/check_card_mapping.py --case-pack $DATA/case_pack.csv
+```
+
+It must report **Mismatched: 0** (or very close). If many rows mismatch, the derived card IDs disagree with the dataset's labels and every card history will be wrong: stop and fix `card_id` derivation in `scripts/prepare_graph_data.py` before anything else.
+
+## 1b. Find the undocumented pattern (10 min)
+
+```bash
+python scripts/discover_patterns.py --case-pack $DATA/case_pack.csv --out outputs/DISCOVERY.md
+```
+
+Rings labelled *candidate undocumented* are the leads. Read their transactions, give the pattern a name and a one-line description, and mention it in the blog and video.
+
+## 1c. Measure before touching TigerGraph (30 min)
 
 Run the agent on the CSVs against the closed cases. This is the honest accuracy number, and it tells you which detectors need tuning before the benchmark:
 
@@ -58,7 +74,15 @@ python scripts/prepare_graph_data.py --data-dir $DATA --output-dir build/graph_d
 python scripts/setup_tigergraph.py --data-dir build/graph_data
 ```
 
-The setup script creates the schema and loading job, loads every TSV, and installs all queries, including the six `agent_*` tools. It finishes by printing vertex counts and running `agent_txn_profile` once. If a query fails to install, the error names the file and line; fix it and rerun with `--skip schema job load`.
+The setup script creates the schema and loading job, loads every TSV, and installs all queries, including the seven `agent_*` tools. It finishes by printing vertex counts and running `agent_txn_profile` once. If a query fails to install, the error names the file and line; fix it and rerun with `--skip schema job load`.
+
+Build the GraphRAG vector index (policy passages, pattern documents and closed-case narratives, embedded with `EMBEDDING_MODEL`):
+
+```bash
+python scripts/index_fraud_knowledge.py --readme $DATA/README.md --closed-case-limit 5565
+```
+
+With `EMBEDDING_PROVIDER` set, the agent's `graphrag_retrieve` step then shows *GraphRAG (TigerGraph vectors)* instead of TF-IDF.
 
 Check the MCP connection:
 
