@@ -1,0 +1,226 @@
+{
+  "case_id": "HHG-002",
+  "case": {
+    "status": "escalated",
+    "verdict": "uncertain",
+    "fraud_probability": 0.2685,
+    "pattern": "none",
+    "pattern_description": "",
+    "affected_txn_ids": [
+      "3478782"
+    ],
+    "first_suspicious_txn_id": "3478782",
+    "connected_card_ids": [],
+    "connected_device_profiles": [],
+    "exposure_usd": 292.36,
+    "evidence": [
+      {
+        "claim": "No documented fraud pattern matched: no customer or equivalent legitimacy confirmation was supplied.",
+        "source": "graph",
+        "ref": "tigergraph",
+        "entity_ids": [
+          "3478782"
+        ]
+      },
+      {
+        "claim": "Flagged amount $292.36 is 6.2\u00d7 the card's prior median of $47.29 across 35 transactions.",
+        "source": "graph",
+        "ref": "tigergraph",
+        "entity_ids": [
+          "3478782",
+          "C11891-K1"
+        ]
+      },
+      {
+        "claim": "The customer did not reply to the verification request (simulated response).",
+        "source": "customer",
+        "ref": "HHG-002-customer-validation",
+        "entity_ids": [
+          "C11891"
+        ]
+      },
+      {
+        "claim": "Step-up authentication response: not completed. (assumed response)",
+        "source": "external",
+        "ref": "HHG-002-step-up",
+        "entity_ids": [
+          "C11891"
+        ]
+      }
+    ],
+    "similar_prior_cases": [],
+    "summary": "No documented fraud pattern on C11891-K1: fraud probability 0.27, exposure $292.36 across 1 transaction(s). Further investigation is unlikely to change the decision.",
+    "written_to_graph": true,
+    "graph_case_id": "INV-HHG-002"
+  },
+  "evidence_requests": [
+    {
+      "type": "customer_validation",
+      "asked_after_step": 5,
+      "assumed_response": "no_reply"
+    },
+    {
+      "type": "step_up_auth",
+      "asked_after_step": 6,
+      "assumed_response": "not_completed"
+    }
+  ],
+  "next_best_actions": {
+    "initial": [
+      {
+        "action": "VERIFY_WITH_CUSTOMER",
+        "route": "auto",
+        "reason": "R1: single weak signal with fraud probability below 0.70; verify before any block"
+      }
+    ],
+    "final": [
+      {
+        "action": "VERIFY_WITH_CUSTOMER",
+        "route": "auto",
+        "reason": "R1: single weak signal with fraud probability below 0.70; verify before any block"
+      },
+      {
+        "action": "MONITOR_CARD",
+        "route": "auto",
+        "reason": "R4: no customer reply within 24 hours"
+      },
+      {
+        "action": "DECLINE_TRANSACTION",
+        "route": "L1",
+        "reason": "R4: decline pending authorizations after no reply"
+      }
+    ],
+    "what_changed": "Step-up authentication evidence (not completed) moved fraud probability to 0.27. Added: monitor card, decline transaction."
+  },
+  "sar": {
+    "file": false,
+    "reason": "README section 3a: fraud is not confirmed or strongly suspected",
+    "narrative": "",
+    "subjects": [],
+    "total_amount_usd": 0.0,
+    "activity_dates": []
+  },
+  "stop_reason": "Further investigation is unlikely to change the decision.",
+  "tool_calls": [
+    {
+      "step": 1,
+      "tool": "get_transaction",
+      "source": "tigergraph-mcp",
+      "args": {
+        "transaction_id": "3478782"
+      },
+      "reason": "Load the flagged transaction with its card, device and identity signals.",
+      "planner": "rules",
+      "result": "$292.36 online on C11891-K1",
+      "ok": true,
+      "ms": 83.4
+    },
+    {
+      "step": 2,
+      "tool": "get_customer_activity",
+      "source": "tigergraph-mcp",
+      "args": {
+        "customer_id": "C11891"
+      },
+      "reason": "Build the customer's baseline across every card they hold.",
+      "planner": "rules",
+      "result": "44 transactions",
+      "ok": true,
+      "ms": 39.9
+    },
+    {
+      "step": 3,
+      "tool": "get_linked_closed_cases",
+      "source": "tigergraph-mcp",
+      "args": {
+        "customer_id": "C11891",
+        "card_id": "C11891-K1"
+      },
+      "reason": "Case memory: find prior investigations on this customer, card or the customers sharing its device.",
+      "planner": "rules",
+      "result": "0 closed cases",
+      "ok": true,
+      "ms": 34.7
+    },
+    {
+      "step": 4,
+      "tool": "recall_case_memory",
+      "source": "case-memory",
+      "args": {
+        "customer_id": "C11891"
+      },
+      "reason": "Check this agent's own earlier investigations on the same entities.",
+      "result": "0 related investigations",
+      "ok": true,
+      "ms": 0.0
+    },
+    {
+      "step": 5,
+      "tool": "graphrag_retrieve",
+      "source": "graphrag:tfidf",
+      "args": {
+        "query": "none online No documented fraud pattern matched: no customer or equivalent legit\u2026",
+        "method": "tfidf"
+      },
+      "reason": "Ground the explanation: retrieve the policy passages and prior-case narratives closest to this case.",
+      "planner": "rules",
+      "result": "3 policy passages, 0 case narratives (tfidf)",
+      "ok": true,
+      "ms": 0.2
+    },
+    {
+      "step": 6,
+      "tool": "graphrag_retrieve",
+      "source": "graphrag:tfidf",
+      "args": {
+        "query": "none online No documented fraud pattern matched: no customer or equivalent legit\u2026",
+        "method": "tfidf"
+      },
+      "reason": "Ground the explanation: retrieve the policy passages and prior-case narratives closest to this case.",
+      "planner": "rules",
+      "result": "3 policy passages, 0 case narratives (tfidf)",
+      "ok": true,
+      "ms": 0.1
+    },
+    {
+      "step": 7,
+      "tool": "graphrag_retrieve",
+      "source": "graphrag:tfidf",
+      "args": {
+        "query": "none online No documented fraud pattern matched: no customer or equivalent legit\u2026",
+        "method": "tfidf"
+      },
+      "reason": "Ground the explanation: retrieve the policy passages and prior-case narratives closest to this case.",
+      "planner": "rules",
+      "result": "3 policy passages, 0 case narratives (tfidf)",
+      "ok": true,
+      "ms": 0.1
+    },
+    {
+      "tool": "execute_action",
+      "receipt_id": "MOCK-95427BAA",
+      "action": "VERIFY_WITH_CUSTOMER",
+      "route": "auto",
+      "status": "executed",
+      "system": "customer-messaging",
+      "detail": "Verification request sent to the customer's registered phone",
+      "approved_by": "policy (auto)",
+      "executed_at": "2026-09-24T00:35:28.329412+00:00",
+      "simulated": true
+    },
+    {
+      "tool": "execute_action",
+      "receipt_id": "MOCK-4884CFED",
+      "action": "MONITOR_CARD",
+      "route": "auto",
+      "status": "executed",
+      "system": "transaction-monitoring",
+      "detail": "Card added to enhanced monitoring for 30 days",
+      "approved_by": "policy (auto)",
+      "executed_at": "2026-09-24T00:35:28.333751+00:00",
+      "simulated": true
+    }
+  ],
+  "tokens": 0,
+  "latency_s": 0.354
+}

@@ -1,0 +1,130 @@
+{
+  "case_id": "HHG-012",
+  "case": {
+    "status": "closed_legitimate",
+    "verdict": "legitimate",
+    "fraud_probability": 0.0825,
+    "pattern": "none",
+    "pattern_description": "",
+    "affected_txn_ids": [],
+    "first_suspicious_txn_id": "",
+    "connected_card_ids": [],
+    "connected_device_profiles": [],
+    "exposure_usd": 0.0,
+    "evidence": [
+      {
+        "claim": "No documented fraud pattern matched: no customer or equivalent legitimacy confirmation was supplied.",
+        "source": "graph",
+        "ref": "tigergraph",
+        "entity_ids": [
+          "3553342"
+        ]
+      },
+      {
+        "claim": "Flagged amount $30.91 is in line with the card's prior median of $49.08.",
+        "source": "graph",
+        "ref": "tigergraph",
+        "entity_ids": [
+          "3553342"
+        ]
+      },
+      {
+        "claim": "This agent's earlier investigation HHG-007 (legitimate, none) shares the shared device DP-05bb4e46874299d01c8a9db90740a835, DP-0c3cabf7a514603d7d7013dda3d7e3a4, DP-357ea50e98c211c363f086f89b3fd299, DP-399140ba94cd5ab0d1d78f3fc66b6c37, DP-5cc9dfb336c8c705b70fc94bf4e6fbb5, DP-814c060c16a6c343de3a8788494e1e29, DP-937c13eb7c10d79ad3aabd22755d3c8e, DP-9a0fa3e23978d6bb0a9ef266df19d0e5, DP-b78ef7a771a24e6bd89424041414098f, DP-c5a7d3f9f599523c15376f87eccd2857, DP-e85892ef2441e5921f0e0339afc798e0, DP-e8f6957452eb6495796c0d739c18b2b2.",
+        "source": "graph",
+        "ref": "case_memory",
+        "entity_ids": [
+          "HHG-007"
+        ]
+      }
+    ],
+    "similar_prior_cases": [],
+    "summary": "No documented fraud pattern on C05876-K2: fraud probability 0.08, exposure $0.00 across 0 transaction(s). Fraud probability 0.08 meets the strong-legitimate threshold with 2 independent supporting evidence sources.",
+    "written_to_graph": false,
+    "graph_case_id": ""
+  },
+  "evidence_requests": [],
+  "next_best_actions": {
+    "initial": [],
+    "final": [],
+    "what_changed": "nothing"
+  },
+  "sar": {
+    "file": false,
+    "reason": "README section 3a: fraud is not confirmed or strongly suspected",
+    "narrative": "",
+    "subjects": [],
+    "total_amount_usd": 0.0,
+    "activity_dates": []
+  },
+  "stop_reason": "Fraud probability 0.08 meets the strong-legitimate threshold with 2 independent supporting evidence sources.",
+  "tool_calls": [
+    {
+      "step": 1,
+      "tool": "get_transaction",
+      "source": "tigergraph-mcp",
+      "args": {
+        "transaction_id": "3553342"
+      },
+      "reason": "Load the flagged transaction with its card, device and identity signals.",
+      "planner": "rules",
+      "result": "$30.91 in_person on C05876-K2",
+      "ok": true,
+      "ms": 91.2
+    },
+    {
+      "step": 2,
+      "tool": "get_customer_activity",
+      "source": "tigergraph-mcp",
+      "args": {
+        "customer_id": "C05876"
+      },
+      "reason": "Build the customer's baseline across every card they hold.",
+      "planner": "rules",
+      "result": "991 transactions",
+      "ok": true,
+      "ms": 233.3
+    },
+    {
+      "step": 3,
+      "tool": "get_linked_closed_cases",
+      "source": "tigergraph-mcp",
+      "args": {
+        "customer_id": "C05876",
+        "card_id": "C05876-K2"
+      },
+      "reason": "Case memory: find prior investigations on this customer, card or the customers sharing its device.",
+      "planner": "rules",
+      "result": "0 closed cases",
+      "ok": true,
+      "ms": 37.3
+    },
+    {
+      "step": 4,
+      "tool": "recall_case_memory",
+      "source": "case-memory",
+      "args": {
+        "customer_id": "C05876"
+      },
+      "reason": "Check this agent's own earlier investigations on the same entities.",
+      "result": "1 related investigations",
+      "ok": true,
+      "ms": 0.0
+    },
+    {
+      "step": 5,
+      "tool": "graphrag_retrieve",
+      "source": "graphrag:tfidf",
+      "args": {
+        "query": "none in_person No documented fraud pattern matched: no customer or equivalent le\u2026",
+        "method": "tfidf"
+      },
+      "reason": "Ground the explanation: retrieve the policy passages and prior-case narratives closest to this case.",
+      "planner": "rules",
+      "result": "3 policy passages, 0 case narratives (tfidf)",
+      "ok": true,
+      "ms": 0.2
+    }
+  ],
+  "tokens": 0,
+  "latency_s": 0.371
+}

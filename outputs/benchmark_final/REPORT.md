@@ -1,0 +1,26 @@
+# Benchmark run
+
+Source: `tigergraph-mcp`. Cases: 20. Valid and written to the graph: 20. Valid but waiting for a graph write: 0. Needing review: 0.
+
+| Case | Pattern | Verdict | P(fraud) | Exposure | Evidence requested (assumed) | Final actions | SAR | In graph | Issue |
+|---|---|---|---|---|---|---|---|---|---|
+| HHG-001 | none | legitimate | 0.09 | $0.00 | none | none | no | no |  |
+| HHG-002 | none | uncertain | 0.27 | $292.36 | customer_validation=no_reply, step_up_auth=not_completed | VERIFY_WITH_CUSTOMER (auto), MONITOR_CARD (auto), DECLINE_TRANSACTION (L1) | no | yes |  |
+| HHG-003 | none | fraud | 0.11 | $49.00 | none | BLOCK_CARD (L1), CREATE_CASE (auto) | no | yes |  |
+| HHG-004 | undocumented | fraud | 0.59 | $221.19 | none | BLOCK_CARD (L1), CREATE_CASE (auto), FILE_REPORT (L2), ESCALATE_TO_ANALYST (auto) | yes | yes |  |
+| HHG-005 | undocumented | uncertain | 0.42 | $100.07 | customer_validation=no_reply, step_up_auth=not_completed | MONITOR_CARD (auto), DECLINE_TRANSACTION (L1), CREATE_CASE (auto), FILE_REPORT (L2), ESCALATE_TO_ANALYST (auto) | no | yes |  |
+| HHG-006 | undocumented | fraud | 0.58 | $2,394.13 | none | BLOCK_CARD (L1), CREATE_CASE (auto), FILE_REPORT (L2), ESCALATE_TO_ANALYST (auto) | yes | yes |  |
+| HHG-007 | none | legitimate | 0.13 | $0.00 | none | none | no | no |  |
+| HHG-008 | undocumented | fraud | 0.45 | $595.74 | none | BLOCK_CARD (L1), CREATE_CASE (auto), FILE_REPORT (L2), ESCALATE_TO_ANALYST (auto) | yes | yes |  |
+| HHG-009 | undocumented | fraud | 0.43 | $30.02 | none | BLOCK_CARD (L1), CREATE_CASE (auto), FILE_REPORT (L2), ESCALATE_TO_ANALYST (auto) | yes | yes |  |
+| HHG-010 | undocumented | uncertain | 0.62 | $1,000.03 | customer_validation=no_reply, step_up_auth=not_completed | MONITOR_CARD (auto), DECLINE_TRANSACTION (L1), ESCALATE_TO_ANALYST (auto), CREATE_CASE (auto), FILE_REPORT (L2) | no | yes |  |
+| HHG-011 | undocumented | fraud | 0.60 | $2,586.86 | none | BLOCK_CARD (L2), CREATE_CASE (auto), FILE_REPORT (L2), ESCALATE_TO_ANALYST (auto) | yes | yes |  |
+| HHG-012 | none | legitimate | 0.08 | $0.00 | none | none | no | no |  |
+| HHG-013 | undocumented | uncertain | 0.45 | $2,569.43 | customer_validation=no_reply, step_up_auth=not_completed | MONITOR_CARD (auto), DECLINE_TRANSACTION (L1), ESCALATE_TO_ANALYST (auto), CREATE_CASE (auto), FILE_REPORT (L2) | no | yes |  |
+| HHG-014 | undocumented | uncertain | 0.35 | $111.00 | customer_validation=no_reply, step_up_auth=not_completed | MONITOR_CARD (auto), DECLINE_TRANSACTION (L1), CREATE_CASE (auto), FILE_REPORT (L2), ESCALATE_TO_ANALYST (auto) | no | yes |  |
+| HHG-015 | undocumented | uncertain | 0.61 | $2,140.94 | customer_validation=no_reply, step_up_auth=not_completed | MONITOR_CARD (auto), DECLINE_TRANSACTION (L1), ESCALATE_TO_ANALYST (auto), CREATE_CASE (auto), FILE_REPORT (L2) | no | yes |  |
+| HHG-016 | undocumented | fraud | 0.45 | $59.67 | none | BLOCK_CARD (L1), CREATE_CASE (auto), FILE_REPORT (L2), ESCALATE_TO_ANALYST (auto) | yes | yes |  |
+| HHG-017 | undocumented | uncertain | 0.43 | $300.14 | customer_validation=no_reply, step_up_auth=not_completed | MONITOR_CARD (auto), DECLINE_TRANSACTION (L1), CREATE_CASE (auto), FILE_REPORT (L2), ESCALATE_TO_ANALYST (auto) | no | yes |  |
+| HHG-018 | none | fraud | 0.12 | $39.08 | none | BLOCK_CARD (L1), CREATE_CASE (auto) | no | yes |  |
+| HHG-019 | undocumented | uncertain | 0.47 | $216.83 | customer_validation=no_reply, step_up_auth=not_completed | MONITOR_CARD (auto), DECLINE_TRANSACTION (L1), CREATE_CASE (auto), FILE_REPORT (L2), ESCALATE_TO_ANALYST (auto) | no | yes |  |
+| HHG-020 | undocumented | uncertain | 0.42 | $125.08 | customer_validation=no_reply, step_up_auth=not_completed | MONITOR_CARD (auto), DECLINE_TRANSACTION (L1), CREATE_CASE (auto), FILE_REPORT (L2), ESCALATE_TO_ANALYST (auto) | no | yes |  |

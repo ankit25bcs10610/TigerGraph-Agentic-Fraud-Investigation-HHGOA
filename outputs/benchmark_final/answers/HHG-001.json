@@ -1,0 +1,110 @@
+{
+  "case_id": "HHG-001",
+  "case": {
+    "status": "closed_legitimate",
+    "verdict": "legitimate",
+    "fraud_probability": 0.0915,
+    "pattern": "none",
+    "pattern_description": "",
+    "affected_txn_ids": [],
+    "first_suspicious_txn_id": "",
+    "connected_card_ids": [],
+    "connected_device_profiles": [],
+    "exposure_usd": 0.0,
+    "evidence": [
+      {
+        "claim": "No documented fraud pattern matched: no customer or equivalent legitimacy confirmation was supplied.",
+        "source": "graph",
+        "ref": "tigergraph",
+        "entity_ids": [
+          "3514030"
+        ]
+      },
+      {
+        "claim": "Flagged amount $77.07 is in line with the card's prior median of $83.94.",
+        "source": "graph",
+        "ref": "tigergraph",
+        "entity_ids": [
+          "3514030"
+        ]
+      }
+    ],
+    "similar_prior_cases": [],
+    "summary": "No documented fraud pattern on C12382-K1: fraud probability 0.09, exposure $0.00 across 0 transaction(s). Fraud probability 0.09 meets the strong-legitimate threshold with 2 independent supporting evidence sources.",
+    "written_to_graph": false,
+    "graph_case_id": ""
+  },
+  "evidence_requests": [],
+  "next_best_actions": {
+    "initial": [],
+    "final": [],
+    "what_changed": "nothing"
+  },
+  "sar": {
+    "file": false,
+    "reason": "README section 3a: fraud is not confirmed or strongly suspected",
+    "narrative": "",
+    "subjects": [],
+    "total_amount_usd": 0.0,
+    "activity_dates": []
+  },
+  "stop_reason": "Fraud probability 0.09 meets the strong-legitimate threshold with 2 independent supporting evidence sources.",
+  "tool_calls": [
+    {
+      "step": 1,
+      "tool": "get_transaction",
+      "source": "tigergraph-mcp",
+      "args": {
+        "transaction_id": "3514030"
+      },
+      "reason": "Load the flagged transaction with its card, device and identity signals.",
+      "planner": "rules",
+      "result": "$77.07 in_person on C12382-K1",
+      "ok": true,
+      "ms": 239.7
+    },
+    {
+      "step": 2,
+      "tool": "get_customer_activity",
+      "source": "tigergraph-mcp",
+      "args": {
+        "customer_id": "C12382"
+      },
+      "reason": "Build the customer's baseline across every card they hold.",
+      "planner": "rules",
+      "result": "422 transactions",
+      "ok": true,
+      "ms": 128.1
+    },
+    {
+      "step": 3,
+      "tool": "get_linked_closed_cases",
+      "source": "tigergraph-mcp",
+      "args": {
+        "customer_id": "C12382",
+        "card_id": "C12382-K1"
+      },
+      "reason": "Case memory: find prior investigations on this customer, card or the customers sharing its device.",
+      "planner": "rules",
+      "result": "0 closed cases",
+      "ok": true,
+      "ms": 40.2
+    },
+    {
+      "step": 4,
+      "tool": "graphrag_retrieve",
+      "source": "graphrag:tfidf",
+      "args": {
+        "query": "none in_person No documented fraud pattern matched: no customer or equivalent le\u2026",
+        "method": "tfidf"
+      },
+      "reason": "Ground the explanation: retrieve the policy passages and prior-case narratives closest to this case.",
+      "planner": "rules",
+      "result": "3 policy passages, 0 case narratives (tfidf)",
+      "ok": true,
+      "ms": 0.1
+    }
+  ],
+  "tokens": 0,
+  "latency_s": 0.421
+}
