@@ -184,11 +184,13 @@ def build_reference_runtime(path: str, transactions_path: str | None = None, clo
     queries over TigerGraph MCP; otherwise the supplied CSV files are used.
     """
     from backend.local_engine import LocalInvestigationEngine
-    from backend.sources.tigergraph_source import open_source
+    from backend.sources.tigergraph_source import MCPGraphWriter, open_source
+    from backend.cases.service import InvestigationCaseService
 
     transactions = transactions_path or os.getenv("TRANSACTIONS_PATH")
     closed_cases = closed_cases_path or os.getenv("CLOSED_CASES_PATH")
     identity = os.getenv("IDENTITY_PATH")
     kind = "csv" if transactions_path is not None else os.getenv("DATA_SOURCE", "csv")
     source = open_source(kind, transactions=transactions, identity=identity, closed_cases=closed_cases) if (kind.lower().startswith("tiger") or transactions) else None
-    return CasePackProvider(path, transactions), LocalInvestigationEngine(source)
+    case_service = InvestigationCaseService(MCPGraphWriter(source)) if source is not None and source.name == "tigergraph-mcp" else None
+    return CasePackProvider(path, transactions), LocalInvestigationEngine(source, case_service=case_service)

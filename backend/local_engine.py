@@ -39,7 +39,8 @@ from backend.investigation.stopping import EvidenceDirection, IndependentEvidenc
 from backend.graphrag import open_graphrag
 from backend.memory import CaseMemory
 from backend.planner import FINISH, RulePlanner, ToolOption, open_planner
-from backend.models.answer import FraudPattern, PolicyAction, Verdict
+from backend.models.answer import Action, Case, EvidenceRequest, FraudPattern, PolicyAction, Verdict
+from backend.cases.service import InvestigationCaseRequest, InvestigationCaseService
 from backend.policy.approvals import get_approval_route
 from backend.policy.knowledge import PolicyKnowledge
 from backend.policy.rules import CustomerResponse, PolicyContext, recommend_actions
@@ -135,7 +136,7 @@ class ToolTrace:
 class LocalInvestigationEngine(ReferenceWorkflow):
     """The investigation agent (kept under its original name for compatibility)."""
 
-    def __init__(self, source: CaseDataSource | None = None, *, memory: CaseMemory | None = None, knowledge: PolicyKnowledge | None = None, planner: Any = None, compute_decision_paths: bool = True) -> None:
+    def __init__(self, source: CaseDataSource | None = None, *, memory: CaseMemory | None = None, knowledge: PolicyKnowledge | None = None, planner: Any = None, compute_decision_paths: bool = True, case_service: InvestigationCaseService | None = None) -> None:
         super().__init__(None)
         self.source = source
         self.memory = memory or CaseMemory(os.getenv("CASE_MEMORY_PATH") or None)
@@ -145,8 +146,59 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         self.planner = planner or open_planner()
         self.executor = MockActionService()
         self.compute_decision_paths = compute_decision_paths
+        self.case_service = case_service
         self._rag: Any = None
         self._closed_index = {case.case_id: case for case in getattr(source, "_closed", ())}
+
+    def _persist_formal_case(self, state: dict[str, Any]) -> None:
+        """Keep the graph's formal case record synchronized with workflow state."""
+        if self.case_service is None or "case" not in state:
+            return
+        case_payload = dict(state["case"])
+        case_payload.update(written_to_graph=False, graph_case_id="")
+        try:
+            case = Case.model_validate(case_payload)
+            actions = [Action.model_validate(item) for item in state.get("next_best_actions", {}).get("final", ())]
+            requests = [
+                EvidenceRequest.model_validate({
+                    "type": item["type"],
+                    "asked_after_step": len(state.get("agent_trace", ())),
+                    "assumed_response": item.get("reason") or item.get("question") or "Response required",
+                })
+                for item in state.get("evidence_requests", ())
+            ]
+            customer_id = str(state.get("customer_id") or self._contexts[state["case_id"]]["target"].customer_id)
+            target = self._contexts.get(state["case_id"], {}).get("target")
+            flagged_txn_id = str(state.get("flagged_txn_id") or getattr(target, "transaction_id", ""))
+            card_id = str(state.get("card_id") or getattr(target, "card_id", "") or customer_id)
+            opened_at = str(state.get("opened_at") or datetime.now(timezone.utc).isoformat())
+            similar_reasons = {
+                item["case_id"]: item.get("reason_for_match", "Related prior investigation")
+                for item in state.get("similar_cases", ()) if item.get("case_id")
+            }
+            result = self.case_service.persist(InvestigationCaseRequest(
+                investigation_case_id=f"INV-{state['case_id']}",
+                flagged_transaction_id=flagged_txn_id,
+                customer_id=customer_id,
+                card_id=card_id,
+                opened_at=opened_at,
+                case=case,
+                recommended_actions=actions,
+                evidence_requests=requests,
+                customer_disputed=bool(state.get("stop_context", {}).get("customer_disputed")),
+                trigger_type=str(state.get("trigger_type", "")),
+                trigger_text=str(state.get("trigger_text", "")),
+                closed_at=opened_at if state.get("status") == "completed" else "",
+                stop_reason=str(state.get("stop_reason", "")),
+                sar_narrative=str(state.get("sar", {}).get("narrative", "")),
+                similar_prior_case_reasons=similar_reasons,
+                force_create=True,
+            ))
+            if result.persisted:
+                state["case"] = result.case.model_dump(mode="json")
+                state["graph_persistence"] = {"status": "persisted", "graph_case_id": result.investigation_case_id}
+        except Exception as caught:  # noqa: BLE001 - graph persistence must not hide the investigation result
+            state["graph_persistence"] = {"status": "failed", "error": f"{type(caught).__name__}: {caught}"}
 
     @property
     def rag(self) -> Any:
@@ -841,6 +893,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
             self._record(state, {"type": "approvals_routed", "pending": ",".join(item["action"] for item in state["approval_requests"])})
         self._execute_auto(state, assessment)
         self._remember_if_done(state)
+        self._persist_formal_case(state)
         return state
 
     def resume_with_evidence(self, case_id: str, evidence: dict[str, Any]) -> dict[str, Any]:
@@ -891,6 +944,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         self._render(state, assessment)
         self._execute_auto(state, assessment)
         self._remember_if_done(state)
+        self._persist_formal_case(state)
         return state
 
     def resume_with_approval(self, case_id: str, decision: dict[str, Any]) -> dict[str, Any]:
@@ -912,6 +966,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
             self._record(state, {"type": "case_closed", "case_status": state["case"]["status"]})
             self._remember_if_done(state)
         state["message"] = f"{item['action'].replace('_', ' ').capitalize()} {'approved' if approved else 'rejected'} at {item['route']}" + (f"; {len(pending)} approval(s) still pending." if pending else "; no approvals pending.")
+        self._persist_formal_case(state)
         return state
 
     def _execute(self, state: dict[str, Any], action: dict[str, Any], *, approved_by: str = "", rejected: bool = False) -> dict[str, Any]:
