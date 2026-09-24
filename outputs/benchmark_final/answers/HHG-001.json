@@ -61,7 +61,7 @@
       "planner": "rules",
       "result": "$77.07 in_person on C12382-K1",
       "ok": true,
-      "ms": 345.1
+      "ms": 327.5
     },
     {
       "step": 2,
@@ -74,7 +74,7 @@
       "planner": "rules",
       "result": "422 transactions",
       "ok": true,
-      "ms": 123.4
+      "ms": 126.7
     },
     {
       "step": 3,
@@ -88,7 +88,7 @@
       "planner": "rules",
       "result": "0 closed cases",
       "ok": true,
-      "ms": 47.7
+      "ms": 39.6
     },
     {
       "step": 4,
@@ -102,9 +102,9 @@
       "planner": "rules",
       "result": "3 policy passages, 0 case narratives (tfidf)",
       "ok": true,
-      "ms": 0.1
+      "ms": 0.2
     }
   ],
   "tokens": 0,
-  "latency_s": 0.53
+  "latency_s": 0.508
 }

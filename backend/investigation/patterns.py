@@ -109,15 +109,15 @@ def detect_card_testing(context: PatternContext) -> PatternResult:
                 FraudPattern.CARD_TESTING,
                 [
                     f"{len(small)} small online authorizations averaging USD {small_median:.2f} occurred within one hour",
-                    f"larger purchase of USD {larger.amount_usd:.2f} followed the authorizations",
+                    f"larger purchase of USD {larger.amount_usd:.2f} occurred within one hour of the authorizations",
                     "sequence transactions: " + ", ".join(item.transaction_id for item in sequence),
                 ],
                 [], 0.95,
-                "A qualifying small-authorization sequence is followed by a larger online purchase.",
+                "A qualifying small-authorization sequence is clustered with a larger online purchase.",
             )
     return _result(
         FraudPattern.NONE, [],
-        ["No sequence of at least three sub-USD-5 online authorizations followed by a larger purchase was found."],
+        ["No sequence of at least three small online authorizations clustered with a larger purchase was found."],
         0.0, "The card-testing sequence rule was not satisfied.",
     )
 

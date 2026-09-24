@@ -8165,11 +8165,11 @@
     ],
     "similar_prior_cases": [
       "CC-5489",
-      "CC-5451",
-      "CC-5450",
       "CC-5424",
       "CC-5342",
-      "CC-5275"
+      "CC-5275",
+      "CC-5493",
+      "CC-5473"
     ],
     "summary": "Undocumented pattern on C08299-K1: fraud probability 0.43, exposure $30.02 across 1 transaction(s). Verification response case_pack.trigger_text settled the question as fraud.",
     "written_to_graph": true,
@@ -8260,7 +8260,7 @@
       "planner": "rules",
       "result": "$30.02 online on C08299-K1",
       "ok": true,
-      "ms": 130.5
+      "ms": 80.0
     },
     {
       "step": 2,
@@ -8273,7 +8273,7 @@
       "planner": "rules",
       "result": "56 transactions",
       "ok": true,
-      "ms": 43.0
+      "ms": 42.0
     },
     {
       "step": 3,
@@ -8286,7 +8286,7 @@
       "planner": "rules",
       "result": "257 transactions from 1 customers",
       "ok": true,
-      "ms": 50.0
+      "ms": 67.0
     },
     {
       "step": 4,
@@ -8300,7 +8300,7 @@
       "planner": "rules",
       "result": "7943 customers, 8090 cards, 9542 devices, 0 confirmed cases",
       "ok": true,
-      "ms": 482.2
+      "ms": 412.0
     },
     {
       "step": 5,
@@ -8314,7 +8314,7 @@
       "planner": "rules",
       "result": "5565 closed cases",
       "ok": true,
-      "ms": 138.7
+      "ms": 212.3
     },
     {
       "step": 6,
@@ -8354,7 +8354,7 @@
       "planner": "rules",
       "result": "3 policy passages, 0 case narratives (tfidf)",
       "ok": true,
-      "ms": 0.2
+      "ms": 0.3
     },
     {
       "tool": "execute_action",
@@ -8365,7 +8365,7 @@
       "system": "case-management",
       "detail": "Fraud case opened in case management",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T04:00:39.879063+00:00",
+      "executed_at": "2026-09-24T04:06:03.484668+00:00",
       "simulated": true
     },
     {
@@ -8377,10 +8377,10 @@
       "system": "case-management",
       "detail": "Case routed to the analyst review queue",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T04:00:39.879082+00:00",
+      "executed_at": "2026-09-24T04:06:03.484777+00:00",
       "simulated": true
     }
   ],
   "tokens": 0,
-  "latency_s": 1.426
+  "latency_s": 1.813
 }

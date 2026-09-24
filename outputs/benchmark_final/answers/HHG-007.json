@@ -69,7 +69,7 @@
       "planner": "rules",
       "result": "$111.92 in_person on C09933-K2",
       "ok": true,
-      "ms": 84.8
+      "ms": 91.0
     },
     {
       "step": 2,
@@ -82,7 +82,7 @@
       "planner": "rules",
       "result": "2792 transactions",
       "ok": true,
-      "ms": 202.3
+      "ms": 217.0
     },
     {
       "step": 3,
@@ -96,7 +96,7 @@
       "planner": "rules",
       "result": "0 closed cases",
       "ok": true,
-      "ms": 37.3
+      "ms": 38.3
     },
     {
       "step": 4,
@@ -126,5 +126,5 @@
     }
   ],
   "tokens": 0,
-  "latency_s": 0.366
+  "latency_s": 0.413
 }
