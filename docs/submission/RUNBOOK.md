@@ -98,10 +98,21 @@ Check the MCP connection:
 python scripts/test_tigergraph_mcp.py
 ```
 
+### 3b. Fill in closed cases and identity signals (15 min)
+
+If the graph was loaded some other way (for example through a Savanna data source), check that closed cases have their attributes: `ClosedCase` vertices with an empty `outcome` mean the closed-case file never loaded, and the agent cannot learn from past outcomes. The loader fixes that and adds the identity signals the new-device and account-takeover detectors need:
+
+```bash
+python scripts/load_dataset_to_graph.py --data-dir $DATA
+python scripts/index_fraud_knowledge.py --readme $DATA/README.md --closed-case-limit 5565
+```
+
+It maps closed-case columns by name (the file has a `txn_ids` column and commas inside analyst notes, which break positional comma-separated loading), adds `device_status`, `proxy_type` and `match_status` to `Transaction`, and reinstalls the agent queries with those fields. Re-running it is safe.
+
 ## 4. The real benchmark run (20 min)
 
 ```bash
-DATA_SOURCE=tigergraph python scripts/run_benchmark.py --case-pack $DATA/case_pack.csv --write-graph --out outputs
+python scripts/run_benchmark.py --source tigergraph --case-pack $DATA/case_pack.csv --write-graph --out outputs
 ```
 
 This is the submission run. Every graph question goes through TigerGraph MCP, every formal case is written back to the graph as an `InvestigationCase`, and each answer is validated. `outputs/REPORT.md` must show **Needing review: 0** and every formal case **In graph: yes**. The answers are in `outputs/answers/`.

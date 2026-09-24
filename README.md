@@ -124,13 +124,14 @@ Every investigation is an explicit loop over **graph tools**. Each tool is an in
 |---|---|---|
 | `get_transaction` | `agent_txn_profile` | The flagged transaction with its card, device and identity signals |
 | `get_customer_activity` | `agent_customer_activity` | The customer's baseline across every card |
-| `get_device_activity` | `agent_device_activity` | Who else used the same device |
-| `detect_device_ring` | `agent_device_ring` | Graph algorithm: bounded connected component around a shared or new device, to find fraud rings |
+| `get_device_activity` | `agent_device_activity` | Who else used the same device, and whether it is one device in a burst or a generic fingerprint |
+| `detect_device_ring` | `agent_device_ring` | Graph algorithm: bounded connected component around a shared or new device, within seven days of the alert, to find fraud rings |
+| `find_ring_membership` | `agent_fraud_communities` | Graph algorithm: whether the card sits in one of the graph-wide burst-device rings, even when its own device is common |
 | `get_linked_closed_cases` | `agent_linked_closed_cases` | Prior investigations on the same customer, card or device users |
 | `get_closed_cases_by_pattern` | `agent_closed_cases_by_pattern` | Case memory by detected pattern, with outcomes |
 | `recall_case_memory` | `InvestigationCase` / memory store | The agent's own earlier investigations on these entities |
 | `graphrag_retrieve` | `KnowledgeChunk` vector search | Policy passages and prior-case narratives closest to this case |
-| *(queue level)* | `agent_fraud_communities` | Weakly connected components across the whole graph, to find rings and undocumented patterns |
+| *(queue level)* | `agent_fraud_communities` | Weakly connected components across the whole graph, to find rings and undocumented patterns (computed once, reused by every case) |
 
 **Who picks the next tool.** With an OpenAI model configured, an **LLM planner** chooses each next graph tool from the tools that make sense at that moment, within a step budget, and must give a reason. It can only pick from the allow-list; an unknown tool, a malformed reply or a provider error hands the choice to the **rule planner**, and the trace says so. The planner decides *what to look at*. It never sees or sets the probability, the verdict, the actions or the approval routes. Without a model, the rule planner runs the investigator's default order.
 
@@ -143,7 +144,8 @@ After the tools, the agent scores the evidence, checks the stopping rules, reque
 - **Decision paths (value of information).** Before asking for evidence, the agent simulates every possible answer to every request it could make (the customer denies, confirms or doesn't reply; step-up passes, fails or isn't completed) through the full assessment. It asks for the evidence whose answers lead to the most different decisions, and shows the analyst exactly what each answer would do before it arrives.
 - **Counterfactual scoring.** A waterfall shows how many points each signal added to the fraud probability and how close the verdict sits to each threshold. Any signal whose removal alone would change the verdict is marked **decisive**, so analysts see which facts the decision really rests on.
 - **Actions are carried out, not just recommended.** Automatic actions run through simulated bank systems (card platform, customer messaging, case management, regulatory filing, monitoring) as soon as policy recommends them; L1/L2 actions run only after approval. Every execution returns a receipt that is sealed into the case's hash chain.
-- **Undocumented patterns, found across the whole graph.** `agent_fraud_communities` runs weakly connected components over the card, transaction and device graph. The Fraud rings tab lists every ring spanning three or more customers, labelled *known pattern* when it touches confirmed fraud of a documented type, or *undocumented pattern* when nothing documented explains it.
+- **Undocumented patterns, found across the whole graph.** `agent_fraud_communities` runs weakly connected components over cards and *burst devices*: a device links cards only when 3–10 customers used it within 72 hours, the way one physical device serving stolen cards behaves. The Fraud rings tab lists every ring spanning three or more customers, labelled *known pattern* when it touches confirmed fraud of a documented type, or *undocumented pattern* when nothing documented explains it.
+- **It knows a burst from a fingerprint.** Device profiles in this dataset are model / browser / screen fingerprints, and 116 of them are shared by 100–1,000 customers. Measured on the full graph, expanding through them turns every ring into one component of thousands of customers. So the agent asks two questions of every device: how many customers ever used it, and how many used it within seven days of the alert. More than 10 overall and under a quarter of them this week is a generic fingerprint: the agent skips sharing and ring expansion and says why in its trace. Many customers concentrated in one week is the opposite, a burst on one device, and becomes evidence. That is how HHG-014's "unusual device profile" (24 of its 52 customers in the alert week, a 38-card ring) is caught while ordinary alerts are not.
 - **Blast radius.** When a case looks like fraud, the agent uses the shared device and the fraud ring to list the *other* cards and customers at risk now, with their recent spend. One alert becomes protection for the whole ring.
 
 ### From dataset to submission
@@ -155,6 +157,7 @@ After the tools, the agent scores the evidence, checks the stopping rules, reque
 | `scripts/run_benchmark.py` | Answers every benchmark case: actions before and after evidence, labelled assumed responses, graph write, validation, report |
 | `scripts/check_card_mapping.py` | Confirms the derived card IDs match the labels the case pack and closed cases use |
 | `scripts/discover_patterns.py` | Lists every fraud ring in the graph and flags the ones no documented pattern explains |
+| `scripts/load_dataset_to_graph.py` | Fills in closed-case attributes and transaction identity signals on a graph that was loaded without them, over MCP |
 
 The full order of operations, down to the submission form, is in [docs/submission/RUNBOOK.md](docs/submission/RUNBOOK.md), alongside the [demo script](docs/submission/DEMO_SCRIPT.md), [blog post](docs/submission/BLOG_POST.md) and [social posts](docs/submission/SOCIAL_POSTS.md).
 
@@ -402,7 +405,7 @@ A production deployment injects the TigerGraph-backed workflow and a real identi
 ## ✅ Validation
 
 ```bash
-pytest -q                      # 155 deterministic tests
+pytest -q                      # 164 deterministic tests
 cd frontend && npm run build   # type-checked production build
 ```
 
