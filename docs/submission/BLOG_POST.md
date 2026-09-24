@@ -25,7 +25,8 @@ case_pack trigger
  Agent loop ──tools──► TigerGraph MCP ──► installed GSQL queries
       │                    (agent_txn_profile, agent_customer_activity,
       │                     agent_device_activity, agent_device_ring,
-      │                     agent_linked_closed_cases, agent_closed_cases_by_pattern)
+      │                     agent_fraud_communities, agent_ring_profile,
+      │                     agent_linked_closed_cases, agent_prior_investigations)
       ▼
  Deterministic assessment: patterns → fraud probability → stopping rules
       │            │
@@ -47,7 +48,7 @@ The backend is Python (FastAPI); the workbench is Next.js, React and Cytoscape.j
 - **GSQL queries are the agent's tools.** Each is a small, read-only question with a clear answer. The agent calls them through the **official TigerGraph MCP server**, and every call is recorded with the reason it was made.
 - **A graph algorithm finds rings.** `agent_device_ring` runs a seeded, bounded connected-component expansion: device → transactions → cards → their other transactions → other devices, for two rounds, only within seven days of the alert. It returns the ring's customers, cards and devices, and any confirmed-fraud cases touching it. That feeds both the "coordinated, undocumented abuse" detector and the shared-origin reporting rule.
 - **It knows when a device means nothing.** Device profiles here are fingerprints (model, browser, screen), and some are shared by hundreds of customers. Our first version expanded rings through them and found "rings" of 6,000 customers for ordinary alerts. Our second version flagged bursts, and promptly mistook a Chrome release for a fraud ring: a new browser version packs hundreds of customers into its first weeks. The agent now asks three questions of every device: how many customers ever used it, how many used it in the week of the alert, and whether the profile names an actual device model or only "Windows". A generic desktop profile is never ring evidence, however busy. A specific phone build serving many cards in one week is, and that is exactly what the benchmark's analyst request HHG-014 describes: one Samsung Galaxy S7 edge build (`SM-G935F Build/NRD90M`) used by 24 of its 52 customers in the alert week, a 38-card ring, and no documented pattern that explains it.
-- **Case memory lives in the graph.** Each formal case becomes an `InvestigationCase` vertex linked to the flagged transaction, the customer, the card, connected cards, devices and similar closed cases.
+- **Case memory lives in the graph.** Each formal case becomes an `InvestigationCase` vertex linked to the flagged transaction, the customer, the card, connected cards, devices and similar closed cases, and later investigations read those links back.
 - **GraphRAG** grounds the explanation: after assessing, the agent runs vector search over `KnowledgeChunk` vertices (policy passages, pattern documents, closed-case narratives) through MCP, cites what it retrieved, and the LLM may only write from that.
 
 ## The agentic part, and where we kept it deterministic
@@ -67,11 +68,9 @@ What *is* agentic:
 
 **1. The agent chooses its questions by value of information.** When the evidence isn't enough, most agents ask a fixed next question. Ours simulates every possible answer to every request it could make, running each through the full deterministic assessment, and asks for the evidence whose answers lead to the most different decisions. For a card-testing case, asking the customer can end in *block the card*, *close as legitimate* or *monitor*: three decisions, two of which settle the case. Step-up authentication can't settle it either way. So the agent asks the customer, says why, and shows the analyst every branch before the answer arrives.
 
-**2. Every verdict comes with its counterfactual.** A waterfall shows exactly how many points each signal added to the fraud probability and how far the result sits from each threshold. Signals whose removal alone would flip the verdict are marked *decisive*. In one of our cases the probability was 0.852 against a 0.85 threshold, so every signal was decisive, and the analyst can see that the call is close rather than being handed a confident label.
+**2. Every verdict comes with its counterfactual.** A waterfall shows exactly how many points each signal added to the fraud probability and how far the result sits from each threshold. Signals whose removal alone would flip the verdict are marked *decisive*. When a probability sits just past a threshold, every signal is decisive, and the analyst can see that the call is close rather than being handed a confident label.
 
-**3. It describes the pattern nobody documented.** Finding a ring is not the same as explaining it, so `agent_ring_profile` summarises what each ring's cards did on their shared devices. The largest ring on the live graph: 73 transactions by 36 cards on 16 shared devices, 15 of them different Android phone builds, 100% online, 99% product C, median $31.70. None of the five documented patterns describes that.
-
-**4. It finds the pattern nobody documented.** The brief warns that not every fraud pattern in the data is documented. A weakly-connected-components query runs across cards and burst devices (3–10 customers on one device within 72 hours), and every ring spanning several customers is labelled: *known* when it touches confirmed fraud of a documented type, *undocumented* when nothing explains it. Those are the leads an analyst should read first.
+**3. It finds, and describes, the pattern nobody documented.** The brief warns that not every fraud pattern in the data is documented. A weakly-connected-components query runs across all 590,000 transactions, over cards and *burst devices* (3–10 customers on one device within 72 hours), and found eight rings. Finding a ring is not the same as explaining it, so `agent_ring_profile` summarises what each ring's cards did on their shared devices. The largest: 73 transactions by 36 cards on 16 shared devices, 15 of them different Android phone builds, 100% online, 99% product C, median $31.70. None of the five documented patterns describes that, so it is labelled *undocumented*. Two separate benchmark alerts, a card-testing case (HHG-011) and a customer's dispute (HHG-016), turned out to sit inside it, and each investigation cites the ring.
 
 **4. It acts, with receipts.** Automatic actions run through simulated bank systems as soon as policy recommends them, and protected actions only after approval. Each returns a receipt sealed into the audit chain, so "what did the agent actually do" has an answer.
 
@@ -79,26 +78,27 @@ What *is* agentic:
 
 ## How accurate is it?
 
-We replayed the bank's closed cases through the agent, hiding the case under test and every case opened after it, and compared the agent's pattern and verdict with the analysts' conclusions.
+We measured it two ways, and we'll be straight about both.
 
-We replayed 49 closed cases, sampled evenly across the seven analyst labels, while hiding the case under test and all later cases. After widening the evidence windows, aligning card-testing thresholds to the observed data, and removing historical-case-only ring false positives, pattern recall was 14% for account takeover, 0% for card-not-present fraud, 29% for card-not-present new device, 43% for out-of-region use, 71% for card testing, and 14% for undocumented activity. Card-testing precision was 100% in this sample. The agent decided four cases without further evidence; none matched the analyst outcome, while 38 fraud cases and 7 cleared cases remained uncertain. This is an honest calibration result, not a claim of benchmark accuracy, and it identifies detector tuning and evidence quality as the remaining accuracy work.
+**Against the bank's history.** We replayed 49 closed cases, sampled evenly across the seven analyst labels, hiding the case under test and every case opened after it. Pattern recall was 71% for card testing (with 100% precision in the sample), 43% for out-of-region use, 29% for card-not-present from a new device, 14% for account takeover and for undocumented activity, and 0% for plain card-not-present fraud. The agent settled only four cases without asking for more evidence; the rest it kept uncertain. That is a modest number, and it told us where to work: detector tuning, and the device evidence below.
 
-The calibration runner now disables the expensive full closed-case text index during blindfolded replay, preventing the measurement itself from timing out. The complete report is retained at `outputs/CALIBRATION_REAL.md`.
+**On the 20 benchmark cases, live on TigerGraph.** Every answer was produced through TigerGraph MCP and written back to the graph as an `InvestigationCase`; all 20 pass our validator. Our first live run labelled 13 of the 20 cases "undocumented" and produced answer files of 8,000 lines, because generic browser fingerprints were chaining unrelated customers into giant "rings". Fixing that, by asking whether a device names a real model and whether its customers are concentrated around the alert, brought it to three undocumented cases, each tied to evidence an analyst can check: one phone build used by 24 customers in a week (HHG-014), a card inside the 36-card ring (HHG-016), and a 33-customer ring around a rare device (HHG-019).
 
-The most useful number isn't raw agreement: it's how often the agent stays *uncertain* instead of guessing wrong. Uncertain cases go to the evidence-request branch, not straight to a block.
+The number we care most about isn't raw agreement: it's how often the agent stays *uncertain* instead of guessing wrong. Uncertain cases go to the evidence-request branch, not straight to a block.
 
 ## What we learned
 
 - **Graphs make the second question cheap.** "Who else used this device?" is one hop in TigerGraph and a painful self-join anywhere else. Most of our best evidence came from the second and third hop.
+- **A graph needs to know which edges mean something.** A device vertex shared by 250 people is not evidence of anything. The most valuable code we wrote decides, for each device, whether it is one physical device or a fingerprint, and it changed more answers than any other fix.
 - **Uncertainty is a feature.** Designing the "not enough evidence yet" path first made the whole agent more trustworthy than tuning for a confident verdict.
 - **Separate facts from prose.** Letting the LLM only narrate cited facts kept explanations readable without letting them drift from the evidence.
 
 ## What we'd do with more time
 
-- Vector-index every closed-case narrative for semantic similarity, alongside the structural matches.
-- Run the full weakly-connected-components and Louvain algorithms from the TigerGraph GDS library across the whole graph, and track rings over time.
+- Load the identity signals (new-device flags, proxy and match status) onto every transaction in the live graph, so the new-device and account-takeover detectors see what our CSV replay sees, then re-run the calibration.
+- Run Louvain from the TigerGraph GDS library alongside our connected components, and track how rings grow over time.
 - Integrate real customer messaging and step-up providers instead of labelled simulated responses.
 
 ---
 
-Code, benchmark answers and the demo: *(repository link)* · Demo video: *(link)* · Built on TigerGraph Savanna with @TigerGraphDB.
+Code and benchmark answers: https://github.com/ankit25bcs10610/TigerGraph-Agentic-Fraud-Investigation-HHGOA · Demo video: *(add link)* · Built on TigerGraph Savanna with @TigerGraphDB.
