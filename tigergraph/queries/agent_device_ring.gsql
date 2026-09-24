@@ -2,25 +2,28 @@
 // Alternates device -> transactions -> cards -> their transactions -> devices, for up to max_hops rounds,
 // and reports the ring's devices, cards, customers and any confirmed-fraud closed cases on its cards or transactions.
 // Only transactions between from_ts and to_ts are followed: a ring is people sharing devices at the same
-// time, not everyone who ever used a similar browser. Generic fingerprints (devices seen with more than
-// max_device_customers customers) are not expanded: they connect unrelated people and would turn every
-// ring into most of the graph. The walk also stops once it has reached max_cards cards.
+// time, not everyone who ever used a similar browser. Devices seen with more than max_device_customers
+// customers are fingerprints shared by unrelated people and are not expanded, with one exception: the
+// seed device itself, when at least a quarter of its customers used it inside the window (a burst on
+// the device under investigation, not a common fingerprint). The walk stops once it has max_cards cards.
 CREATE QUERY agent_device_ring(STRING device_profile_id, INT max_hops, INT max_device_customers, INT max_cards,
                                DATETIME from_ts, DATETIME to_ts) FOR GRAPH FraudInvestigationGraph {
   SetAccum<STRING> @@ids, @@devices, @@cards, @@customers, @@confirmed, @@skipped;
   SetAccum<VERTEX<Card>> @@card_set;
   SetAccum<VERTEX<Transaction>> @@txn_set;
-  SetAccum<VERTEX<Customer>> @users;
+  SetAccum<VERTEX<Customer>> @users, @window_users;
   SumAccum<INT> @@transactions, @@hops;
   OrAccum @seen;
   @@ids += device_profile_id;
   frontier = to_vertex_set(@@ids, "DeviceProfile");
   WHILE frontier.size() > 0 LIMIT max_hops DO
-    measured = SELECT d FROM frontier:d -(<FROM_DEVICE)- Transaction:t -(<made)- Card:k -(<OWNS)- Customer:c ACCUM d.@users += c;
+    measured = SELECT d FROM frontier:d -(<FROM_DEVICE)- Transaction:t -(<made)- Card:k -(<OWNS)- Customer:c
+               ACCUM d.@users += c, IF t.ts >= from_ts AND t.ts <= to_ts THEN d.@window_users += c END;
     frontier = SELECT d FROM frontier:d
                POST-ACCUM d.@seen = TRUE,
-                          IF d.@users.size() > max_device_customers THEN @@skipped += d.device_profile_id ELSE @@devices += d.device_profile_id END
-               HAVING d.@users.size() <= max_device_customers;
+                          IF d.@users.size() > max_device_customers AND (@@hops > 0 OR d.@window_users.size() * 4 < d.@users.size())
+                          THEN @@skipped += d.device_profile_id ELSE @@devices += d.device_profile_id END
+               HAVING d.@users.size() <= max_device_customers OR (@@hops == 0 AND d.@window_users.size() * 4 >= d.@users.size());
     IF frontier.size() == 0 THEN BREAK; END;
     @@hops += 1;
     txns = SELECT t FROM frontier:d -(<FROM_DEVICE)- Transaction:t

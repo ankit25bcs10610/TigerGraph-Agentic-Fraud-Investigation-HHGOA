@@ -45,7 +45,7 @@ from backend.policy.approvals import get_approval_route
 from backend.policy.knowledge import PolicyKnowledge
 from backend.policy.rules import CustomerResponse, PolicyContext, recommend_actions
 from backend.policy.sar import build_sar, evaluate_sar, generate_grounded_sar
-from backend.sources.base import COMMON_DEVICE_CUSTOMERS, CaseDataSource, ClosedCaseRecord, RingResult, Txn
+from backend.sources.base import COMMON_DEVICE_CUSTOMERS, CaseDataSource, ClosedCaseRecord, Community, RingResult, Txn, generic_device
 
 PATTERN_WINDOW = timedelta(hours=48)
 NETWORK_WINDOW = timedelta(days=7)
@@ -149,6 +149,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         self.compute_decision_paths = compute_decision_paths
         self.case_service = case_service
         self._rag: Any = None
+        self._rings_by_card: dict[str, Community] | None = None
         self._closed_index = {case.case_id: case for case in getattr(source, "_closed", ())}
 
     def _persist_formal_case(self, state: dict[str, Any]) -> None:
@@ -211,6 +212,13 @@ class LocalInvestigationEngine(ReferenceWorkflow):
     def source_name(self) -> str:
         return getattr(self.source, "name", "none")
 
+    def _ring_for_card(self, card_id: str) -> Community | None:
+        """The graph-wide burst-device ring (agent_fraud_communities, computed once) that holds this card."""
+        if self._rings_by_card is None:
+            communities = self.source.communities(3, 50) if self.source is not None and hasattr(self.source, "communities") else []
+            self._rings_by_card = {card: community for community in communities for card in community.cards}
+        return self._rings_by_card.get(card_id)
+
     # ------------------------------------------------------------ investigate
 
     MAX_TOOL_STEPS = 6
@@ -219,14 +227,18 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         """The graph tools that make sense right now, in the investigator's default order."""
         target: Txn = gathered["target"]
         done = gathered["done"]
-        device = None if target.generic_device else target.device_profile_id
+        device = target.device_profile_id
+        generic = bool(gathered.get("device_view", {}).get("generic"))
         options = []
         if "get_customer_activity" not in done:
             options.append(ToolOption("get_customer_activity", f"All transactions of customer {target.customer_id} across their cards: the behavioural baseline.", "Build the customer's baseline across every card they hold."))
         if device and "get_device_activity" not in done:
             options.append(ToolOption("get_device_activity", f"Every transaction seen on device {device}, whoever made it.", f"Check who else has used device {device}."))
-        if device and "get_device_activity" in done and "detect_device_ring" not in done and (gathered["network"] or (target.device_status or "").lower() == "new"):
+        if device and "get_device_activity" in done and "detect_device_ring" not in done and not generic and (gathered["network"] or (target.device_status or "").lower() == "new"):
             options.append(ToolOption("detect_device_ring", f"Graph algorithm: bounded connected component around device {device} to find a fraud ring.", "The device is shared or new: expand the connected component around it to look for a fraud ring."))
+        if target.card_id and "find_ring_membership" not in done:
+            options.append(ToolOption("find_ring_membership", f"Graph algorithm: is card {target.card_id} in one of the graph-wide rings (weakly connected components over cards and burst devices)?",
+                                      "Check whether this card belongs to a ring found across the whole graph, even if its own device is common."))
         if "get_linked_closed_cases" not in done:
             options.append(ToolOption("get_linked_closed_cases", "Closed investigations on this customer, card or the customers sharing its device, with outcomes.", "Case memory: find prior investigations on this customer, card or the customers sharing its device."))
         return options
@@ -236,8 +248,9 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         target: Txn = gathered["target"]
         lines = [f"Flagged transaction {target.transaction_id}: {_money(target.amount)} {target.channel} on card {target.card_id or 'unknown'}, region {target.region or 'unknown'}, "
                  f"device {target.device_profile_id or 'none'} (status {target.device_status or 'unknown'}, proxy {target.proxy_type or 'none'})."]
-        if target.generic_device:
-            lines.append(f"Device {target.device_profile_id} is a generic fingerprint seen with {target.device_customers} customers, so it does not identify one device.")
+        view = gathered.get("device_view")
+        if view and view["generic"]:
+            lines.append(f"Device {target.device_profile_id} is a generic fingerprint: {view['customers']} customers overall, only {view['window_customers']} around this alert.")
         if "get_customer_activity" in gathered["done"]:
             prior = [item for item in gathered["history"] if item.ts < target.ts]
             typical = median(item.amount for item in prior) if prior else 0
@@ -247,6 +260,9 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         if gathered["ring"]:
             ring = gathered["ring"]
             lines.append(f"Ring: {len(ring.customers)} customers, {len(ring.cards)} cards, {len(ring.confirmed_cases)} confirmed fraud cases.")
+        if "find_ring_membership" in gathered["done"]:
+            found = gathered["community"]
+            lines.append(f"Graph-wide ring: {found.size} customers, {len(found.cards)} cards, {len(found.devices)} burst devices." if found else "The card is in no graph-wide ring.")
         if "get_linked_closed_cases" in gathered["done"]:
             lines.append(f"Linked closed cases: {len(gathered['linked'])} ({sum(1 for case in gathered['linked'] if case.confirmed_fraud)} confirmed fraud).")
         return "\n".join(lines)
@@ -263,11 +279,23 @@ class LocalInvestigationEngine(ReferenceWorkflow):
             device = target.device_profile_id
             on_device = trace.call(name, {"device_profile_id": device}, reason, lambda: source.device_transactions(device),
                                    lambda rows: f"{len(rows)} transactions from {len({row.customer_id for row in rows})} customers", planner=planner) or []
-            gathered["network"] = [item for item in on_device if item.customer_id and item.customer_id != target.customer_id and abs(item.ts - target.ts) <= NETWORK_WINDOW]
+            in_window = [item for item in on_device if item.customer_id and abs(item.ts - target.ts) <= NETWORK_WINDOW]
+            total = max(len({item.customer_id for item in on_device if item.customer_id}), target.device_customers or 0)
+            window_customers = len({item.customer_id for item in in_window} | {target.customer_id})
+            generic = generic_device(total, window_customers)
+            gathered["device_view"] = {"customers": total, "window_customers": window_customers, "generic": generic, "burst": total > COMMON_DEVICE_CUSTOMERS and not generic}
+            gathered["network"] = [] if generic else [item for item in in_window if item.customer_id != target.customer_id]
+            if generic:
+                trace.note("skip_device_tools", "rules", {"device_profile_id": device, "customers_on_device": total, "customers_this_week": window_customers},
+                           f"More than {COMMON_DEVICE_CUSTOMERS} customers overall and under a quarter of them around this alert: a fingerprint shared by unrelated people, not one device.",
+                           "device sharing and ring expansion skipped")
         elif name == "detect_device_ring":
             device = target.device_profile_id
             gathered["ring"] = trace.call(name, {"device_profile_id": device, "max_hops": RING_HOPS, "window": "±7 days"}, reason, lambda: source.device_ring(device, RING_HOPS, target.ts),
                                           lambda result: f"{len(result.customers)} customers, {len(result.cards)} cards, {len(result.devices)} devices, {len(result.confirmed_cases)} confirmed cases" if result else "no ring", planner=planner)
+        elif name == "find_ring_membership":
+            gathered["community"] = trace.call(name, {"card_id": target.card_id}, reason, lambda: self._ring_for_card(target.card_id),
+                                               lambda found: f"ring of {found.size} customers, {len(found.cards)} cards, {len(found.devices)} burst devices" if found else "not in any ring", planner=planner)
         elif name == "get_linked_closed_cases":
             network = gathered["network"]
             gathered["linked"] = trace.call(name, {"customer_id": target.customer_id, "card_id": target.card_id}, reason,
@@ -286,11 +314,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
             return None
         if not target.card_id and case_input.get("card_id") and target.customer_id == case_input.get("customer_id"):
             target = Txn(**{**target.__dict__, "card_id": case_input["card_id"]})
-        gathered: dict[str, Any] = {"target": target, "history": [target], "network": [], "ring": None, "linked": [], "done": set()}
-        if target.generic_device:
-            trace.note("skip_device_tools", "rules", {"device_profile_id": target.device_profile_id, "customers_on_device": target.device_customers},
-                       f"A fingerprint seen with more than {COMMON_DEVICE_CUSTOMERS} customers is shared by unrelated people, not one device.",
-                       "device sharing and ring expansion skipped")
+        gathered: dict[str, Any] = {"target": target, "history": [target], "network": [], "ring": None, "community": None, "linked": [], "done": set()}
         budget = self.MAX_TOOL_STEPS
         while budget > 0:
             options = self._tool_options(gathered)
@@ -309,7 +333,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         if len(self.memory):
             trace.note("recall_case_memory", "case-memory", {"customer_id": target.customer_id}, "Check this agent's own earlier investigations on the same entities.", f"{len(remembered)} related investigations")
         card_history = [item for item in history if item.card_id == target.card_id] if target.card_id else history
-        return {"input": dict(case_input), "target": target, "history": history, "card_history": card_history, "network": gathered["network"], "ring": gathered["ring"],
+        return {"input": dict(case_input), "target": target, "history": history, "card_history": card_history, "network": gathered["network"], "ring": gathered["ring"], "device_view": gathered.get("device_view"), "community": gathered["community"],
                 "linked": gathered["linked"], "remembered": remembered, "trace": trace}
 
     def _retrieve_grounding(self, context: dict[str, Any], assessment: dict[str, Any]) -> None:
@@ -365,12 +389,15 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         confirmed_links = [(case, reasons) for case, reasons in linked if case.confirmed_fraud]
         other_customers = sorted({item.customer_id for item in network})
         other_cards = sorted({item.card_id for item in network if item.card_id and item.card_id != target.card_id})
-        ring_cards = sorted(set(ring.cards) - {target.card_id}) if ring else []
+        community: Community | None = context.get("community")
+        ring_cards = sorted(((set(ring.cards) if ring else set()) | (set(community.cards) if community else set())) - {target.card_id})
+        ring_confirmed = set(ring.confirmed_cases if ring else ()) | set(community.confirmed_cases if community else ())
 
         pattern = classify_pattern(PatternContext(
             target=_evidence(target), card_history=tuple(map(_evidence, card_history)), customer_history=tuple(map(_evidence, context["history"])),
             network_transactions=tuple(map(_evidence, network)), connected_card_ids=tuple(sorted(set(other_cards) | set(ring_cards))),
-            confirmed_related_case_ids=tuple(sorted({case.case_id for case, _ in confirmed_links} | set(ring.confirmed_cases if ring else ()))),
+            confirmed_related_case_ids=tuple(sorted({case.case_id for case, _ in confirmed_links} | ring_confirmed)),
+            ring_customer_count=community.size if community else 0,
         ))
         if pattern.pattern is not FraudPattern.NONE:
             fact(f"Pattern {pattern.pattern.value.replace('_', ' ')} detected: {'; '.join(pattern.supporting_evidence)}.", [target.transaction_id, target.card_id], "pattern")
@@ -397,12 +424,19 @@ class LocalInvestigationEngine(ReferenceWorkflow):
             fact(f"Device {target.device_profile_id or 'on the flagged transaction'} is new for this card{' (identity marks it New)' if device_new else ''}.", [target.transaction_id, target.device_profile_id or ""], "device")
         elif target.device_profile_id and target.device_profile_id in prior_devices:
             fact(f"Device {target.device_profile_id} has been used on this card before.", [target.device_profile_id], "device_known", EvidenceDirection.LEGITIMATE)
-        if target.generic_device:
-            fact(f"Device {target.device_profile_id} is a generic fingerprint seen with {target.device_customers} customers across the graph, so sharing it is not evidence of a ring.", [target.device_profile_id])
+        view = context.get("device_view") or {}
+        if view.get("generic"):
+            fact(f"Device {target.device_profile_id} is a generic fingerprint: {view['customers']} customers used it overall and only {view['window_customers']} within seven days of this alert, so sharing it is not evidence of a ring.", [target.device_profile_id])
+        elif view.get("burst"):
+            fact(f"Device {target.device_profile_id} served {view['window_customers']} of its {view['customers']} customers within seven days of this alert: a concentrated burst on one device, not a common fingerprint.", [target.device_profile_id], "device_burst")
         if ring and (len(ring.customers) >= 3 or ring.confirmed_cases):
             touching = f", touching confirmed fraud case(s) {', '.join(ring.confirmed_cases[:4])}" if ring.confirmed_cases else ""
             fact(f"Fraud-ring analysis: device {ring.seed_device} sits in a connected component of {len(ring.customers)} customers, {len(ring.cards)} cards and {len(ring.devices)} devices within {ring.hops} hops{touching}.",
                  [ring.seed_device, *ring.cards[:6]], "ring")
+        if community:
+            touching = f", touching confirmed fraud case(s) {', '.join(community.confirmed_cases[:4])}" if community.confirmed_cases else ""
+            fact(f"Graph-wide ring: card {target.card_id} is one of {len(community.cards)} cards of {community.size} customers linked through {len(community.devices)} burst devices "
+                 f"(each used by 3–10 customers within 72 hours){touching}.", [target.card_id, *community.devices[:4]], "ring")
 
         region = 0.0
         prior_regions = {item.region for item in prior if item.region}
@@ -481,7 +515,8 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         asked = {response.get("type") for response in responses}
         further_unlikely = {"customer_validation", "step_up_auth"} <= asked
         stop = evaluate_stopping(fraud_probability=probability, evidence=independent, verification=verification, further_investigation_unlikely=further_unlikely)
-        shared_origin = len(other_customers) >= 2 or (bool(other_customers) and bool(confirmed_links)) or bool(ring and ring.confirmed_cases and len(ring.customers) >= 3)
+        shared_origin = (len(other_customers) >= 2 or (bool(other_customers) and bool(confirmed_links)) or bool(ring and ring.confirmed_cases and len(ring.customers) >= 3)
+                         or bool(community and community.size >= 3))
         coordinated = pattern.pattern is FraudPattern.UNDOCUMENTED
         confirmed_cards = {case.card_id for case, _ in confirmed_links if case.customer_id == target.customer_id and case.card_id}
         independent_count = len({item.independence_key for item in independent if item.direction is EvidenceDirection.FRAUD})
@@ -638,11 +673,16 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         for card in (ring.cards if ring else ()):
             if card != target.card_id and card not in cards:
                 cards[card] = {"card_id": card, "customer_id": "", "transactions": 0, "spend_usd": 0.0, "first_seen": "", "last_seen": "", "link": f"fraud ring within {ring.hops} hops"}
+        community: Community | None = context.get("community")
+        for card in (community.cards if community else ()):
+            if card != target.card_id and card not in cards:
+                cards[card] = {"card_id": card, "customer_id": "", "transactions": 0, "spend_usd": 0.0, "first_seen": "", "last_seen": "", "link": "graph-wide burst-device ring"}
         if not cards:
             return None
         rows = sorted(cards.values(), key=lambda row: (-row["spend_usd"], row["card_id"]))
         return {"target": {"card_id": target.card_id, "first_seen": target.ts.isoformat(), "spend_usd": target.amount}, "cards": rows[:12], "card_count": len(rows), "customers": len({row["customer_id"] for row in rows if row["customer_id"]}),
-                "recent_spend_usd": round(sum(row["spend_usd"] for row in rows), 2), "confirmed_cases": list(ring.confirmed_cases) if ring else []}
+                "recent_spend_usd": round(sum(row["spend_usd"] for row in rows), 2),
+                "confirmed_cases": sorted(set(ring.confirmed_cases if ring else ()) | set(community.confirmed_cases if community else ()))}
 
     def _render(self, state: dict[str, Any], assessment: dict[str, Any], *, narrate: bool = True) -> None:
         context = self._contexts[state["case_id"]]

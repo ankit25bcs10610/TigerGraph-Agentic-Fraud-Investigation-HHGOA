@@ -40,6 +40,7 @@ class PatternContext:
     confirmed_related_case_ids: tuple[str, ...] = ()
     known_pattern_results: tuple["PatternResult", ...] = ()
     customer_confirmed_legitimate: bool = False
+    ring_customer_count: int = 0   # customers in the graph-wide burst-device ring holding this card
 
 
 @dataclass
@@ -318,6 +319,7 @@ def detect_undocumented(context: PatternContext) -> PatternResult:
     coordinated = (
         len(other_customers) >= 2
         or (len(other_customers) >= 1 and len(set(context.connected_card_ids)) >= 2)
+        or (context.ring_customer_count >= 3 and len(set(context.connected_card_ids)) >= 2)
     )
     known_match = any(
         result.pattern in {
@@ -331,7 +333,7 @@ def detect_undocumented(context: PatternContext) -> PatternResult:
         return _result(
             FraudPattern.UNDOCUMENTED,
             [
-                f"coordinated activity spans {len(other_customers)} other customers",
+                f"coordinated activity spans {max(len(other_customers), context.ring_customer_count - 1)} other customers",
                 f"{len(set(context.connected_card_ids))} connected cards were supplied",
                 f"{len(context.confirmed_related_case_ids)} related confirmed cases were supplied",
             ],
@@ -381,6 +383,7 @@ def classify_pattern(context: PatternContext) -> PatternResult:
             confirmed_related_case_ids=context.confirmed_related_case_ids,
             known_pattern_results=tuple(results),
             customer_confirmed_legitimate=context.customer_confirmed_legitimate,
+            ring_customer_count=context.ring_customer_count,
         )
     )
     return undocumented if undocumented.pattern is FraudPattern.UNDOCUMENTED else detect_none(context)

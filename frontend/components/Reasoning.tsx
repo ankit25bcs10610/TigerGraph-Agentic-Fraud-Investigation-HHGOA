@@ -9,13 +9,13 @@ import { Panel } from "./Panels";
 const toolIcon: Record<string, IconName> = {
   get_transaction: "swap", get_customer_activity: "user", get_device_activity: "device", detect_device_ring: "graph",
   get_linked_closed_cases: "folder", get_closed_cases_by_pattern: "folder", recall_case_memory: "ledger", synthesize_explanation: "doc",
-  graphrag_retrieve: "search", finish_investigation: "check",
+  graphrag_retrieve: "search", finish_investigation: "check", skip_device_tools: "shield", find_ring_membership: "graph",
 };
 
 const plannerLabel: Record<string, string> = { llm: "Chosen by LLM", "llm-fallback": "LLM fallback: rules", rules: "Rule planner", required: "Required step" };
 
 export const sourceLabel: Record<string, string> = { "tigergraph-mcp": "TigerGraph MCP", csv: "CSV files", "case-memory": "Case memory", llm: "LLM", none: "No graph",
-  "graphrag:tfidf": "GraphRAG (TF-IDF)", "graphrag:tigergraph-vector": "GraphRAG (TigerGraph vectors)", "planner:llm": "LLM planner", "planner:rules": "Rule planner" };
+  rules: "Rule planner", "graphrag:tfidf": "GraphRAG (TF-IDF)", "graphrag:tigergraph-vector": "GraphRAG (TigerGraph vectors)", "planner:llm": "LLM planner", "planner:rules": "Rule planner" };
 
 function args(step: AgentStep) {
   return Object.entries(step.args).map(([key, value]) => `${key}=${String(value)}`).join(", ");

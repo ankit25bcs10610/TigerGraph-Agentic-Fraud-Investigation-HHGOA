@@ -222,3 +222,18 @@ def test_rings_endpoint_returns_labelled_rings():
     app = create_app(workflow=LocalInvestigationEngine(source, memory=CaseMemory()), case_provider=CasePackProvider(str(SAMPLE / "case_pack.csv")))
     rings = TestClient(app).get("/network/rings").json()
     assert {ring["label"] for ring in rings} == {"known_ring", "candidate_undocumented"}
+
+
+def test_generic_fingerprint_is_not_sharing_evidence_but_a_burst_is():
+    from backend.sources.base import generic_device
+
+    assert generic_device(158, 34)          # many customers spread over months
+    assert not generic_device(52, 24)       # nearly half of them in the alert week: a burst on one device
+    assert not generic_device(6, 1)         # a handful of customers is always specific
+
+
+def test_ring_membership_links_a_card_whose_own_device_is_common(agent):
+    provider, engine = agent
+    state = engine.start_investigation(provider.get("SMP-007"))
+    assert any(step["tool"] == "find_ring_membership" and "ring of 3 customers" in step["result"] for step in state["agent_trace"])
+    assert any(item["claim"].startswith("Graph-wide ring:") for item in state["case"]["evidence"])

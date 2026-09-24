@@ -6,9 +6,11 @@ from datetime import datetime, timedelta
 from typing import Any, Protocol
 
 # Device fingerprints in this dataset (model / browser / screen) are often generic: one
-# "Windows / chrome / 1920x1080" profile serves hundreds of customers. A device seen with more
-# customers than this does not identify a device, so it is not used as sharing or ring evidence.
+# "Windows / chrome / 1920x1080" profile serves hundreds of customers steadily for months. A device
+# seen with more customers than this is generic unless at least BURST_SHARE of them used it around
+# the alert: many customers concentrated in one week is a burst on one device, not a fingerprint.
 COMMON_DEVICE_CUSTOMERS = 10
+BURST_SHARE = 0.25
 # A fraud ring is people sharing devices at the same time: ring expansion only follows
 # transactions within this window of the flagged one, and stops at RING_MAX_CARDS cards.
 RING_WINDOW = timedelta(days=7)
@@ -64,9 +66,10 @@ class Txn:
     match_status: str | None = None
     device_customers: int | None = None   # distinct customers ever seen on device_profile_id
 
-    @property
-    def generic_device(self) -> bool:
-        return bool(self.device_profile_id) and (self.device_customers or 0) > COMMON_DEVICE_CUSTOMERS
+
+def generic_device(total_customers: int, window_customers: int) -> bool:
+    """A fingerprint shared by many customers spread over time, rather than one device used in a burst."""
+    return total_customers > COMMON_DEVICE_CUSTOMERS and window_customers < BURST_SHARE * total_customers
 
 
 @dataclass(frozen=True)

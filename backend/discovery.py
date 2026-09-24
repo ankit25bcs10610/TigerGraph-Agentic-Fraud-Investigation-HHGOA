@@ -18,8 +18,12 @@ DOCUMENTED = {"card_testing", "card_not_present_fraud", "card_not_present_new_de
 
 
 def discover(source: Any, case_pack: list[dict[str, Any]] | None = None, *, min_customers: int = 3, top_k: int = 15) -> list[dict[str, Any]]:
-    closed = {case.case_id: case for case in getattr(source, "_closed", ())}
+    # The CSV source keeps every transaction and closed case in memory; on the live graph the
+    # community query already carries the members, so these stay empty.
+    closed_cases = getattr(source, "_closed", ())
+    closed = {case.case_id: case for case in closed_cases} if isinstance(closed_cases, (list, tuple)) else {}
     txns = getattr(source, "_txns", {})
+    txns = txns if isinstance(txns, dict) else {}
     flagged = {item.get("flagged_txn_id"): item["case_id"] for item in (case_pack or []) if item.get("flagged_txn_id")}
     results = []
     for community in source.communities(min_customers, top_k):

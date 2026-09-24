@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from backend.sources.base import (BURST_MIN_CUSTOMERS, BURST_SPAN_HOURS, COMMON_DEVICE_CUSTOMERS, RING_MAX_CARDS, RING_WINDOW,
-                                  ClosedCaseRecord, Community, RingResult, Txn, clean, parse_float, parse_time)
+                                  ClosedCaseRecord, Community, RingResult, Txn, clean, generic_device, parse_float, parse_time)
 from scripts.prepare_graph_data import CARD_FIELDS, card_id as loader_card_id, device_profile
 
 
@@ -135,7 +135,11 @@ class CsvSource:
         frontier_devices = {device_profile_id}
         hops = 0
         while frontier_devices and hops < max_hops:
-            generic = {device for device in frontier_devices if self._device_customers(device) > COMMON_DEVICE_CUSTOMERS}
+            if hops == 0:  # the device under investigation: generic only if its customers are not concentrated in the window
+                generic = {device for device in frontier_devices
+                           if generic_device(self._device_customers(device), len({self._txns[txn].customer_id for txn in self._by_device.get(device, []) if in_window(txn)}))}
+            else:
+                generic = {device for device in frontier_devices if self._device_customers(device) > COMMON_DEVICE_CUSTOMERS}
             skipped |= generic
             frontier_devices -= generic
             devices |= frontier_devices
