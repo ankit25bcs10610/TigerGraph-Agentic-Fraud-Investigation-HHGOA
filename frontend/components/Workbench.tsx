@@ -73,14 +73,33 @@ export function Workbench() {
     try {
       const health = await api.health();
       if (!health.workflow_configured) { setConnection("setup"); setCases([]); return; }
-      const items = await api.overview();
-      setCases(items); setConnection("online");
-      setSelected((current) => current || items[0]?.case_id || "");
+      setConnection("online");
+      try {
+        const items = await api.overview();
+        setCases(items);
+        setSelected((current) => current || items[0]?.case_id || "");
+      } catch (caught) {
+        setError(message(caught, "The case queue could not be loaded."));
+      }
     } catch (caught) {
       setConnection("offline"); setError(message(caught, "The investigation API could not be reached."));
     }
   }, []);
   useEffect(() => { void connect(); }, [connect]);
+
+  useEffect(() => {
+    if (!data?.llm_pending) return;
+    const timer = window.setInterval(async () => {
+      try {
+        const latest = await api.state(data.case_id);
+        if (!latest.llm_pending) {
+          setData(latest);
+          window.clearInterval(timer);
+        }
+      } catch { /* keep the deterministic result if the narrative poll fails */ }
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [data?.case_id, data?.llm_pending]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -93,10 +112,10 @@ export function Workbench() {
 
   const run = useCallback(async (caseId: string, target: View = "overview") => {
     if (!caseId) return;
-    setSelected(caseId); setBusy(true); setError("");
+    setSelected(caseId); setBusy(true); setError(""); setView(target);
     try {
       const state = await api.start(caseId);
-      setData(state); setVisited((seen) => new Set(seen).add(caseId)); setView(target);
+      setData(state); setVisited((seen) => new Set(seen).add(caseId));
       log(`Investigation run on ${caseId}`, state.case?.verdict === "fraud" ? "risk" : state.case?.verdict === "uncertain" ? "warn" : "info", state.case?.verdict ? `${humanize(state.case.verdict)}, ${humanize(state.status ?? "")}` : humanize(state.status ?? ""));
       void refreshCases();
     }
@@ -178,6 +197,7 @@ export function Workbench() {
   const current = view;
   const page = sectionFor(current);
   const range = dayRange(cases.map((item) => item.opened_at));
+  const loadingCase = busy && Boolean(selected) && data?.case_id !== selected;
 
   return <div className={`shell ${collapsed ? "collapsed" : ""}`}>
     <Sidebar busy={busy} caseCount={cases.length} collapsed={collapsed} connection={connection} data={data} onLoadPack={() => fileRef.current?.click()} onNavigate={setView} onRetry={() => void connect()} onToggle={() => setCollapsed(!collapsed)} view={view} />
@@ -205,7 +225,7 @@ export function Workbench() {
         {error && <div className="alert" role="alert"><strong>{error}</strong>{connection === "offline" && <button className="button ghost" onClick={() => void connect()} type="button"><Icon name="refresh" size={15} />Retry</button>}<button aria-label="Dismiss" className="icon-button small" onClick={() => setError("")} type="button"><Icon name="x" size={14} /></button></div>}
         {!api.isConfigured && <div className="alert"><strong>Set NEXT_PUBLIC_API_BASE_URL in frontend/.env.local, then restart the workbench.</strong></div>}
 
-        {current === "command" ? <CommandCenter activity={activity} busy={busy} cases={cases} connection={connection} onLoadPack={() => fileRef.current?.click()} onOpen={openFromQueue} onRetry={() => void connect()} query={query} selected={selected} theme={theme} visited={visited} /> : !data ? <NoCase busy={busy} cases={cases} connection={connection} onLoadPack={() => fileRef.current?.click()} onOpen={(id, target) => void run(id, target)} onRetry={() => void connect()} view={current} /> : <>
+        {current === "command" ? <CommandCenter activity={activity} busy={busy} cases={cases} connection={connection} onLoadPack={() => fileRef.current?.click()} onOpen={openFromQueue} onRetry={() => void connect()} query={query} selected={selected} theme={theme} visited={visited} /> : loadingCase ? <section className="panel onboarding"><span className="onboarding-mark"><Icon className="spin" name="refresh" size={28} /></span><h1>Running investigation</h1><p>Gathering graph evidence, case memory and policy-grounded reasoning for {selected}…</p></section> : !data ? <NoCase busy={busy} cases={cases} connection={connection} onLoadPack={() => fileRef.current?.click()} onOpen={(id, target) => void run(id, target)} onRetry={() => void connect()} view={current} /> : <>
           <CaseHeader busy={busy} data={data} neighbours={neighbours} onExport={exportCase} onOpen={(id) => void run(id, current)} onRun={() => void run(data.case_id, current)} />
           {current === "overview" && <>
             <KeyFigures data={data} />
@@ -280,4 +300,3 @@ function CaseHeader({ data, busy, neighbours, onRun, onExport, onOpen }: { data:
     </div>
   </section>;
 }
-

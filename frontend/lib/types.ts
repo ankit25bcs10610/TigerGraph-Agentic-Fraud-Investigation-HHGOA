@@ -45,6 +45,7 @@ export type Investigation = {
   policy_grounding?: PolicyCitation[];
   data_source?: string;
   llm_usage?: { model: string; total_tokens: number };
+  llm_pending?: boolean;
   decision_paths?: DecisionPath[];
   score_breakdown?: { probability: number; fraud_threshold: number; legitimate_threshold: number; contributions: Contribution[] };
   blast_radius?: BlastRadius | null;

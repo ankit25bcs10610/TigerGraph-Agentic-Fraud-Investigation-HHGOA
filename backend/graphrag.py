@@ -14,6 +14,7 @@ the UI and the answer files can say exactly where grounding came from.
 """
 from __future__ import annotations
 
+import asyncio
 import math
 import os
 import re
@@ -113,6 +114,21 @@ class TigerGraphVectorRAG:
             self._vector_available = False
             return self.fallback.retrieve(query, kind, top_k)
         return [Passage(item.source_reference, kind, item.chunk.title, item.chunk.text, item.chunk.source_id, round(item.similarity_score or 0.0, 3), self.method) for item in chunks]
+
+    async def _retrieve_all(self, query: str) -> dict[str, list[Passage]]:
+        cases, patterns, policy = await asyncio.gather(
+            self.retriever.search_similar_closed_cases(query, 3),
+            self.retriever.search_patterns(query, 2),
+            self.retriever.search_policy(query, 3),
+        )
+        return {
+            "policy": [Passage(item.source_reference, "policy", item.chunk.title, item.chunk.text, item.chunk.source_id, round(item.similarity_score or 0.0, 3), self.method) for item in policy],
+            "patterns": [Passage(item.source_reference, "pattern_document", item.chunk.title, item.chunk.text, item.chunk.source_id, round(item.similarity_score or 0.0, 3), self.method) for item in patterns],
+            "cases": [Passage(item.source_reference, "closed_case", item.chunk.title, item.chunk.text, item.chunk.source_id, round(item.similarity_score or 0.0, 3), self.method) for item in cases],
+        }
+
+    def retrieve_all(self, query: str) -> dict[str, list[Passage]]:
+        return self.source._loop.run(self._retrieve_all(query), 60)
 
 
 def open_graphrag(source: Any, knowledge: PolicyKnowledge) -> Any:

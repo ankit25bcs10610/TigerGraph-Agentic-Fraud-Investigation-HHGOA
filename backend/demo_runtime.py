@@ -7,6 +7,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import mmap
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,18 +15,41 @@ from typing import Any
 
 
 class CasePackProvider:
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, transactions_path: str | None = None) -> None:
         with Path(path).open(newline="", encoding="utf-8") as handle:
             self._cases = {row["case_id"]: row for row in csv.DictReader(handle)}
+        self._risk_scores: dict[str, str] = {}
+        if transactions_path and Path(transactions_path).exists():
+            targets = {str(row.get("flagged_txn_id") or "") for row in self._cases.values() if not row.get("risk_score")}
+            with Path(transactions_path).open("rb") as handle, mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ) as mapped:
+                header = next(csv.reader([mapped.readline().decode("utf-8", "replace")]))
+                risk_index = header.index("risk_score") if "risk_score" in header else -1
+                while risk_index >= 0 and targets:
+                    line = mapped.readline()
+                    if not line:
+                        break
+                    transaction_id = line.split(b",", 1)[0].decode("utf-8", "replace")
+                    if transaction_id not in targets:
+                        continue
+                    fields = next(csv.reader([line.decode("utf-8", "replace")]))
+                    if risk_index < len(fields) and fields[risk_index]:
+                        self._risk_scores[transaction_id] = fields[risk_index]
+                        targets.remove(transaction_id)
+
+    def _with_risk_score(self, row: dict[str, Any]) -> dict[str, Any]:
+        result = dict(row)
+        if not result.get("risk_score"):
+            result["risk_score"] = self._risk_scores.get(str(result.get("flagged_txn_id") or ""), "")
+        return result
 
     def list(self) -> list[dict[str, Any]]:
         fields = ("case_id", "trigger_type", "trigger_text", "opened_at", "flagged_txn_id", "customer_id", "card_id", "risk_score")
-        return [{field: row.get(field, "") for field in fields} for row in self._cases.values()]
+        return [{field: self._with_risk_score(row).get(field, "") for field in fields} for row in self._cases.values()]
 
     def get(self, case_id: str) -> dict[str, Any]:
         if case_id not in self._cases:
             raise KeyError(case_id)
-        return dict(self._cases[case_id])
+        return self._with_risk_score(self._cases[case_id])
 
 
 # Only these transaction columns are read; the rest of the wide source table is ignored.
@@ -167,4 +191,4 @@ def build_reference_runtime(path: str, transactions_path: str | None = None, clo
     identity = os.getenv("IDENTITY_PATH")
     kind = "csv" if transactions_path is not None else os.getenv("DATA_SOURCE", "csv")
     source = open_source(kind, transactions=transactions, identity=identity, closed_cases=closed_cases) if (kind.lower().startswith("tiger") or transactions) else None
-    return CasePackProvider(path), LocalInvestigationEngine(source)
+    return CasePackProvider(path, transactions), LocalInvestigationEngine(source)

@@ -37,6 +37,7 @@ export const api = {
   overview: () => call<CaseOverview[]>("/cases/overview"),
   rings: () => call<Ring[]>("/network/rings?min_customers=3&top_k=8"),
   start: (caseId: string) => call<Investigation>("/investigations/start", { method: "POST", body: JSON.stringify({ case_id: caseId }) }),
+  state: (caseId: string) => call<Investigation>(`/investigations/${caseId}`),
   approve: (caseId: string, action: string, approved: boolean) => call<Investigation>(`/investigations/${caseId}/approval`, { method: "POST", body: JSON.stringify({ action, approved }) }),
   evidence: (caseId: string, request: EvidenceRequest, result: string, details: string) => call<Investigation>(`/investigations/${caseId}/evidence`, { method: "POST", body: JSON.stringify({ evidence: { request_id: request.request_id, case_id: caseId, type: request.type, result, details, source: request.type === "customer_validation" ? "customer" : request.type === "step_up_auth" ? "step_up_auth" : "analyst" } }) }),
 };

@@ -78,16 +78,18 @@ data/processed/closed_case_connected_to.csv
 
 ## Commands
 
-From the repository root, using the supplied files in Downloads:
+From the repository root, set `DATA_DIR` to the directory containing the supplied dataset files:
 
 ```bash
+export DATA_DIR=/path/to/HHGOA_IEEE
+
 python3 scripts/prepare_tigergraph_data.py \
-  --data-dir /Users/ankitpandey/Downloads \
+  --data-dir "$DATA_DIR" \
   --output-dir data/processed \
   --sample
 
 python3 scripts/validate_processed_data.py \
-  --data-dir /Users/ankitpandey/Downloads \
+  --data-dir "$DATA_DIR" \
   --processed-dir data/processed
 ```
 
@@ -95,12 +97,12 @@ For the complete dataset:
 
 ```bash
 python3 scripts/prepare_tigergraph_data.py \
-  --data-dir /Users/ankitpandey/Downloads \
+  --data-dir "$DATA_DIR" \
   --output-dir data/processed \
   --full
 
 python3 scripts/validate_processed_data.py \
-  --data-dir /Users/ankitpandey/Downloads \
+  --data-dir "$DATA_DIR" \
   --processed-dir data/processed
 ```
 

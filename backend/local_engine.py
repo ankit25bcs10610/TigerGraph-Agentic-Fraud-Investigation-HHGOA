@@ -22,6 +22,7 @@ lookup-only record instead of guessing.
 from __future__ import annotations
 
 import os
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from statistics import median
@@ -263,6 +264,8 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         method = getattr(rag, "method", "rag")
 
         def run() -> dict[str, Any]:
+            if hasattr(rag, "retrieve_all"):
+                return rag.retrieve_all(query)
             return {"policy": rag.retrieve(query, "policy", 3), "patterns": rag.retrieve(query, "pattern_document", 2), "cases": rag.retrieve(query, "closed_case", 3)}
 
         context["rag"] = context["trace"].call("graphrag_retrieve", {"query": query[:80] + ("…" if len(query) > 80 else ""), "method": method},
@@ -580,7 +583,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         return {"target": {"card_id": target.card_id, "first_seen": target.ts.isoformat(), "spend_usd": target.amount}, "cards": rows[:12], "card_count": len(rows), "customers": len({row["customer_id"] for row in rows if row["customer_id"]}),
                 "recent_spend_usd": round(sum(row["spend_usd"] for row in rows), 2), "confirmed_cases": list(ring.confirmed_cases) if ring else []}
 
-    def _render(self, state: dict[str, Any], assessment: dict[str, Any]) -> None:
+    def _render(self, state: dict[str, Any], assessment: dict[str, Any], *, narrate: bool = True) -> None:
         context = self._contexts[state["case_id"]]
         context["last"] = assessment
         target: Txn = assessment["target"]
@@ -646,7 +649,14 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         state["agent_trace"] = context["trace"].steps
         state["data_source"] = self.source_name
         self._render_graph(state, assessment)
-        self._narrate(state, assessment)
+        if narrate:
+            self._narrate(state, assessment)
+
+    def _narrate_in_background(self, state: dict[str, Any], assessment: dict[str, Any]) -> None:
+        try:
+            self._narrate(state, assessment)
+        finally:
+            state["llm_pending"] = False
 
     def _narrate(self, state: dict[str, Any], assessment: dict[str, Any]) -> None:
         """Optional LLM narrative, grounded: every claim must cite supplied evidence or policy.
@@ -753,6 +763,16 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         case_id = case_input["case_id"]
         state = self._states.get(case_id)
         stored = self._contexts.get(case_id)
+        if self.source_name == "tigergraph-mcp" and not stored:
+            customer_id = str(case_input.get("customer_id") or "")
+            card_id = str(case_input.get("card_id") or "")
+            return {
+                "verdict": "none", "pattern": "none", "fraud_probability": None, "exposure_usd": None,
+                "finding": "Awaiting investigation", "flagged_amount": None, "channel": "", "status": "not_started",
+                "pending_approvals": [], "open_requests": 0, "sar_required": False,
+                "entities": {"customers": [customer_id] if customer_id else [], "cards": [card_id] if card_id else [],
+                              "devices": [], "shared_devices": [], "transactions": [], "closed_cases": []},
+            }
         if stored and "last" in stored and state:
             assessment, context = stored["last"], stored
             status = state["status"]
@@ -804,6 +824,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         self._states[case_id] = state
         self._record(state, {"type": "case_opened", "trigger_type": str(case_input.get("trigger_type", "")), "flagged_txn_id": str(case_input.get("flagged_txn_id", ""))})
         assessment = self._assess(case_input, context, [], trace)
+        async_narrative = self.source_name == "tigergraph-mcp" and os.getenv("LLM_PROVIDER", "disabled").strip().lower() == "openai"
         self._retrieve_grounding(context, assessment)
         self._seal_steps(state, assessment, "", trace, 0)
         state["decision_paths"] = self._decision_paths(case_input, context, [], assessment, set()) if self.compute_decision_paths else []
@@ -812,7 +833,10 @@ class LocalInvestigationEngine(ReferenceWorkflow):
             state["evidence_requests"] = [request]
             self._record(state, {"type": "evidence_requested", "request_id": request["request_id"], "request_type": request["type"]})
         state["next_best_actions"] = {"initial": assessment["actions"], "final": assessment["actions"], "what_changed": "nothing"}
-        self._render(state, assessment)
+        self._render(state, assessment, narrate=not async_narrative)
+        if async_narrative:
+            state["llm_pending"] = True
+            threading.Thread(target=self._narrate_in_background, args=(state, assessment), daemon=True, name=f"llm-narrative-{case_id}").start()
         if state["approval_requests"]:
             self._record(state, {"type": "approvals_routed", "pending": ",".join(item["action"] for item in state["approval_requests"])})
         self._execute_auto(state, assessment)

@@ -112,7 +112,7 @@ function RingTimeline({ blast }: { blast: Blast }) {
   return <div className="ring-timeline" aria-label="Ring timeline">
     <div className="rt-head"><strong>Ring timeline</strong><small>{points.length} cards touched within {hours < 48 ? `${Math.round(hours)} hours` : `${Math.round(hours / 24)} days`}</small></div>
     <div className="rt-track">
-      {points.map((point, index) => <span className={`rt-point ${point.flagged ? "flagged" : ""} ${index % 2 ? "below" : ""}`} key={point.label} style={{ left: `${((point.time - start) / span) * 100}%` }} title={`${point.label}, ${dateTime(new Date(point.time).toISOString())}`}>
+      {points.map((point, index) => <span className={`rt-point ${point.flagged ? "flagged" : ""} ${index % 2 ? "below" : ""}`} key={`${point.label}-${point.time}-${index}`} style={{ left: `${((point.time - start) / span) * 100}%` }} title={`${point.label}, ${dateTime(new Date(point.time).toISOString())}`}>
         <i /><em>{point.label}</em><b>{dateTime(new Date(point.time).toISOString())}</b>
       </span>)}
     </div>
