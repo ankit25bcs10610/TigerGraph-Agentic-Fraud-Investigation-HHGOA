@@ -3,9 +3,9 @@
   "case": {
     "status": "escalated",
     "verdict": "fraud",
-    "fraud_probability": 0.591,
-    "pattern": "undocumented",
-    "pattern_description": "coordinated activity spans 1 other customers; 6403 connected cards were supplied; 0 related confirmed cases were supplied",
+    "fraud_probability": 0.585,
+    "pattern": "card_not_present_fraud",
+    "pattern_description": "",
     "affected_txn_ids": [
       "3580804",
       "3583227"
@@ -6423,7 +6423,7 @@
     "exposure_usd": 221.19,
     "evidence": [
       {
-        "claim": "Pattern undocumented detected: coordinated activity spans 1 other customers; 6403 connected cards were supplied; 0 related confirmed cases were supplied.",
+        "claim": "Pattern card not present fraud detected: 8 online transactions occur within 48 hours of 3583227; target amount USD 128.33 is materially above prior online median USD 27.73; burst transactions: 3580804, 3583227, 3583499, 3583503, 3584017, 3585446, 3585726, 3587858.",
         "source": "graph",
         "ref": "tigergraph",
         "entity_ids": [
@@ -6475,12 +6475,12 @@
     "similar_prior_cases": [
       "CC-5489",
       "CC-5451",
-      "CC-5450",
-      "CC-5432",
-      "CC-5429",
-      "CC-5493"
+      "CC-5493",
+      "CC-5473",
+      "CC-5293",
+      "CC-5424"
     ],
-    "summary": "Undocumented pattern on C08106-K1: fraud probability 0.59, exposure $221.19 across 2 transaction(s). Verification response case_pack.trigger_text settled the question as fraud.",
+    "summary": "Card not present fraud pattern on C08106-K1: fraud probability 0.58, exposure $221.19 across 2 transaction(s). Verification response case_pack.trigger_text settled the question as fraud.",
     "written_to_graph": true,
     "graph_case_id": "INV-HHG-004"
   },
@@ -6495,17 +6495,7 @@
       {
         "action": "CREATE_CASE",
         "route": "auto",
-        "reason": "R2: customer denial requires an internal fraud case; R9: coordinated abuse fits none of the documented patterns"
-      },
-      {
-        "action": "FILE_REPORT",
-        "route": "L2",
-        "reason": "R9: coordinated undocumented abuse requires a report"
-      },
-      {
-        "action": "ESCALATE_TO_ANALYST",
-        "route": "auto",
-        "reason": "R9: undocumented coordinated abuse requires analyst review"
+        "reason": "R2: customer denial requires an internal fraud case"
       }
     ],
     "final": [
@@ -6517,44 +6507,18 @@
       {
         "action": "CREATE_CASE",
         "route": "auto",
-        "reason": "R2: customer denial requires an internal fraud case; R9: coordinated abuse fits none of the documented patterns"
-      },
-      {
-        "action": "FILE_REPORT",
-        "route": "L2",
-        "reason": "R9: coordinated undocumented abuse requires a report"
-      },
-      {
-        "action": "ESCALATE_TO_ANALYST",
-        "route": "auto",
-        "reason": "R9: undocumented coordinated abuse requires analyst review"
+        "reason": "R2: customer denial requires an internal fraud case"
       }
     ],
     "what_changed": "nothing"
   },
   "sar": {
-    "file": true,
-    "reason": "README section 3a: confirmed or strongly suspected fraud and coordinated or undocumented activity",
-    "narrative": "Customer C08106 and card C08106-K1 are the report subjects. The identified episode contains transactions 3580804, 3583227 between 2016-12-28 and 2016-12-29. The deterministic episode exposure is USD 221.19. The deterministic investigation classified the observed pattern as undocumented. Connected cards supplied by graph evidence: C00004-K1, C00005-K1, C00007-K1, C00008-K2, C00013-K1, C00016-K1, C00018-K1, C00019-K1, C00025-K1, C00026-K1. The report reason is: README section 3a: confirmed or strongly suspected fraud and coordinated or undocumented activity",
-    "subjects": [
-      "C08106",
-      "C08106-K1",
-      "C00004-K1",
-      "C00005-K1",
-      "C00007-K1",
-      "C00008-K2",
-      "C00013-K1",
-      "C00016-K1",
-      "C00018-K1",
-      "C00019-K1",
-      "C00025-K1",
-      "C00026-K1"
-    ],
-    "total_amount_usd": 221.19,
-    "activity_dates": [
-      "2016-12-28",
-      "2016-12-29"
-    ]
+    "file": false,
+    "reason": "README section 3a: no exposure, shared-origin, connected-fraud, or coordinated-activity trigger",
+    "narrative": "",
+    "subjects": [],
+    "total_amount_usd": 0.0,
+    "activity_dates": []
   },
   "stop_reason": "Verification response case_pack.trigger_text settled the question as fraud.",
   "tool_calls": [
@@ -6569,7 +6533,7 @@
       "planner": "rules",
       "result": "$128.33 online on C08106-K1",
       "ok": true,
-      "ms": 84.2
+      "ms": 84.6
     },
     {
       "step": 2,
@@ -6582,7 +6546,7 @@
       "planner": "rules",
       "result": "216 transactions",
       "ok": true,
-      "ms": 51.4
+      "ms": 61.2
     },
     {
       "step": 3,
@@ -6595,7 +6559,7 @@
       "planner": "rules",
       "result": "8 transactions from 1 customers",
       "ok": true,
-      "ms": 38.7
+      "ms": 40.5
     },
     {
       "step": 4,
@@ -6609,7 +6573,7 @@
       "planner": "rules",
       "result": "6322 customers, 6404 cards, 9457 devices, 0 confirmed cases",
       "ok": true,
-      "ms": 423.1
+      "ms": 418.5
     },
     {
       "step": 5,
@@ -6623,7 +6587,7 @@
       "planner": "rules",
       "result": "5565 closed cases",
       "ok": true,
-      "ms": 584.3
+      "ms": 522.0
     },
     {
       "step": 6,
@@ -6642,21 +6606,21 @@
       "tool": "get_closed_cases_by_pattern",
       "source": "tigergraph-mcp",
       "args": {
-        "pattern": "undocumented",
+        "pattern": "card_not_present_fraud",
         "k": 5
       },
-      "reason": "Retrieve closed cases with the same undocumented pattern and their outcomes.",
+      "reason": "Retrieve closed cases with the same card not present fraud pattern and their outcomes.",
       "planner": "rules",
       "result": "0 closed cases",
       "ok": true,
-      "ms": 38.6
+      "ms": 39.0
     },
     {
       "step": 8,
       "tool": "graphrag_retrieve",
       "source": "graphrag:tfidf",
       "args": {
-        "query": "undocumented online Pattern undocumented detected: coordinated activity spans 1 \u2026",
+        "query": "card not present fraud online Pattern card not present fraud detected: 8 online \u2026",
         "method": "tfidf"
       },
       "reason": "Ground the explanation: retrieve the policy passages and prior-case narratives closest to this case.",
@@ -6674,22 +6638,10 @@
       "system": "case-management",
       "detail": "Fraud case opened in case management",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T00:35:30.239982+00:00",
-      "simulated": true
-    },
-    {
-      "tool": "execute_action",
-      "receipt_id": "MOCK-7A5E5F80",
-      "action": "ESCALATE_TO_ANALYST",
-      "route": "auto",
-      "status": "executed",
-      "system": "case-management",
-      "detail": "Case routed to the analyst review queue",
-      "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T00:35:30.240000+00:00",
+      "executed_at": "2026-09-24T03:49:40.380570+00:00",
       "simulated": true
     }
   ],
   "tokens": 0,
-  "latency_s": 1.721
+  "latency_s": 1.686
 }

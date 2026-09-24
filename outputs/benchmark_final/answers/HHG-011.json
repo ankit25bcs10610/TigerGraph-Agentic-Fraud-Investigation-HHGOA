@@ -3,9 +3,9 @@
   "case": {
     "status": "escalated",
     "verdict": "fraud",
-    "fraud_probability": 0.5985,
-    "pattern": "undocumented",
-    "pattern_description": "coordinated activity spans 1 other customers; 2738 connected cards were supplied; 0 related confirmed cases were supplied",
+    "fraud_probability": 0.5925,
+    "pattern": "card_not_present_fraud",
+    "pattern_description": "",
     "affected_txn_ids": [
       "3578405",
       "3578451",
@@ -2832,7 +2832,7 @@
     "exposure_usd": 2586.86,
     "evidence": [
       {
-        "claim": "Pattern undocumented detected: coordinated activity spans 1 other customers; 2738 connected cards were supplied; 0 related confirmed cases were supplied.",
+        "claim": "Pattern card not present fraud detected: 84 online transactions occur within 48 hours of 3583368; target amount USD 131.30 is materially above prior online median USD 28.57; burst transactions: 3578405, 3578451, 3578471, 3578475, 3578483, 3578486, 3578491, 3578496, 3578506, 3578817, 3578995, 3578997, 3579400, 3579407, 3579576, 3579597, 3580137, 3580202, 3580219, 3580232, 3580348, 3580380, 3580403, 3580417, 3580427, 3580478, 3580544, 3580712, 3580765, 3580776, 3580815, 3580821, 3580907, 3580933, 3580951, 3580992, 3581048, 3581345, 3582082, 3582107, 3582142, 3582175, 3582178, 3582327, 3582338, 3582375, 3582413, 3582602, 3582624, 3582671, 3582738, 3582868, 3582897, 3583101, 3583140, 3583199, 3583229, 3583348, 3583368, 3583406, 3583411, 3583415, 3583417, 3583435, 3583494, 3583644, 3583670, 3583866, 3583914, 3583968, 3584003, 3584153, 3584155, 3584401, 3584460, 3584516, 3584693, 3584706, 3584859, 3584962, 3584985, 3585055, 3585064, 3585345.",
         "source": "graph",
         "ref": "tigergraph",
         "entity_ids": [
@@ -2892,12 +2892,12 @@
     "similar_prior_cases": [
       "CC-5489",
       "CC-5451",
-      "CC-5450",
-      "CC-5432",
-      "CC-5429",
-      "CC-5493"
+      "CC-5493",
+      "CC-5473",
+      "CC-5293",
+      "CC-5424"
     ],
-    "summary": "Undocumented pattern on C11923-K2: fraud probability 0.60, exposure $2,586.86 across 59 transaction(s). Verification response case_pack.trigger_text settled the question as fraud.",
+    "summary": "Card not present fraud pattern on C11923-K2: fraud probability 0.59, exposure $2,586.86 across 59 transaction(s). Verification response case_pack.trigger_text settled the question as fraud.",
     "written_to_graph": true,
     "graph_case_id": "INV-HHG-011"
   },
@@ -2912,17 +2912,12 @@
       {
         "action": "CREATE_CASE",
         "route": "auto",
-        "reason": "R2: customer denial requires an internal fraud case; R9: coordinated abuse fits none of the documented patterns"
+        "reason": "R2: customer denial requires an internal fraud case"
       },
       {
         "action": "FILE_REPORT",
         "route": "L2",
-        "reason": "R2: denial plus exposure or connected fraud satisfies report conditions; R9: coordinated undocumented abuse requires a report"
-      },
-      {
-        "action": "ESCALATE_TO_ANALYST",
-        "route": "auto",
-        "reason": "R9: undocumented coordinated abuse requires analyst review"
+        "reason": "R2: denial plus exposure or connected fraud satisfies report conditions"
       }
     ],
     "final": [
@@ -2934,25 +2929,20 @@
       {
         "action": "CREATE_CASE",
         "route": "auto",
-        "reason": "R2: customer denial requires an internal fraud case; R9: coordinated abuse fits none of the documented patterns"
+        "reason": "R2: customer denial requires an internal fraud case"
       },
       {
         "action": "FILE_REPORT",
         "route": "L2",
-        "reason": "R2: denial plus exposure or connected fraud satisfies report conditions; R9: coordinated undocumented abuse requires a report"
-      },
-      {
-        "action": "ESCALATE_TO_ANALYST",
-        "route": "auto",
-        "reason": "R9: undocumented coordinated abuse requires analyst review"
+        "reason": "R2: denial plus exposure or connected fraud satisfies report conditions"
       }
     ],
     "what_changed": "nothing"
   },
   "sar": {
     "file": true,
-    "reason": "README section 3a: confirmed or strongly suspected fraud and exposure exceeds $1,000; coordinated or undocumented activity",
-    "narrative": "Customer C11923 and card C11923-K2 are the report subjects. The identified episode contains transactions 3578405, 3578451, 3578471, 3578475, 3578483, 3578486, 3578491, 3578496, 3578506, 3578817, 3578995, 3578997, 3579400, 3579407, 3579576, 3579597, 3580137, 3580202, 3580219, 3580232, 3580348, 3580380, 3580403, 3580417, 3580427, 3580478, 3580544, 3580712, 3580765, 3580776, 3580815, 3580821, 3580907, 3580933, 3580951, 3580992, 3581048, 3581345, 3582082, 3582107, 3582142, 3582175, 3582178, 3582327, 3582338, 3582375, 3582413, 3582602, 3582624, 3582671, 3582738, 3582868, 3582897, 3583101, 3583140, 3583199, 3583229, 3583348, 3583368 between 2016-12-27 and 2016-12-29. The deterministic episode exposure is USD 2586.86. The deterministic investigation classified the observed pattern as undocumented. Connected cards supplied by graph evidence: C00005-K1, C00013-K1, C00018-K1, C00025-K1, C00026-K1, C00027-K1, C00033-K1, C00035-K1, C00036-K1, C00045-K1. Grounded linkage evidence: This agent's earlier investigation HHG-007 (legitimate, none) shares the shared device DP-0d1ecc7eeab90971ce09129b1c380a9c, DP-113906cbc95925dfbd056050a1ee2ceb, DP-2cbd8506e77fcc79806a112c177929c2, DP-357ea50e98c211c363f086f89b3fd299, DP-3ca5a3f0f42f4b4fc35dd9c64a9f4dcf, DP-477f12482adfb35d8a41875869b07c6a, DP-59ff5574599911ef3f5306bfe836edf3, DP-7215b397bc1a19fb372b41fbb047305a, DP-d0cbe4b01ca6300c83ee80f2241c87bd, DP-d317e13702aeff857d5fc1904b454bcf, DP-dfc04b24c6237405d348bec38396f854, DP-f923b271946a586d8f31ddbb4c7f6ad4. The report reason is: README section 3a: confirmed or strongly suspected fraud and exposure exceeds $1,000; coordinated or undocumented activity",
+    "reason": "README section 3a: confirmed or strongly suspected fraud and exposure exceeds $1,000",
+    "narrative": "Customer C11923 and card C11923-K2 are the report subjects. The identified episode contains transactions 3578405, 3578451, 3578471, 3578475, 3578483, 3578486, 3578491, 3578496, 3578506, 3578817, 3578995, 3578997, 3579400, 3579407, 3579576, 3579597, 3580137, 3580202, 3580219, 3580232, 3580348, 3580380, 3580403, 3580417, 3580427, 3580478, 3580544, 3580712, 3580765, 3580776, 3580815, 3580821, 3580907, 3580933, 3580951, 3580992, 3581048, 3581345, 3582082, 3582107, 3582142, 3582175, 3582178, 3582327, 3582338, 3582375, 3582413, 3582602, 3582624, 3582671, 3582738, 3582868, 3582897, 3583101, 3583140, 3583199, 3583229, 3583348, 3583368 between 2016-12-27 and 2016-12-29. The deterministic episode exposure is USD 2586.86. The deterministic investigation classified the observed pattern as card_not_present_fraud. Connected cards supplied by graph evidence: C00005-K1, C00013-K1, C00018-K1, C00025-K1, C00026-K1, C00027-K1, C00033-K1, C00035-K1, C00036-K1, C00045-K1. Grounded linkage evidence: This agent's earlier investigation HHG-007 (legitimate, none) shares the shared device DP-0d1ecc7eeab90971ce09129b1c380a9c, DP-113906cbc95925dfbd056050a1ee2ceb, DP-2cbd8506e77fcc79806a112c177929c2, DP-357ea50e98c211c363f086f89b3fd299, DP-3ca5a3f0f42f4b4fc35dd9c64a9f4dcf, DP-477f12482adfb35d8a41875869b07c6a, DP-59ff5574599911ef3f5306bfe836edf3, DP-7215b397bc1a19fb372b41fbb047305a, DP-d0cbe4b01ca6300c83ee80f2241c87bd, DP-d317e13702aeff857d5fc1904b454bcf, DP-dfc04b24c6237405d348bec38396f854, DP-f923b271946a586d8f31ddbb4c7f6ad4. The report reason is: README section 3a: confirmed or strongly suspected fraud and exposure exceeds $1,000",
     "subjects": [
       "C11923",
       "C11923-K2",
@@ -2986,7 +2976,7 @@
       "planner": "rules",
       "result": "$131.30 online on C11923-K2",
       "ok": true,
-      "ms": 82.7
+      "ms": 110.6
     },
     {
       "step": 2,
@@ -2999,7 +2989,7 @@
       "planner": "rules",
       "result": "10361 transactions",
       "ok": true,
-      "ms": 1253.4
+      "ms": 1483.0
     },
     {
       "step": 3,
@@ -3012,7 +3002,7 @@
       "planner": "rules",
       "result": "4 transactions from 1 customers",
       "ok": true,
-      "ms": 36.5
+      "ms": 51.2
     },
     {
       "step": 4,
@@ -3026,7 +3016,7 @@
       "planner": "rules",
       "result": "2656 customers, 2739 cards, 8757 devices, 0 confirmed cases",
       "ok": true,
-      "ms": 319.4
+      "ms": 306.6
     },
     {
       "step": 5,
@@ -3040,7 +3030,7 @@
       "planner": "rules",
       "result": "5565 closed cases",
       "ok": true,
-      "ms": 117.5
+      "ms": 64.6
     },
     {
       "step": 6,
@@ -3059,10 +3049,10 @@
       "tool": "get_closed_cases_by_pattern",
       "source": "tigergraph-mcp",
       "args": {
-        "pattern": "undocumented",
+        "pattern": "card_not_present_fraud",
         "k": 5
       },
-      "reason": "Retrieve closed cases with the same undocumented pattern and their outcomes.",
+      "reason": "Retrieve closed cases with the same card not present fraud pattern and their outcomes.",
       "planner": "rules",
       "result": "0 closed cases",
       "ok": true,
@@ -3073,14 +3063,14 @@
       "tool": "graphrag_retrieve",
       "source": "graphrag:tfidf",
       "args": {
-        "query": "undocumented online Pattern undocumented detected: coordinated activity spans 1 \u2026",
+        "query": "card not present fraud online Pattern card not present fraud detected: 84 online\u2026",
         "method": "tfidf"
       },
       "reason": "Ground the explanation: retrieve the policy passages and prior-case narratives closest to this case.",
       "planner": "rules",
       "result": "3 policy passages, 0 case narratives (tfidf)",
       "ok": true,
-      "ms": 1.9
+      "ms": 0.6
     },
     {
       "tool": "execute_action",
@@ -3091,22 +3081,10 @@
       "system": "case-management",
       "detail": "Fraud case opened in case management",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T00:36:13.087779+00:00",
-      "simulated": true
-    },
-    {
-      "tool": "execute_action",
-      "receipt_id": "MOCK-201388B2",
-      "action": "ESCALATE_TO_ANALYST",
-      "route": "auto",
-      "status": "executed",
-      "system": "case-management",
-      "detail": "Case routed to the analyst review queue",
-      "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T00:36:13.087800+00:00",
+      "executed_at": "2026-09-24T03:50:34.038941+00:00",
       "simulated": true
     }
   ],
   "tokens": 0,
-  "latency_s": 35.565
+  "latency_s": 45.657
 }

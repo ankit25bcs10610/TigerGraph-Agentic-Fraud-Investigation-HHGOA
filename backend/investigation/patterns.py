@@ -95,7 +95,7 @@ def detect_card_testing(context: PatternContext) -> PatternResult:
             None,
         )
         sequence = [*small, larger] if larger else []
-        if larger and context.target.transaction_id in {item.transaction_id for item in sequence}:
+        if larger and any(_within(item, context.target, 48) for item in sequence):
             return _result(
                 FraudPattern.CARD_TESTING,
                 [
@@ -145,7 +145,7 @@ def _cnp_result(context: PatternContext, pattern: FraudPattern) -> PatternResult
         )
     burst = [item for item in history if _online(item) and _within(item, target, 48)]
     inconsistency = _online_inconsistency(target, history)
-    if 2 <= len(burst) <= 4 and inconsistency:
+    if len(burst) >= 2 and inconsistency:
         return _result(
             pattern,
             [
@@ -159,8 +159,6 @@ def _cnp_result(context: PatternContext, pattern: FraudPattern) -> PatternResult
     contradictions = []
     if len(burst) < 2:
         contradictions.append("fewer than two online transactions occur in the 48-hour window")
-    elif len(burst) > 4:
-        contradictions.append("the 48-hour window is larger than the typical 2-4 transaction burst")
     if not inconsistency:
         contradictions.append("the target is not materially inconsistent with prior online history")
     return _result(
@@ -224,12 +222,20 @@ def detect_out_of_region_use(context: PatternContext) -> PatternResult:
         if item.billing_region == target.billing_region and _in_person(item)
         and _within(item, target, 168)
     ]
-    if not after_home:
-        return _result(FraudPattern.NONE, [], [f"normal home region {home} does not continue after the target"],
-                       0.0, "New-region and continuing-home-activity conditions were not both satisfied.")
-    if len(new_region_activity) < 2:
-        return _result(FraudPattern.NONE, [], ["fewer than two card-present events support activity in the new region"],
-                       0.0, "The isolated new-region signal is insufficient for this pattern.")
+    if not after_home or len(new_region_activity) < 2:
+        supporting = [
+            f"target region {target.billing_region} was absent from prior card-present history",
+            f"prior home region {home} had {home_count} transactions",
+        ]
+        contradictions = []
+        if not after_home:
+            contradictions.append(f"normal home region {home} does not continue after the target")
+        if len(new_region_activity) < 2:
+            contradictions.append("fewer than two card-present events support activity in the new region")
+        return _result(
+            FraudPattern.OUT_OF_REGION_USE, supporting, contradictions, 0.62,
+            "A single new card-present region is suspicious, but the stronger travel-versus-clone evidence is incomplete.",
+        )
     return _result(
         FraudPattern.OUT_OF_REGION_USE,
         [
@@ -270,14 +276,15 @@ def _device_anomaly(target: TransactionEvidence,
 
 def detect_account_takeover(context: PatternContext) -> PatternResult:
     history = _history(context)
-    window = [item for item in history if _within(item, context.target, 48)]
+    window = [item for item in history if _within(item, context.target, 168)]
     channels = {item.channel.lower() for item in window}
     if not {"online", "in_person"}.issubset(channels):
-        return _result(FraudPattern.NONE, [], ["no mixed online and in_person activity within 48 hours"],
+        return _result(FraudPattern.NONE, [], ["no mixed online and in_person activity within seven days"],
                        0.0, "Account-takeover detection requires mixed-channel activity.")
-    device_anomaly = _device_anomaly(context.target, history)
-    match_anomaly = _match_flag_anomaly(context.target, history)
-    supporting = ["mixed online and in_person activity within 48 hours"]
+    online_window = [item for item in window if _online(item)]
+    device_anomaly = any(_device_anomaly(item, history) for item in online_window)
+    match_anomaly = any(_match_flag_anomaly(item, history) for item in online_window)
+    supporting = ["mixed online and in_person activity within seven days"]
     if device_anomaly:
         supporting.append("target device/identity differs from the normal device baseline")
     if match_anomaly:
@@ -301,8 +308,7 @@ def detect_undocumented(context: PatternContext) -> PatternResult:
     }
     coordinated = (
         len(other_customers) >= 2
-        or len(set(context.connected_card_ids)) >= 2
-        or bool(context.confirmed_related_case_ids)
+        or (len(other_customers) >= 1 and len(set(context.connected_card_ids)) >= 2)
     )
     known_match = any(
         result.pattern in {
@@ -324,10 +330,10 @@ def detect_undocumented(context: PatternContext) -> PatternResult:
             "Repeated or coordinated abuse is present, but no documented pattern detector fired.",
         )
     contradictions = []
-    if not coordinated:
-        contradictions.append("no cross-customer, connected-card, or confirmed-case coordination was supplied")
     if known_match:
         contradictions.append("a documented pattern detector already has supporting evidence")
+    if not coordinated:
+        contradictions.append("no cross-customer, connected-card, or confirmed-case coordination was supplied")
     return _result(FraudPattern.NONE, [], contradictions, 0.0,
                    "The undocumented-pattern conditions were not satisfied.")
 
@@ -369,4 +375,3 @@ def classify_pattern(context: PatternContext) -> PatternResult:
         )
     )
     return undocumented if undocumented.pattern is FraudPattern.UNDOCUMENTED else detect_none(context)
-

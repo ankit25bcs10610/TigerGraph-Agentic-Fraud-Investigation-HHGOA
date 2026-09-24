@@ -72,7 +72,7 @@ def main() -> int:
     parser.add_argument("--transactions", default=os.getenv("TRANSACTIONS_PATH"))
     parser.add_argument("--identity", default=os.getenv("IDENTITY_PATH"))
     parser.add_argument("--closed-cases", default=os.getenv("CLOSED_CASES_PATH"), required=False)
-    parser.add_argument("--source", default=os.getenv("DATA_SOURCE", "csv"))
+    parser.add_argument("--source", default="csv", help="csv or tigergraph")
     parser.add_argument("--limit", type=int, default=400, help="cases to replay, sampled evenly across patterns")
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--out", default="outputs/CALIBRATION.md")

@@ -8222,10 +8222,10 @@
     "similar_prior_cases": [
       "CC-5489",
       "CC-5451",
-      "CC-5450",
-      "CC-5432",
-      "CC-5429",
-      "CC-5493"
+      "CC-5493",
+      "CC-5473",
+      "CC-5293",
+      "CC-5424"
     ],
     "summary": "Undocumented pattern on C07671-K2: fraud probability 0.45, exposure $2,569.43 across 25 transaction(s). Further investigation is unlikely to change the decision.",
     "written_to_graph": true,
@@ -8311,7 +8311,7 @@
       "planner": "rules",
       "result": "$35.66 online on C07671-K2",
       "ok": true,
-      "ms": 79.6
+      "ms": 82.1
     },
     {
       "step": 2,
@@ -8324,7 +8324,7 @@
       "planner": "rules",
       "result": "1569 transactions",
       "ok": true,
-      "ms": 130.5
+      "ms": 137.8
     },
     {
       "step": 3,
@@ -8337,7 +8337,7 @@
       "planner": "rules",
       "result": "1531 transactions from 1 customers",
       "ok": true,
-      "ms": 100.5
+      "ms": 91.7
     },
     {
       "step": 4,
@@ -8351,7 +8351,7 @@
       "planner": "rules",
       "result": "7798 customers, 8107 cards, 9547 devices, 0 confirmed cases",
       "ok": true,
-      "ms": 536.7
+      "ms": 441.1
     },
     {
       "step": 5,
@@ -8365,7 +8365,7 @@
       "planner": "rules",
       "result": "5565 closed cases",
       "ok": true,
-      "ms": 142.3
+      "ms": 73.7
     },
     {
       "step": 6,
@@ -8391,7 +8391,7 @@
       "planner": "rules",
       "result": "0 closed cases",
       "ok": true,
-      "ms": 0.0
+      "ms": 0.1
     },
     {
       "step": 8,
@@ -8419,7 +8419,7 @@
       "planner": "rules",
       "result": "3 policy passages, 0 case narratives (tfidf)",
       "ok": true,
-      "ms": 1.4
+      "ms": 0.2
     },
     {
       "step": 10,
@@ -8444,7 +8444,7 @@
       "system": "case-management",
       "detail": "Case routed to the analyst review queue",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T00:36:15.585570+00:00",
+      "executed_at": "2026-09-24T03:50:36.312979+00:00",
       "simulated": true
     },
     {
@@ -8456,7 +8456,7 @@
       "system": "case-management",
       "detail": "Fraud case opened in case management",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T00:36:15.585591+00:00",
+      "executed_at": "2026-09-24T03:50:36.313001+00:00",
       "simulated": true
     },
     {
@@ -8468,10 +8468,10 @@
       "system": "transaction-monitoring",
       "detail": "Card added to enhanced monitoring for 30 days",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T00:36:16.018124+00:00",
+      "executed_at": "2026-09-24T03:50:36.729654+00:00",
       "simulated": true
     }
   ],
   "tokens": 0,
-  "latency_s": 2.52
+  "latency_s": 2.521
 }
