@@ -232,9 +232,9 @@ class TigerGraphSource:
 
         def top(key: str) -> list[dict[str, Any]]:
             counts = {str(name): int(value) for name, value in (_first(payload, key) or {}).items() if str(name)}
-            return [{"value": name, "share": round(value / count, 2)} for name, value in sorted(counts.items(), key=lambda item: -item[1])[:3]]
+            return [{"value": name, "share": round(value / count, 2)} for name, value in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:3]]
 
-        models = [name for name, _ in sorted(((str(name), int(value)) for name, value in (_first(payload, "models") or {}).items() if str(name)), key=lambda item: -item[1])[:3]]
+        models = [name for name, _ in sorted(((str(name), int(value)) for name, value in (_first(payload, "models") or {}).items() if str(name)), key=lambda item: (-item[1], item[0]))[:3]]
         return {"transactions": count, "online_share": round(int(_first(payload, "online") or 0) / count, 2), "total_amount_usd": round(float(_first(payload, "total_amount") or 0), 2),
                 "median_amount_usd": round(amounts[len(amounts) // 2], 2) if amounts else None, "first_seen": str(first or ""), "last_seen": str(last or ""),
                 "span_hours": round((last - first).total_seconds() / 3600, 1) if first and last else None, "products": top("products"), "emails": top("emails"), "device_models": models}

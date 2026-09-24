@@ -8,6 +8,8 @@ We built Sentinel for the TigerGraph Hacker House Goa challenge: an AI agent tha
 
 For each alert it:
 🔎 queries TigerGraph through MCP (customer baseline, shared devices, a fraud-ring expansion, prior cases)
+🕸️ tells one phone serving many cards from a browser fingerprint shared by hundreds (it caught a Galaxy S7 edge build used by 24 customers in one week, and ignored a Chrome release that looked like a ring)
+🧠 remembers its own earlier investigations in the graph, so a later alert inherits what it already concluded about the same ring
 ⚖️ scores the evidence deterministically and checks whether it's enough to act
 🙋 asks the customer or requests step-up authentication when it isn't
 ✅ recommends the next best action under policy, with L1/L2 human approval for anything protected
@@ -29,8 +31,10 @@ Built Sentinel for #HackerHouseGoa: a fraud-investigation agent on @TigerGraphDB
 
 2/ Every graph question is a GSQL query called through TigerGraph MCP, with a recorded reason: the customer's baseline, who else used the device, and a bounded connected-component search for fraud rings.
 
-3/ When the evidence isn't enough, it doesn't guess. It asks the customer or requests step-up auth, then updates its recommendation, and we record the before and the after.
+3/ Across 590k transactions, community detection found 8 rings of devices serving several customers in a burst. The biggest: 36 cards on 16 shared phones, 100% online, 99% one product. No documented fraud pattern looks like that, and two separate alerts turned out to be inside it.
 
-4/ Blocks and report filings wait for L1/L2 approval. Every event lands in a SHA-256 chain the UI re-verifies. The LLM only narrates cited facts.
+4/ When the evidence isn't enough, it doesn't guess. It asks the customer or requests step-up auth, then updates its recommendation, and we record the before and the after.
 
-5/ Blog: <link> · Demo: <link> · Code: <link> #HackerHouseGoa
+5/ Blocks and report filings wait for L1/L2 approval. Every event lands in a SHA-256 chain the UI re-verifies. The LLM only narrates cited facts.
+
+6/ Blog: <link> · Demo: <link> · Code: <link> #HackerHouseGoa

@@ -37,6 +37,7 @@ def ring_profile(source: Any, community: Community) -> dict[str, Any]:
     amounts = [txn.amount for txn in members]
     first, last = min(txn.ts for txn in members), max(txn.ts for txn in members)
     models = Counter(txn.device_info or "" for txn in {txn.device_profile_id: txn for txn in members}.values())
+    models = Counter(dict(sorted(models.items())))  # ties in most_common keep alphabetical order
     return {"transactions": len(members), "online_share": round(sum(1 for txn in members if txn.channel.lower() == "online") / len(members), 2),
             "total_amount_usd": round(sum(amounts), 2), "median_amount_usd": round(median(amounts), 2), "first_seen": first.isoformat(sep=" "), "last_seen": last.isoformat(sep=" "),
             "span_hours": round((last - first).total_seconds() / 3600, 1), "products": _top(Counter(txn.product_code or "" for txn in members), len(members)),

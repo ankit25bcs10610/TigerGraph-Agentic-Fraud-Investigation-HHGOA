@@ -129,9 +129,11 @@ Every investigation is an explicit loop over **graph tools**. Each tool is an in
 | `find_ring_membership` | `agent_fraud_communities` | Graph algorithm: whether the card sits in one of the graph-wide burst-device rings, even when its own device is common |
 | `get_linked_closed_cases` | `agent_linked_closed_cases` | Prior investigations on the same customer, card or device users |
 | `get_closed_cases_by_pattern` | `agent_closed_cases_by_pattern` | Case memory by detected pattern, with outcomes |
-| `recall_case_memory` | `InvestigationCase` / memory store | The agent's own earlier investigations on these entities |
+| `recall_graph_memory` | `agent_prior_investigations` | Graph memory: the agent's own earlier `InvestigationCase` vertices on this customer, card, its ring's cards or devices, opened before this case |
+| `recall_case_memory` | local memory store | The same, for investigations run without TigerGraph |
 | `graphrag_retrieve` | `KnowledgeChunk` vector search | Policy passages and prior-case narratives closest to this case |
 | *(queue level)* | `agent_fraud_communities` | Weakly connected components across the whole graph, to find rings and undocumented patterns (computed once, reused by every case) |
+| *(queue level)* | `agent_ring_profile` | What each ring's cards did on its shared devices: volume, amounts, dates, channel, products, email domains, device models |
 
 **Who picks the next tool.** With an OpenAI model configured, an **LLM planner** chooses each next graph tool from the tools that make sense at that moment, within a step budget, and must give a reason. It can only pick from the allow-list; an unknown tool, a malformed reply or a provider error hands the choice to the **rule planner**, and the trace says so. The planner decides *what to look at*. It never sees or sets the probability, the verdict, the actions or the approval routes. Without a model, the rule planner runs the investigator's default order.
 
@@ -146,6 +148,8 @@ After the tools, the agent scores the evidence, checks the stopping rules, reque
 - **Actions are carried out, not just recommended.** Automatic actions run through simulated bank systems (card platform, customer messaging, case management, regulatory filing, monitoring) as soon as policy recommends them; L1/L2 actions run only after approval. Every execution returns a receipt that is sealed into the case's hash chain.
 - **Undocumented patterns, found across the whole graph.** `agent_fraud_communities` runs weakly connected components over cards and *burst devices*: a device links cards only when 3–10 customers used it within 72 hours, the way one physical device serving stolen cards behaves. The Fraud rings tab lists every ring spanning three or more customers, labelled *known pattern* when it touches confirmed fraud of a documented type, or *undocumented pattern* when nothing documented explains it.
 - **It knows a burst from a fingerprint.** Device profiles in this dataset are model / browser / screen fingerprints, and 116 of them are shared by 100–1,000 customers. Measured on the full graph, expanding through them turns every ring into one component of thousands of customers. New browser releases make it worse: "Windows / chrome 66" appears only in December and packs 250 customers into a few weeks. So the agent asks three questions of every device: how many customers ever used it, how many used it within seven days of the alert, and whether the profile names a specific device model or only an operating system. More than 10 customers on a blank or "Windows" profile is a generic fingerprint, however bursty: the agent skips sharing and ring expansion and says why in its trace. A specific build such as `SM-G935F Build/NRD90M` serving many cards in the alert week is the opposite, one unusual device, and becomes evidence. That is how HHG-014's "unusual device profile" (24 of its 52 customers in the alert week, a 38-card ring) is caught while browser rollouts are not.
+- **Memory that lives in the graph.** Every investigation is written back as an `InvestigationCase` linked to its customer, cards and devices, and later investigations read those links back through `agent_prior_investigations`, only ever from cases opened earlier. On the benchmark, HHG-011 (card testing, Dec 29) recalls the agent's own fraud finding on HHG-016 (Dec 12), a different customer whose card sits in the same ring. Rewriting a case first clears its old edges, so memory reflects the latest investigation.
+- **Rings you can read.** `agent_ring_profile` turns each ring into a sentence. The largest one on the live graph: *73 transactions by 36 cards on 16 shared devices, 15 different Android phone builds (Samsung, LG, Motorola, Huawei and others), 100% online, 99% product C, median $31.70*. No documented pattern describes phones shared across unrelated cards for small product-C purchases, which is why it is flagged as undocumented.
 - **Blast radius.** When a case looks like fraud, the agent uses the shared device and the fraud ring to list the *other* cards and customers at risk now, with their recent spend. One alert becomes protection for the whole ring.
 
 ### From dataset to submission
@@ -405,7 +409,7 @@ A production deployment injects the TigerGraph-backed workflow and a real identi
 ## ✅ Validation
 
 ```bash
-pytest -q                      # 164 deterministic tests
+pytest -q                      # 167 deterministic tests
 cd frontend && npm run build   # type-checked production build
 ```
 

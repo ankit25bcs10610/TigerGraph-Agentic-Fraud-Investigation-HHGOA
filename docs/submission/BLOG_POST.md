@@ -60,7 +60,7 @@ What *is* agentic:
 - **Knowing when to stop.** The agent keeps investigating until a stopping rule is met: strong fraud or strong legitimacy with enough independent evidence, a settled customer answer, or no useful next step.
 - **Gathering evidence under control.** When uncertain, the agent requests customer validation or step-up authentication, choosing between them by value of information (below). Each request pauses the case until the answer is recorded.
 - **Updating its recommendation.** We record the next best actions **before** any evidence and **after** it, with a sentence on what changed.
-- **Memory.** Completed investigations are recalled when a later case touches the same customer, card or device.
+- **Memory, in the graph.** Every investigation is written back to TigerGraph as an `InvestigationCase` linked to the customer, cards and devices it touched. A later investigation walks those edges (`agent_prior_investigations`), only to cases opened before it. When the agent reached HHG-011 on December 29, it recalled its own fraud finding on HHG-016 from December 12: a different customer, but a card in the same ring.
 - **Controls and audit.** L1/L2 actions wait for a human. Every event (each graph call, assessment, request, response and approval) extends a SHA-256 hash chain, and the UI recomputes every hash to prove nothing was edited.
 
 ## Five ideas we haven't seen elsewhere
@@ -69,7 +69,9 @@ What *is* agentic:
 
 **2. Every verdict comes with its counterfactual.** A waterfall shows exactly how many points each signal added to the fraud probability and how far the result sits from each threshold. Signals whose removal alone would flip the verdict are marked *decisive*. In one of our cases the probability was 0.852 against a 0.85 threshold, so every signal was decisive, and the analyst can see that the call is close rather than being handed a confident label.
 
-**3. It finds the pattern nobody documented.** The brief warns that not every fraud pattern in the data is documented. A weakly-connected-components query runs across cards and burst devices (3–10 customers on one device within 72 hours), and every ring spanning several customers is labelled: *known* when it touches confirmed fraud of a documented type, *undocumented* when nothing explains it. Those are the leads an analyst should read first.
+**3. It describes the pattern nobody documented.** Finding a ring is not the same as explaining it, so `agent_ring_profile` summarises what each ring's cards did on their shared devices. The largest ring on the live graph: 73 transactions by 36 cards on 16 shared devices, 15 of them different Android phone builds, 100% online, 99% product C, median $31.70. None of the five documented patterns describes that.
+
+**4. It finds the pattern nobody documented.** The brief warns that not every fraud pattern in the data is documented. A weakly-connected-components query runs across cards and burst devices (3–10 customers on one device within 72 hours), and every ring spanning several customers is labelled: *known* when it touches confirmed fraud of a documented type, *undocumented* when nothing explains it. Those are the leads an analyst should read first.
 
 **4. It acts, with receipts.** Automatic actions run through simulated bank systems as soon as policy recommends them, and protected actions only after approval. Each returns a receipt sealed into the audit chain, so "what did the agent actually do" has an answer.
 
