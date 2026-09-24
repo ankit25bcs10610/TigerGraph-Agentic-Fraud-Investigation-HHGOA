@@ -341,10 +341,15 @@ class LocalInvestigationEngine(ReferenceWorkflow):
             self._run_tool("get_customer_activity", "Required: no assessment runs without the customer's baseline.", "required", gathered, trace)
         history = gathered["history"]
         devices = {item.device_profile_id for item in history if item.device_profile_id}
-        remembered = self.memory.related(case_id=case_input["case_id"], customer_id=target.customer_id, card_id=target.card_id, devices=devices)
-        if len(self.memory):
-            trace.note("recall_case_memory", "case-memory", {"customer_id": target.customer_id}, "Check this agent's own earlier investigations on the same entities.", f"{len(remembered)} related investigations")
-        remembered = self._merge_memory(remembered, self._recall_graph_memory(case_input, gathered, trace))
+        if hasattr(source, "prior_investigations"):
+            # The graph is the memory: it links each earlier case to the entities it actually implicated,
+            # instead of every device in the customer's history (many are generic fingerprints).
+            remembered = self._merge_memory([], self._recall_graph_memory(case_input, gathered, trace))
+        else:
+            remembered = self.memory.related(case_id=case_input["case_id"], customer_id=target.customer_id, card_id=target.card_id, devices=devices)
+            if len(self.memory):
+                trace.note("recall_case_memory", "case-memory", {"customer_id": target.customer_id}, "Check this agent's own earlier investigations on the same entities.", f"{len(remembered)} related investigations")
+            remembered = self._merge_memory(remembered, [])
         card_history = [item for item in history if item.card_id == target.card_id] if target.card_id else history
         return {"input": dict(case_input), "target": target, "history": history, "card_history": card_history, "network": gathered["network"], "ring": gathered["ring"], "device_view": gathered.get("device_view"), "community": gathered["community"],
                 "linked": gathered["linked"], "remembered": remembered, "trace": trace}
