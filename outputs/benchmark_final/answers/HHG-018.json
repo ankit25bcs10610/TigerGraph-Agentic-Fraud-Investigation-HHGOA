@@ -3,7 +3,7 @@
   "case": {
     "status": "escalated",
     "verdict": "fraud",
-    "fraud_probability": 0.122,
+    "fraud_probability": 0.372,
     "pattern": "none",
     "pattern_description": "",
     "affected_txn_ids": [
@@ -39,11 +39,11 @@
         ]
       },
       {
-        "claim": "This agent's earlier investigation HHG-007 (legitimate, none) shares the shared device DP-0799b665d9c9d9b5853112a6e6e03219, DP-0b154d9d971d5d8b6797ac300e3e1ed8, DP-0c3cabf7a514603d7d7013dda3d7e3a4, DP-110b71103351bedf9334e83bfe0016a6, DP-1124db7c2bafcf5ea4f088af86838459, DP-113906cbc95925dfbd056050a1ee2ceb, DP-1262d0c46c55541bb7427b2219b3ebbe, DP-1885278596030be40f883793756c58a6, DP-1d32d1ad65cefb4e468da853b17e94b4, DP-2e4423d02cc3985122849ca50f77f895, DP-319dc72ace4dfcb1dbf920491401cf0f, DP-357ea50e98c211c363f086f89b3fd299, DP-38a20d9e1a4aab0abf235a07689c440e, DP-399140ba94cd5ab0d1d78f3fc66b6c37, DP-477f12482adfb35d8a41875869b07c6a, DP-4932fc643cf6b9a13a160e9c64a8a57d, DP-4c593aa3046917b0bf575466ca1ad801, DP-51291935c880ba408001d6b6e9460918, DP-561f573c6d92e1402d0d58641b7f61e3, DP-56977fb654ec6b788359e70e69343c7e, DP-59a3100880d437a48509ac5ea2d24f69, DP-59ff5574599911ef3f5306bfe836edf3, DP-5cc9dfb336c8c705b70fc94bf4e6fbb5, DP-5e2fac456fb12993d58f7991e150d031, DP-5f27211b9eb7c8dfd865ba5158a99c01, DP-691e85e8f1a734f4e2155c5e94bdb1c2, DP-73550b767f2d95b688b92162a6053560, DP-814c060c16a6c343de3a8788494e1e29, DP-8795606e9ad4c339fe24f236de0aacb7, DP-937c13eb7c10d79ad3aabd22755d3c8e, DP-95b377d954af5bfbcca8fa82ef7a909f, DP-9a0fa3e23978d6bb0a9ef266df19d0e5, DP-9ad19c5e9717ebb6b08a2d1e5ecfecd6, DP-9c777c4478d4bca3bf074f2ee7c7f08e, DP-a1bc2c101e7d6f92f6a076c57bd82250, DP-a5083a169de94f2a2c80c84b35ced61c, DP-a7acf3036f840df29137c5d688158899, DP-a9f99d7b13041966bc41f30b7a7cf325, DP-af7599128582619d973c16eb9b4b5544, DP-b643aa6978068906501e9bae1d9f56d2, DP-b78ef7a771a24e6bd89424041414098f, DP-b880aa587bf9444dd8f13c955d2fa602, DP-bc201956d1654ea465f733feb1b1164b, DP-bfbf4ee7cbf4f1ee6f3acfeb95b44c40, DP-c0f0edfb7fd94cd38f28f53ac434fb08, DP-c3bc72b2c593dde6c41b02604480e4c3, DP-c5a7d3f9f599523c15376f87eccd2857, DP-d0cbe4b01ca6300c83ee80f2241c87bd, DP-d9ac4af4720f519bd7dc657dd2480356, DP-dfc04b24c6237405d348bec38396f854, DP-e85892ef2441e5921f0e0339afc798e0, DP-e8f6957452eb6495796c0d739c18b2b2, DP-eab820fb3430d719578515eb0267b917, DP-ec20bd6e35235468c059bd1faf688966, DP-f38655d2f39daa9c09576b45a5233bcc, DP-f6db7b747d5fbb977ed2c8a1cce1309e, DP-ffba8482aec3de5dce7f25d1946768cf.",
+        "claim": "This agent's earlier investigation HHG-005 (legitimate, none) shares the shared device DP-37f66bb71ca97d53775442b6d7610024, DP-542bff8d7a8bc4c9858e0bac7b52d577, DP-804609024e8ecb4b7a7e3808673a6d9f, DP-a910843ce194bfc86273d01aeb0a7869, DP-ba5ece7542600af0ffb84019857422f4, DP-bfbf4ee7cbf4f1ee6f3acfeb95b44c40, DP-c3bc72b2c593dde6c41b02604480e4c3, DP-caccf24c06a310a1017e0f8bc47b5a2b, DP-d6e01f0ae29036c0bd532647c28aae47, DP-d97ac40e9e087b27c99236b96334898b.",
         "source": "graph",
         "ref": "case_memory",
         "entity_ids": [
-          "HHG-007"
+          "HHG-005"
         ]
       },
       {
@@ -56,8 +56,18 @@
         ]
       }
     ],
-    "similar_prior_cases": [],
-    "summary": "No documented fraud pattern on C02354-K2: fraud probability 0.12, exposure $39.08 across 1 transaction(s). Verification response case_pack.trigger_text settled the question as fraud.",
+    "similar_prior_cases": [
+      "CC-0454",
+      "CC-0631",
+      "CC-2051",
+      "CC-3537",
+      "CC-4942",
+      "CC-1450",
+      "CC-3989",
+      "CC-2969",
+      "CC-3982"
+    ],
+    "summary": "No documented fraud pattern on C02354-K2: fraud probability 0.37, exposure $39.08 across 1 transaction(s). Verification response case_pack.trigger_text settled the question as fraud.",
     "written_to_graph": true,
     "graph_case_id": "INV-HHG-018"
   },
@@ -110,7 +120,7 @@
       "planner": "rules",
       "result": "$39.08 in_person on C02354-K2",
       "ok": true,
-      "ms": 84.6
+      "ms": 32.5
     },
     {
       "step": 2,
@@ -119,51 +129,64 @@
       "args": {
         "customer_id": "C02354"
       },
-      "reason": "Build the customer's baseline across every card they hold.",
-      "planner": "rules",
+      "reason": "Understanding the full transaction history of customer C02354 will help establish a behavioral baseline to assess the flagged transaction.",
+      "planner": "llm",
       "result": "7091 transactions",
       "ok": true,
-      "ms": 625.2
+      "ms": 1124.2
     },
     {
       "step": 3,
+      "tool": "find_ring_membership",
+      "source": "tigergraph-mcp",
+      "args": {
+        "card_id": "C02354-K2"
+      },
+      "reason": "Determining if card C02354-K2 is part of any connected components could reveal potential links to other fraudulent activities.",
+      "planner": "llm",
+      "result": "not in any ring",
+      "ok": true,
+      "ms": 0.0
+    },
+    {
+      "step": 4,
       "tool": "get_linked_closed_cases",
       "source": "tigergraph-mcp",
       "args": {
         "customer_id": "C02354",
         "card_id": "C02354-K2"
       },
-      "reason": "Case memory: find prior investigations on this customer, card or the customers sharing its device.",
-      "planner": "rules",
-      "result": "0 closed cases",
+      "reason": "Investigating past cases related to this customer or card may reveal patterns or previous fraudulent activities that could inform the current case.",
+      "planner": "llm",
+      "result": "20 closed cases",
       "ok": true,
-      "ms": 36.5
+      "ms": 68.2
     },
     {
-      "step": 4,
+      "step": 5,
       "tool": "recall_case_memory",
       "source": "case-memory",
       "args": {
         "customer_id": "C02354"
       },
       "reason": "Check this agent's own earlier investigations on the same entities.",
-      "result": "3 related investigations",
+      "result": "5 related investigations",
       "ok": true,
       "ms": 0.0
     },
     {
-      "step": 5,
+      "step": 6,
       "tool": "graphrag_retrieve",
-      "source": "graphrag:tfidf",
+      "source": "graphrag:tigergraph-vector",
       "args": {
         "query": "none in_person No documented fraud pattern matched: no customer or equivalent le\u2026",
-        "method": "tfidf"
+        "method": "tigergraph-vector"
       },
       "reason": "Ground the explanation: retrieve the policy passages and prior-case narratives closest to this case.",
       "planner": "rules",
-      "result": "3 policy passages, 0 case narratives (tfidf)",
+      "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 0.4
+      "ms": 1411.2
     },
     {
       "tool": "execute_action",
@@ -174,10 +197,10 @@
       "system": "case-management",
       "detail": "Fraud case opened in case management",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T07:25:36.609076+00:00",
+      "executed_at": "2026-09-24T09:31:48.576041+00:00",
       "simulated": true
     }
   ],
   "tokens": 0,
-  "latency_s": 1.236
+  "latency_s": 5.999
 }

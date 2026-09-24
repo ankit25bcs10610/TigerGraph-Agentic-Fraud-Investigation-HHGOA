@@ -29,7 +29,15 @@
         ]
       }
     ],
-    "similar_prior_cases": [],
+    "similar_prior_cases": [
+      "CC-1066",
+      "CC-3587",
+      "CC-2964",
+      "CC-1673",
+      "CC-2778",
+      "CC-2779",
+      "CC-2773"
+    ],
     "summary": "No documented fraud pattern on C12382-K1: fraud probability 0.09, exposure $0.00 across 0 transaction(s). Fraud probability 0.09 meets the strong-legitimate threshold with 2 independent supporting evidence sources.",
     "written_to_graph": true,
     "graph_case_id": "INV-HHG-001"
@@ -61,7 +69,7 @@
       "planner": "rules",
       "result": "$77.07 in_person on C12382-K1",
       "ok": true,
-      "ms": 299.3
+      "ms": 218.7
     },
     {
       "step": 2,
@@ -70,41 +78,54 @@
       "args": {
         "customer_id": "C12382"
       },
-      "reason": "Build the customer's baseline across every card they hold.",
-      "planner": "rules",
+      "reason": "Understanding the full transaction history of customer C12382 will help establish a behavioral baseline and identify any anomalies.",
+      "planner": "llm",
       "result": "422 transactions",
       "ok": true,
-      "ms": 216.7
+      "ms": 148.6
     },
     {
       "step": 3,
+      "tool": "find_ring_membership",
+      "source": "tigergraph-mcp",
+      "args": {
+        "card_id": "C12382-K1"
+      },
+      "reason": "Determining if card C12382-K1 is part of a larger network of fraudulent activity could provide insights into the legitimacy of the flagged transaction.",
+      "planner": "llm",
+      "result": "not in any ring",
+      "ok": true,
+      "ms": 977.9
+    },
+    {
+      "step": 4,
       "tool": "get_linked_closed_cases",
       "source": "tigergraph-mcp",
       "args": {
         "customer_id": "C12382",
         "card_id": "C12382-K1"
       },
-      "reason": "Case memory: find prior investigations on this customer, card or the customers sharing its device.",
-      "planner": "rules",
-      "result": "0 closed cases",
+      "reason": "Investigating closed cases related to this customer or card may reveal patterns or previous fraudulent activities that could inform the current case.",
+      "planner": "llm",
+      "result": "4 closed cases",
       "ok": true,
-      "ms": 74.2
+      "ms": 38.4
     },
     {
-      "step": 4,
+      "step": 5,
       "tool": "graphrag_retrieve",
-      "source": "graphrag:tfidf",
+      "source": "graphrag:tigergraph-vector",
       "args": {
         "query": "none in_person No documented fraud pattern matched: no customer or equivalent le\u2026",
-        "method": "tfidf"
+        "method": "tigergraph-vector"
       },
       "reason": "Ground the explanation: retrieve the policy passages and prior-case narratives closest to this case.",
       "planner": "rules",
-      "result": "3 policy passages, 0 case narratives (tfidf)",
+      "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 0.1
+      "ms": 2384.8
     }
   ],
   "tokens": 0,
-  "latency_s": 0.838
+  "latency_s": 8.645
 }

@@ -3,7 +3,7 @@
   "case": {
     "status": "escalated",
     "verdict": "fraud",
-    "fraud_probability": 0.11,
+    "fraud_probability": 0.36,
     "pattern": "none",
     "pattern_description": "",
     "affected_txn_ids": [
@@ -40,8 +40,18 @@
         ]
       }
     ],
-    "similar_prior_cases": [],
-    "summary": "No documented fraud pattern on C08623-K2: fraud probability 0.11, exposure $49.00 across 1 transaction(s). Verification response case_pack.trigger_text settled the question as fraud.",
+    "similar_prior_cases": [
+      "CC-2935",
+      "CC-3327",
+      "CC-4957",
+      "CC-2817",
+      "CC-3682",
+      "CC-1589",
+      "CC-4989",
+      "CC-2539",
+      "CC-4994"
+    ],
+    "summary": "No documented fraud pattern on C08623-K2: fraud probability 0.36, exposure $49.00 across 1 transaction(s). Verification response case_pack.trigger_text settled the question as fraud.",
     "written_to_graph": true,
     "graph_case_id": "INV-HHG-003"
   },
@@ -94,7 +104,7 @@
       "planner": "rules",
       "result": "$49.00 in_person on C08623-K2",
       "ok": true,
-      "ms": 83.9
+      "ms": 37.5
     },
     {
       "step": 2,
@@ -103,28 +113,41 @@
       "args": {
         "customer_id": "C08623"
       },
-      "reason": "Build the customer's baseline across every card they hold.",
-      "planner": "rules",
+      "reason": "Understanding the full transaction history of customer C08623 will help establish a behavioral baseline to assess the flagged transaction.",
+      "planner": "llm",
       "result": "1140 transactions",
       "ok": true,
-      "ms": 146.6
+      "ms": 158.2
     },
     {
       "step": 3,
+      "tool": "find_ring_membership",
+      "source": "tigergraph-mcp",
+      "args": {
+        "card_id": "C08623-K2"
+      },
+      "reason": "The transaction amount is significantly lower than the customer's prior median, suggesting potential fraud, and checking for connections in the graph could reveal patterns.",
+      "planner": "llm",
+      "result": "not in any ring",
+      "ok": true,
+      "ms": 0.0
+    },
+    {
+      "step": 4,
       "tool": "get_linked_closed_cases",
       "source": "tigergraph-mcp",
       "args": {
         "customer_id": "C08623",
         "card_id": "C08623-K2"
       },
-      "reason": "Case memory: find prior investigations on this customer, card or the customers sharing its device.",
-      "planner": "rules",
-      "result": "0 closed cases",
+      "reason": "Investigating closed cases related to this customer or card may provide insights into similar fraudulent activities or patterns.",
+      "planner": "llm",
+      "result": "6 closed cases",
       "ok": true,
-      "ms": 35.9
+      "ms": 60.9
     },
     {
-      "step": 4,
+      "step": 5,
       "tool": "recall_case_memory",
       "source": "case-memory",
       "args": {
@@ -136,18 +159,18 @@
       "ms": 0.0
     },
     {
-      "step": 5,
+      "step": 6,
       "tool": "graphrag_retrieve",
-      "source": "graphrag:tfidf",
+      "source": "graphrag:tigergraph-vector",
       "args": {
         "query": "none in_person No documented fraud pattern matched: no customer or equivalent le\u2026",
-        "method": "tfidf"
+        "method": "tigergraph-vector"
       },
       "reason": "Ground the explanation: retrieve the policy passages and prior-case narratives closest to this case.",
       "planner": "rules",
-      "result": "3 policy passages, 0 case narratives (tfidf)",
+      "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 0.2
+      "ms": 1559.4
     },
     {
       "tool": "execute_action",
@@ -158,10 +181,10 @@
       "system": "case-management",
       "detail": "Fraud case opened in case management",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T07:24:30.477130+00:00",
+      "executed_at": "2026-09-24T09:28:22.100357+00:00",
       "simulated": true
     }
   ],
   "tokens": 0,
-  "latency_s": 0.44
+  "latency_s": 5.71
 }
