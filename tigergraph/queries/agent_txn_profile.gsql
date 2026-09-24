@@ -1,10 +1,11 @@
-// Agent tool: one transaction with its card, customer, billing region, purchaser email and device.
+// Agent tool: one transaction with its card, customer, billing region, purchaser email and device
+// (with the DeviceInfo model string, which tells a specific phone build from a generic desktop profile).
 // device_customers counts every customer ever seen on the device: generic fingerprints
 // (for example "Windows / chrome / 1920x1080") are shared by hundreds of customers and do not
 // identify a device, so the agent treats them differently from a device shared by a handful.
 CREATE QUERY agent_txn_profile(STRING transaction_id) FOR GRAPH FraudInvestigationGraph {
   SetAccum<STRING> @@ids;
-  SumAccum<STRING> @card_id, @customer_id;
+  SumAccum<STRING> @card_id, @customer_id, @device_info;
   SetAccum<VERTEX> @region, @email, @device;
   SetAccum<VERTEX<Customer>> @users;
   SumAccum<INT> @device_customers;
@@ -14,12 +15,12 @@ CREATE QUERY agent_txn_profile(STRING transaction_id) FOR GRAPH FraudInvestigati
   owners = SELECT t FROM anchor:t -(<made)- Card:k -(<OWNS)- Customer:c ACCUM t.@customer_id = c.customer_id;
   regions = SELECT t FROM anchor:t -(BILLED_IN>)- BillingRegion:reg ACCUM t.@region += reg;
   emails = SELECT t FROM anchor:t -(PURCHASER_EMAIL>)- EmailDomain:dom ACCUM t.@email += dom;
-  devices = SELECT dv FROM anchor:t -(FROM_DEVICE>)- DeviceProfile:dv ACCUM t.@device += dv;
+  devices = SELECT dv FROM anchor:t -(FROM_DEVICE>)- DeviceProfile:dv ACCUM t.@device += dv, t.@device_info = dv.device_info;
   users = SELECT dv FROM devices:dv -(<FROM_DEVICE)- Transaction:x -(<made)- Card:k -(<OWNS)- Customer:c ACCUM dv.@users += c;
   counted = SELECT t FROM anchor:t -(FROM_DEVICE>)- DeviceProfile:dv ACCUM t.@device_customers += dv.@users.size();
   PRINT anchor[anchor.transaction_id AS transaction_id, anchor.@customer_id AS customer_id,
                anchor.@card_id AS card_id, anchor.ts AS ts, anchor.transaction_amt AS amount,
                anchor.channel AS channel, anchor.risk_score AS risk_score, anchor.product_cd AS product_code,
                anchor.@region AS region, anchor.@email AS email, anchor.@device AS device_profile_id,
-               anchor.@device_customers AS device_customers] AS rows;
+               anchor.@device_info AS device_info, anchor.@device_customers AS device_customers] AS rows;
 }

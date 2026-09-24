@@ -86,7 +86,7 @@ class CsvSource:
                 channel=(row["channel"] or "").strip(), risk_score=parse_float(row["risk_score"]), region=clean(row["addr1"]),
                 email=clean(row["P_emaildomain"]), product_code=clean(row["ProductCD"]), device_profile_id=clean(device_id),
                 device_status=clean(attributes.get("device_status") or row["id_15"]), proxy_type=clean(attributes.get("proxy_type") or row["id_23"]),
-                match_status=clean(attributes.get("match_status") or row["id_34"]),
+                match_status=clean(attributes.get("match_status") or row["id_34"]), device_info=clean(attributes.get("device_info")),
             )
             self._txns[txn_id] = txn
             self._by_customer[customer].append(txn_id)
@@ -138,7 +138,8 @@ class CsvSource:
         while frontier_devices and hops < max_hops:
             if hops == 0:  # the device under investigation: generic only if its customers are not concentrated in the window
                 generic = {device for device in frontier_devices
-                           if generic_device(self._device_customers(device), len({self._txns[txn].customer_id for txn in self._by_device.get(device, []) if in_window(txn)}))}
+                           if generic_device(self._device_customers(device), len({self._txns[txn].customer_id for txn in self._by_device.get(device, []) if in_window(txn)}),
+                                             next((self._txns[txn].device_info for txn in self._by_device.get(device, [])), None))}
             else:
                 generic = {device for device in frontier_devices if self._device_customers(device) > COMMON_DEVICE_CUSTOMERS}
             skipped |= generic

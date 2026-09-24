@@ -5,12 +5,14 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Protocol
 
-# Device fingerprints in this dataset (model / browser / screen) are often generic: one
-# "Windows / chrome / 1920x1080" profile serves hundreds of customers steadily for months. A device
-# seen with more customers than this is generic unless at least BURST_SHARE of them used it around
-# the alert: many customers concentrated in one week is a burst on one device, not a fingerprint.
+# Device fingerprints in this dataset (model / browser / screen) are often generic: a blank or
+# "Windows" desktop profile with a browser version serves hundreds of customers, and a new browser
+# release packs them into a few weeks. A device seen with more customers than this is evidence only
+# when it names a specific model (for example "SM-G935F Build/NRD90M") and at least BURST_SHARE of its
+# customers used it around the alert: one unusual device serving many cards at once.
 COMMON_DEVICE_CUSTOMERS = 10
 BURST_SHARE = 0.25
+GENERIC_DEVICE_INFO = {"", "windows", "macos", "mac os", "ios device", "linux", "trident/7.0", "samsung", "android"}
 # A fraud ring is people sharing devices at the same time: ring expansion only follows
 # transactions within this window of the flagged one, and stops at RING_MAX_CARDS cards.
 RING_WINDOW = timedelta(days=7)
@@ -65,11 +67,20 @@ class Txn:
     proxy_type: str | None = None
     match_status: str | None = None
     device_customers: int | None = None   # distinct customers ever seen on device_profile_id
+    device_info: str | None = None        # the identity DeviceInfo behind device_profile_id
 
 
-def generic_device(total_customers: int, window_customers: int) -> bool:
-    """A fingerprint shared by many customers spread over time, rather than one device used in a burst."""
-    return total_customers > COMMON_DEVICE_CUSTOMERS and window_customers < BURST_SHARE * total_customers
+def specific_model(device_info: str | None) -> bool:
+    """DeviceInfo names a device model or build rather than an operating-system family."""
+    info = (device_info or "").strip().lower()
+    return bool(info) and info not in GENERIC_DEVICE_INFO and not info.startswith("rv:")
+
+
+def generic_device(total_customers: int, window_customers: int, device_info: str | None = None) -> bool:
+    """A fingerprint shared by unrelated people, rather than one unusual device serving many cards at once."""
+    if total_customers <= COMMON_DEVICE_CUSTOMERS:
+        return False
+    return not specific_model(device_info) or window_customers < BURST_SHARE * total_customers
 
 
 @dataclass(frozen=True)

@@ -83,7 +83,7 @@ def _txn(row: Mapping[str, Any], device_profile_id: str | None = None) -> Txn | 
         region=_one(row.get("region")), email=_one(row.get("email")), product_code=clean(row.get("product_code")),
         device_profile_id=device_profile_id or _one(row.get("device_profile_id")), device_status=clean(row.get("device_status")),
         proxy_type=clean(row.get("proxy_type")), match_status=clean(row.get("match_status")),
-        device_customers=int(users) if users not in (None, "") else None,
+        device_customers=int(users) if users not in (None, "") else None, device_info=clean(row.get("device_info")),
     )
 
 

@@ -282,13 +282,14 @@ class LocalInvestigationEngine(ReferenceWorkflow):
             in_window = [item for item in on_device if item.customer_id and abs(item.ts - target.ts) <= NETWORK_WINDOW]
             total = max(len({item.customer_id for item in on_device if item.customer_id}), target.device_customers or 0)
             window_customers = len({item.customer_id for item in in_window} | {target.customer_id})
-            generic = generic_device(total, window_customers)
-            gathered["device_view"] = {"customers": total, "window_customers": window_customers, "generic": generic, "burst": total > COMMON_DEVICE_CUSTOMERS and not generic}
+            generic = generic_device(total, window_customers, target.device_info)
+            gathered["device_view"] = {"customers": total, "window_customers": window_customers, "generic": generic, "burst": total > COMMON_DEVICE_CUSTOMERS and not generic,
+                                       "model": target.device_info or ""}
             gathered["network"] = [] if generic else [item for item in in_window if item.customer_id != target.customer_id]
             if generic:
-                trace.note("skip_device_tools", "rules", {"device_profile_id": device, "customers_on_device": total, "customers_this_week": window_customers},
-                           f"More than {COMMON_DEVICE_CUSTOMERS} customers overall and under a quarter of them around this alert: a fingerprint shared by unrelated people, not one device.",
-                           "device sharing and ring expansion skipped")
+                trace.note("skip_device_tools", "rules", {"device_profile_id": device, "device_info": target.device_info or "none", "customers_on_device": total, "customers_this_week": window_customers},
+                           f"More than {COMMON_DEVICE_CUSTOMERS} customers on a profile that names no specific device model, or whose customers are spread over months: "
+                           "a fingerprint shared by unrelated people, not one device.", "device sharing and ring expansion skipped")
         elif name == "detect_device_ring":
             device = target.device_profile_id
             gathered["ring"] = trace.call(name, {"device_profile_id": device, "max_hops": RING_HOPS, "window": "±7 days"}, reason, lambda: source.device_ring(device, RING_HOPS, target.ts),
@@ -426,9 +427,10 @@ class LocalInvestigationEngine(ReferenceWorkflow):
             fact(f"Device {target.device_profile_id} has been used on this card before.", [target.device_profile_id], "device_known", EvidenceDirection.LEGITIMATE)
         view = context.get("device_view") or {}
         if view.get("generic"):
-            fact(f"Device {target.device_profile_id} is a generic fingerprint: {view['customers']} customers used it overall and only {view['window_customers']} within seven days of this alert, so sharing it is not evidence of a ring.", [target.device_profile_id])
+            described = f"a {view['model']} profile" if view.get("model") else "a profile naming no device model"
+            fact(f"Device {target.device_profile_id} is a generic fingerprint ({described}, {view['customers']} customers overall, {view['window_customers']} within seven days of this alert), so sharing it is not evidence of a ring.", [target.device_profile_id])
         elif view.get("burst"):
-            fact(f"Device {target.device_profile_id} served {view['window_customers']} of its {view['customers']} customers within seven days of this alert: a concentrated burst on one device, not a common fingerprint.", [target.device_profile_id], "device_burst")
+            fact(f"Device {target.device_profile_id} ({view['model']}) served {view['window_customers']} of its {view['customers']} customers within seven days of this alert: one specific device model used by many cards at once, not a common fingerprint.", [target.device_profile_id], "device_burst")
         if ring and (len(ring.customers) >= 3 or ring.confirmed_cases):
             touching = f", touching confirmed fraud case(s) {', '.join(ring.confirmed_cases[:4])}" if ring.confirmed_cases else ""
             fact(f"Fraud-ring analysis: device {ring.seed_device} sits in a connected component of {len(ring.customers)} customers, {len(ring.cards)} cards and {len(ring.devices)} devices within {ring.hops} hops{touching}.",

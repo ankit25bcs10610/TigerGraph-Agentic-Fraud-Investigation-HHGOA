@@ -227,8 +227,10 @@ def test_rings_endpoint_returns_labelled_rings():
 def test_generic_fingerprint_is_not_sharing_evidence_but_a_burst_is():
     from backend.sources.base import generic_device
 
-    assert generic_device(158, 34)          # many customers spread over months
-    assert not generic_device(52, 24)       # nearly half of them in the alert week: a burst on one device
+    assert generic_device(158, 34, "Windows")          # many customers spread over months
+    assert not generic_device(52, 24, "SM-G935F Build/NRD90M")   # one phone build, half its customers in the alert week
+    assert generic_device(171, 126, "")      # a new desktop browser release: bursty but names no device
+    assert generic_device(300, 20, "SM-G935F Build/NRD90M")    # a popular phone spread over months
     assert not generic_device(6, 1)         # a handful of customers is always specific
 
 
