@@ -280,7 +280,10 @@ def _device_anomaly(target: TransactionEvidence,
         return True
     if (target.proxy_type or "").strip():
         return True
-    prior = {item.device_profile_id for item in history if item.device_profile_id}
+    prior = {
+        item.device_profile_id for item in history
+        if item.transaction_id != target.transaction_id and item.device_profile_id
+    }
     return bool(target.device_profile_id and target.device_profile_id not in prior)
 
 
@@ -295,13 +298,33 @@ def detect_account_takeover(context: PatternContext) -> PatternResult:
     device_anomaly = any(_device_anomaly(item, history) for item in online_window)
     match_anomaly = any(_match_flag_anomaly(item, history) for item in online_window)
     supporting = ["mixed online and in_person activity within seven days"]
-    if device_anomaly:
+    coordinated_activity = bool({
+        item.customer_id for item in context.network_transactions
+        if item.customer_id != context.target.customer_id and _within(item, context.target, 168)
+    })
+    if device_anomaly and not coordinated_activity:
         supporting.append("target device/identity differs from the normal device baseline")
     if match_anomaly:
         supporting.append("target match-status signal differs from the normal match baseline")
+    if coordinated_activity:
+        return _result(
+            FraudPattern.NONE,
+            [],
+            ["cross-customer coordination is better handled by the undocumented-pattern detector"],
+            0.0,
+            "Mixed-channel identity signals are present inside a coordinated cross-customer ring.",
+        )
     if device_anomaly and match_anomaly:
         return _result(FraudPattern.ACCOUNT_TAKEOVER, supporting, [], 0.86,
                        "Mixed-channel activity combines device and match-status anomalies.")
+    if device_anomaly:
+        return _result(
+            FraudPattern.ACCOUNT_TAKEOVER,
+            supporting,
+            [],
+            0.72,
+            "Mixed-channel activity combines an independent device anomaly with the account baseline.",
+        )
     contradictions = []
     if not device_anomaly:
         contradictions.append("no device or identity anomaly was established")
@@ -316,10 +339,20 @@ def detect_undocumented(context: PatternContext) -> PatternResult:
         item.customer_id for item in context.network_transactions
         if item.customer_id != context.target.customer_id
     }
+    near_target_transactions = [
+        item for item in context.network_transactions
+        if item.customer_id != context.target.customer_id and _within(item, context.target, 48)
+    ]
+    near_target_customers = {item.customer_id for item in near_target_transactions}
+    history = _history(context)
+    online_burst = [item for item in history if _online(item) and _within(item, context.target, 48)]
+    threshold_burst = [item for item in online_burst if 300 <= item.amount_usd < 500]
+    repeated_threshold_abuse = len(threshold_burst) >= 3 and len(online_burst) == len(threshold_burst)
     coordinated = (
-        len(other_customers) >= 2
-        or (len(other_customers) >= 1 and len(set(context.connected_card_ids)) >= 2)
+        len(near_target_customers) >= 2
+        or (bool(near_target_customers) and len(set(context.connected_card_ids)) >= 2)
         or (context.ring_customer_count >= 3 and len(set(context.connected_card_ids)) >= 2)
+        or repeated_threshold_abuse
     )
     known_match = any(
         result.pattern in {
@@ -330,13 +363,19 @@ def detect_undocumented(context: PatternContext) -> PatternResult:
         for result in context.known_pattern_results
     )
     if coordinated and not known_match:
+        supporting = [
+            f"coordinated activity spans {max(len(other_customers), context.ring_customer_count - 1)} other customers",
+            f"{len(set(context.connected_card_ids))} connected cards were supplied",
+            f"{len(near_target_transactions)} connected transaction(s) occurred within 48 hours of the target",
+            f"{len(context.confirmed_related_case_ids)} related confirmed cases were supplied",
+        ]
+        if repeated_threshold_abuse:
+            supporting.append(
+                f"{len(threshold_burst)} online purchases stayed below the USD 500 authorization threshold within 48 hours"
+            )
         return _result(
             FraudPattern.UNDOCUMENTED,
-            [
-                f"coordinated activity spans {max(len(other_customers), context.ring_customer_count - 1)} other customers",
-                f"{len(set(context.connected_card_ids))} connected cards were supplied",
-                f"{len(context.confirmed_related_case_ids)} related confirmed cases were supplied",
-            ],
+            supporting,
             [], 0.8,
             "Repeated or coordinated abuse is present, but no documented pattern detector fired.",
         )

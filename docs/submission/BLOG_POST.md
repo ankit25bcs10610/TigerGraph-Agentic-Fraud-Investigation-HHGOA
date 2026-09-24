@@ -1,238 +1,202 @@
-# The Chrome update that looked like a fraud ring
+# Sentinel: From an uncertain alert to a defensible fraud decision
 
-### Building Sentinel, an agent that investigates fraud on TigerGraph and knows when it doesn't know enough
+*An agentic fraud investigation system built on TigerGraph for the HHGOA Hacker House Goa challenge.*
 
-*By Kartikeya Yadav and Ankit Pandey, for the TigerGraph Hacker House Goa challenge.*
+Fraud investigation is not a single classification problem. An analyst must connect a payment to a customer, card, device and region; compare it with normal behaviour; search for related accounts; read policy; decide whether more evidence is needed; route protected actions for approval; and leave a record that another person can verify.
 
-![Sentinel's case command center](https://raw.githubusercontent.com/ankit25bcs10610/TigerGraph-Agentic-Fraud-Investigation-HHGOA/main/docs/screenshots/command-center.png)
+We built **Sentinel** to make that workflow faster without making it less accountable. Sentinel is graph-native, evidence-first and explicit about uncertainty. It investigates the activity, recommends the next best action, pauses when the evidence is insufficient, and records every decision with its supporting evidence and approval route.
 
-The first time we ran our fraud agent against the live graph, it found a fraud ring behind almost every alert.
+## The one-line idea
 
-Thirteen of the twenty benchmark cases came back labelled *undocumented coordinated abuse*. The rings were enormous: 6,322 customers, 6,404 cards and 9,457 devices behind a single $128 purchase. Each answer file listed around 8,000 "connected" cards. On paper the agent was doing exactly what we built it to do: follow shared devices outward and flag coordination that no documented pattern explains.
-
-It was wrong, and the reason turned into the most important thing we learned building this project. In this dataset a "device" is a fingerprint: device model, browser version, screen size. One profile, a Windows desktop running Chrome 66, was used by 253 different customers, every one of them in December, the month that browser version first appears in the data. Our agent had found a software release and called it a crime.
-
-This post is about how we built Sentinel, an investigation agent on TigerGraph, and about the unglamorous part that made it trustworthy: teaching a graph agent which edges actually mean something.
-
----
-
-## The problem
-
-Fraud teams don't lack alerts. They lack time. For every flagged payment an analyst traces the customer's history, checks the device, looks for linked accounts, reads prior cases and policy, decides whether there is enough evidence to act, asks the customer if there isn't, and gets approval before blocking anything. Often the money has already gone.
-
-The challenge asked for an agent that does that investigation: start from a trigger, gather evidence from the graph, identify the pattern, **recognise when the evidence isn't enough**, gather more through controlled actions, recommend the next best action under policy, explain itself, and remember past cases. The dataset is built on the IEEE-CIS fraud data: 590,742 card transactions over six months, 13,553 customers, device and identity records for online payments, 5,565 closed investigations, a fraud policy with ten rules, and five documented fraud patterns. The brief also warned that not every pattern in the data is documented.
+**Graph evidence finds the relationships. Deterministic controls make the decision. A human approves protected actions. The audit chain proves what happened.**
 
 ## What Sentinel does
 
-A trigger (a risk score, a customer's report, or an analyst's request) opens a case, and the agent runs an explicit loop:
+Sentinel starts from a risk signal, customer report or analyst request and runs a complete investigation:
 
-1. **Investigate.** It calls graph tools on TigerGraph, one at a time, each with a reason.
-2. **Assess.** Deterministic detectors look for the five documented patterns and for coordination none of them explains. A transparent weighted score turns the evidence into a fraud probability.
-3. **Decide whether to stop.** Stopping rules check whether the evidence is strong and independent enough. If it isn't, the agent asks the customer to confirm the transaction or requests step-up authentication, and the case waits.
-4. **Recommend.** Policy rules R1–R10 produce the next best actions. Automatic ones run; declines, card blocks and report filings wait for an L1 or L2 approver.
-5. **Explain, record and remember.** Every action cites the policy text behind it, every event goes into a hash chain, and the case is written back to TigerGraph, where later investigations can find it.
+1. **Load the trigger.** Validate the case, transaction, customer and card references before analysis begins.
+2. **Build context in TigerGraph.** Retrieve the transaction profile, the card and customer baselines, device neighbours, regional activity, linked cards and prior cases.
+3. **Detect patterns.** Evaluate card testing, card-not-present fraud, card-not-present fraud from a new device, out-of-region use, account takeover and coordinated activity that does not fit a documented pattern.
+4. **Grade the evidence.** Combine independent signals into a transparent fraud probability, preserving both supporting and contradicting evidence.
+5. **Choose whether to continue.** If the evidence is not sufficient, select a controlled evidence request such as customer validation or step-up authentication.
+6. **Recommend and route actions.** Apply bank policy R1–R10. Automatic actions can run; card blocks, declines and reports are routed to the required L1 or L2 approval.
+7. **Explain and remember.** Produce a grounded narrative, persist the formal case, retain before-and-after recommendations, and extend the tamper-evident audit chain.
 
-Here is a real trace, exactly as the agent recorded it, for benchmark case HHG-016: a customer reporting a $59.67 purchase they didn't make.
+The analyst sees this as one workbench: queue health, exposure, risk waterfall, relationship graph, ring timeline, evidence requests, policy citations, approval state and the complete agent trace.
 
-| Step | Tool | What came back |
-|---|---|---|
-| 1 | `get_transaction` | $59.67 online on card C09988-K1 |
-| 2 | `get_device_activity` | 592 transactions from 158 customers on this device |
-| 3 | `skip_device_tools` | *"More than 10 customers on a profile that names no specific device model, or whose customers are spread over months: a fingerprint shared by unrelated people, not one device."* |
-| 4 | `get_customer_activity` | 61 transactions: the customer's baseline |
-| 5 | `find_ring_membership` | the card sits in a graph-wide ring of 36 customers, 36 cards, 16 burst devices |
-| 6 | `get_linked_closed_cases` | none |
-| 7 | `recall_graph_memory` | no earlier investigations of the agent's own on these entities |
-| 8 | `graphrag_retrieve` | 4 policy passages, 3 case narratives (TigerGraph vectors) |
+## What the analyst sees
 
-Six seconds, all of it through TigerGraph's MCP server. Notice step 3. The device looked like a lead, and the agent looked at it and dropped it. Then step 5 found the ring anyway, from a completely different direction. The rest of this post explains both.
+The command center puts operational risk and the investigation queue first. The case view then moves from the relationship graph to evidence, score waterfall, decisions and audit without hiding the underlying records.
 
-## The graph, and the agent's tools
+![Sentinel investigation workbench](../../docs/screenshots/investigation.png)
 
-The graph holds customers, cards, transactions, device profiles, email domains, billing regions, the bank's closed cases, and the agent's own investigations:
+![Sentinel policy decisions and approvals](../../docs/screenshots/decisions.png)
 
-| Vertex | Count |
+The relationship view makes shared devices and linked cases visible, while the audit view lets the browser verify the event chain rather than asking the analyst to trust a status label.
+
+## Why TigerGraph is central
+
+Fraud signals become more valuable when connected. A new device is one signal. The same device used by four customers, touching a previously confirmed case, is a different investigation.
+
+Sentinel stores and retrieves the investigation context in TigerGraph:
+
+- Customers, cards, transactions, devices, email domains, billing regions and closed cases are graph entities.
+- Deterministic identity construction ensures the same source device or card is represented consistently across records.
+- Read-only GSQL queries expose focused agent tools such as transaction context, customer activity, card windows, device neighbours, connected cards and prior cases.
+- The official TigerGraph MCP server exposes those graph capabilities to the agent. Each tool call records what was called, why it was called and what it returned.
+- A bounded device-ring traversal expands device → transaction → card → customer relationships without allowing an unbounded graph search to overwhelm the investigation.
+- Every formal benchmark investigation is written back as an `InvestigationCase` and linked to the entities and evidence that produced it.
+
+The graph is not just a storage layer. It changes the investigation questions Sentinel can ask: *Who else touched this device? Which cards are in the blast radius? Has this relationship appeared in a confirmed case? Is the activity coordinated in the same episode?*
+
+## The agent architecture
+
+```text
+Trigger / case pack
+        │
+        ▼
+Validation and case creation
+        │
+        ▼
+TigerGraph MCP → GSQL evidence tools
+        │
+        ▼
+Pattern detectors → evidence grading → fraud probability
+        │                         │
+        │                         └─ GraphRAG policy and prior-case context
+        ▼
+Stopping decision
+        │
+        ├─ enough evidence → policy → approval route → action receipt
+        │
+        └─ uncertainty → value-of-information evidence request → re-assess
+                                      │
+                                      ▼
+                         InvestigationCase + memory + audit chain
+```
+
+The backend is Python and FastAPI. The workflow is orchestrated as a state machine. The analyst UI is Next.js, React, TypeScript and Cytoscape.js.
+
+## Agentic where it helps, deterministic where it matters
+
+The LLM is optional and deliberately constrained. It may plan the next graph tool and write a narrative from retrieved citations. It cannot change the fraud probability, invent evidence, choose an approval route, execute a protected action or override policy.
+
+The deterministic layer owns:
+
+- pattern detection and supporting/contradicting evidence;
+- fraud probability and exposure calculation;
+- stopping criteria and uncertainty handling;
+- policy recommendations and SAR eligibility;
+- AUTO, L1 and L2 approval routing;
+- graph persistence and output validation.
+
+If the LLM is unavailable, the rule-based planner continues the workflow and the deterministic explanation remains available. If an LLM narrative contains unsupported references, validation rejects it rather than allowing an attractive but ungrounded explanation into the case record.
+
+## Next-best action is a real workflow, not a button label
+
+When Sentinel is uncertain, it does not simply display “review.” It evaluates the evidence requests available to the case and selects one that can change the decision.
+
+For example, a customer validation response can move an uncertain case to confirmed fraud or confirmed legitimate activity. A step-up response may add confidence without settling the case. The agent records:
+
+- the recommendation before the request;
+- why the request was selected;
+- the simulated or real response, clearly labelled;
+- the updated probability and verdict;
+- the changed action set and approval route.
+
+This makes the agent’s behaviour inspectable before and after new evidence arrives.
+
+## Policy, permissions and receipts
+
+Sentinel treats a recommendation and an execution as different events. Every action is mapped to its policy rule and approval route. Automatic actions receive a simulated bank-system receipt. Protected actions remain pending until an authorized analyst approves or rejects them.
+
+The case record includes the evidence, recommendation, required role, approval decision, execution result and receipt. This prevents the common failure mode where a UI says “block card” but the system cannot show whether anyone was authorized to perform it.
+
+## GraphRAG and grounded explanations
+
+Graph evidence answers *what is connected*. GraphRAG supplies the policy and prior-case context needed to answer *why this matters*.
+
+Sentinel indexes policy passages, documented pattern descriptions and closed-case narratives as `KnowledgeChunk` vertices. Retrieval is performed through the graph integration and returned alongside structural evidence. The narrative layer can only cite records in its allow-list, and the UI exposes those citations next to the explanation.
+
+The result is a useful separation:
+
+- graph queries provide facts and relationships;
+- deterministic detectors assess those facts;
+- policy documents explain permitted actions;
+- the LLM, when available, turns cited records into readable prose.
+
+## The audit trail is part of the product
+
+Every graph call, detector result, evidence request, response, approval and action extends a SHA-256 hash chain. The browser recomputes the chain and reports whether the record is verified. Secrets and credentials are filtered before events reach the UI.
+
+That gives an analyst and a reviewer answers to four practical questions:
+
+1. What did the agent know?
+2. Which tools did it call and why?
+3. Which policy produced the recommendation?
+4. What was actually approved and executed?
+
+## Accuracy work and honest calibration
+
+We replayed 49 closed investigations, sampled evenly across the seven analyst labels. The case under test and every case opened after it were hidden from the agent to avoid label leakage. This is a blindfolded evidence-only calibration, not a claim that analyst notes are available at trigger time.
+
+The latest calibration report is stored in [`outputs/CALIBRATION_REAL.md`](../../outputs/CALIBRATION_REAL.md):
+
+| Analyst pattern | Recall |
 |---|---:|
-| Transaction | 590,742 |
-| Card | 14,319 |
-| Customer | 13,553 |
-| DeviceProfile | 9,776 |
-| ClosedCase | 5,565 |
-| KnowledgeChunk (policy, patterns and case narratives, with embeddings) | 5,570 |
+| Account takeover | 57% |
+| Card-not-present fraud | 29% |
+| Card-not-present, new device | 29% |
+| Card testing | 71% |
+| Out-of-region use | 43% |
+| Undocumented activity | 29% |
+| Legitimate / none | 14% |
 
-Every question the agent asks is an installed GSQL query, called through the **official TigerGraph MCP server**. Each one is small, read-only and answers one question:
+The most important engineering result was not fitting labels. It was removing evidence leaks and false positives:
 
-| Tool | GSQL query | The question |
-|---|---|---|
-| `get_transaction` | `agent_txn_profile` | The flagged payment, its card, customer, region, email and device, and how many customers that device has served |
-| `get_customer_activity` | `agent_customer_activity` | Everything this customer did, across all their cards |
-| `get_device_activity` | `agent_device_activity` | Everyone else who used this device, and when |
-| `detect_device_ring` | `agent_device_ring` | A bounded connected-component expansion around the device, within seven days of the alert |
-| `find_ring_membership` | `agent_fraud_communities` | Whether the card sits in one of the graph-wide rings |
-| `get_linked_closed_cases` | `agent_linked_closed_cases` | Closed cases on this customer, their cards, or the cards they are connected to |
-| `get_closed_cases_by_pattern` | `agent_closed_cases_by_pattern` | Closed cases with the same pattern, and their outcomes |
-| `recall_graph_memory` | `agent_prior_investigations` | The agent's own earlier investigations on these entities |
-| `graphrag_retrieve` | `KnowledgeChunk` vector search | The policy passages and prior-case narratives closest to this case |
-| *(queue level)* | `agent_ring_profile` | What a ring's cards actually did |
+- the target transaction is excluded from its own device baseline;
+- historical shared-device activity outside the active episode does not suppress account-takeover detection;
+- coordinated undocumented activity requires temporally relevant cross-customer evidence or a repeated authorization pattern;
+- regression tests protect each of these boundaries.
 
-An **LLM planner** (GPT-4o-mini) picks the next tool from the ones that make sense at that moment, and must give a reason: *"The device has been shared with 23 other customers, indicating a potential fraud ring that needs to be investigated."* It can only choose from an allow-list, within a step budget. An unknown tool, a malformed reply or a provider error hands the choice to a rule planner, and the trace says so.
+The current benchmark run produced **20/20 valid answer files**, with all 20 formal cases written to TigerGraph and no review failures. The repository currently has **166 passing automated tests** in the local suite; live integration tests additionally require the active Savanna workspace to resolve and remain available.
 
-## When is a shared device evidence?
-
-Back to the Chrome 66 problem. "Two customers used the same device" is one of the strongest signals in fraud investigation, and one of the easiest to get catastrophically wrong. We measured the device profiles across the whole graph:
-
-- 4,951 profiles were used by exactly one customer.
-- 2,267 by two or three.
-- 116 by between 100 and 1,000 customers.
-
-Those 116 are generic fingerprints: "Windows, Chrome, 1920×1080". Walk through one and you reach everyone who bought the same laptop. Our first ring expansion did exactly that.
-
-**First fix: count the customers.** A device seen with more than ten customers doesn't identify a device. That removed the giant rings, but it also threw away the most interesting case in the benchmark. HHG-014 is an analyst's request: *"several cards this month show purchases from the same unusual device profile."* That device had 52 customers, so the rule discarded it.
-
-**Second fix: look at timing.** HHG-014's device served 24 of its 52 customers in one week. That's a burst, not a steady fingerprint. We treated concentrated devices as evidence, and the benchmark promptly produced seven "undocumented" cases, including three whose devices were plain desktop Chrome profiles. The device behind HHG-013 had 253 customers, all in December: the first month Chrome 66 appears in the data. A new browser version packs hundreds of people into its first weeks. Timing alone can't tell a release from a ring.
-
-**Third fix: ask what the profile names.** Putting the devices side by side made the difference obvious:
-
-| Case | Device profile | Customers | In the alert week |
-|---|---|---:|---:|
-| HHG-014 | `SM-G935F Build/NRD90M`, mobile, Chrome 62 for Android | 52 | 24 |
-| HHG-013 | "Windows", desktop, Chrome 66 | 253 | 153 |
-| HHG-017 | "Windows", desktop, Chrome 65, 1920×1080 | 299 | 130 |
-| HHG-016 | "Windows", desktop, Edge 16 | 158 | 34 |
-
-HHG-014's device names one specific phone build, a Samsung Galaxy S7 edge on one firmware. The others name only an operating system. So the agent now asks three questions of every device:
-
-```python
-def generic_device(total_customers, window_customers, device_info):
-    """A fingerprint shared by unrelated people, rather than one unusual device serving many cards at once."""
-    if total_customers <= 10:
-        return False                      # a handful of customers: always specific
-    return not specific_model(device_info) or window_customers < 0.25 * total_customers
-```
-
-A blank or "Windows" profile with many customers is never ring evidence, however busy it is. A specific build serving many cards in the week of the alert is. With that rule, HHG-014 expands into a ring of 38 cards on 12 devices within seven days, and is labelled undocumented. The three Chrome rollouts go back to being ordinary alerts, and HHG-016's Edge profile is skipped, with the reason written into the trace.
-
-The ring expansion itself (`agent_device_ring`) follows the same discipline. It only walks transactions within seven days of the alert, never expands through a generic device beyond the one under investigation, and stops at 60 cards. For HHG-004, a card-not-present case, the old version returned 6,322 customers. The new one returns 2.
-
-## Finding, and describing, the pattern nobody documented
-
-The per-case ring search only sees the alert's own device, and HHG-016's own device was generic. So the agent also looks at the graph as a whole.
-
-`agent_fraud_communities` runs weakly connected components by label propagation in GSQL, over cards and **burst devices**: devices used by three to ten customers within 72 hours, which is how one physical device serving a stack of stolen cards behaves.
-
-```sql
-shared = SELECT d FROM measured:d
-         WHERE d.@users.size() >= min_device_customers                        -- 3
-           AND d.@users.size() <= max_device_customers                        -- 10
-           AND datetime_diff(d.@last, d.@first) <= max_span_hours * 3600      -- 72 hours
-         POST-ACCUM d.@shared = TRUE, d.@cc += getvid(d);
-```
-
-Getting the definition right took measurement, not intuition. Allowing any shared device with up to five customers produced one component of 1,881 customers. Counting three customers inside *any* 72-hour window produced one of 1,085. The strict version finds eight distinct rings across all 590,742 transactions: 36 customers, 18, 6, 6, 5, 4, 3 and 3.
-
-A connected component is not an explanation, though. So `agent_ring_profile` summarises what each ring's cards actually did on their shared devices, and the agent quotes it. The largest ring reads:
-
-> 73 transactions by 36 cards on 16 shared devices, 14 of them named Android phone builds; 100% online; 99% product C; median $31.70, total $3,386.49.
-
-Small online purchases of one product, from a pool of phones that each served several unrelated cards within hours. None of the five documented patterns describes that, so it is labelled a candidate undocumented pattern. Then the interesting part: two unrelated benchmark alerts sit inside it. HHG-011 is a customer's dispute that the agent classified as card testing (three small authorizations averaging $5.13 within an hour, then a $92.87 purchase). HHG-016 is the $59.67 dispute from the trace above. Two customers, two alerts, one ring, and each investigation cites it.
-
-![Graph intelligence explorer](https://raw.githubusercontent.com/ankit25bcs10610/TigerGraph-Agentic-Fraud-Investigation-HHGOA/main/docs/screenshots/graph-intelligence.png)
-
-## Memory that lives in the graph
-
-The brief asks for an agent that uses past investigations to improve future decisions. We made the graph the memory.
-
-Every investigation is written back to TigerGraph as an `InvestigationCase` vertex, with edges to the flagged transaction, the customer, the card, the affected transactions, the connected cards and devices, and similar closed cases. When a new case opens, `agent_prior_investigations` walks those edges backwards from the current customer, card, the cards of its ring, and its devices:
-
-```sql
-by_card      = SELECT ic FROM cards:k   -(<ON_CARDS)-         InvestigationCase:ic ACCUM ic.@reasons += ("card " + k.card_id);
-by_connected = SELECT ic FROM cards:k   -(<CONNECTED_CARD)-   InvestigationCase:ic ACCUM ic.@reasons += ("connected card " + k.card_id);
-by_device    = SELECT ic FROM devices:d -(<CONNECTED_DEVICE)- InvestigationCase:ic ACCUM ic.@reasons += ("device " + d.device_profile_id);
-found = by_customer UNION by_card UNION by_connected UNION by_device;
-found = SELECT ic FROM found:ic WHERE ic.opened_at < before_ts AND ic.case_id != exclude_case;
-```
-
-The last line matters most: an investigation only ever learns from cases opened *before* it. The benchmark runs the cases in the order they were opened, so each one sees exactly what an analyst would have had at the time.
-
-On December 29 the agent opened HHG-011 and recalled:
-
-> This agent's earlier investigation HHG-016 (fraud, undocumented, opened 2016-12-12) is linked: its card is in this card's ring: C09988-K1.
-
-A different customer, a different card, seventeen days earlier, linked through the ring. An earlier fraud conclusion counts like a linked confirmed case in the score. In the same way, HHG-019 recalls the agent's fraud finding on HHG-018, whose card sits in its ring.
-
-One detail we learned the hard way: writing a case again adds new edges but keeps the old ones. After a few runs, stale edges from an earlier, noisier version linked almost every case to every other. Now each case's outgoing edges are cleared (`agent_reset_case_edges`) before it is rewritten, so memory reflects the latest investigation, not every past attempt.
-
-## Knowing when it doesn't know
-
-Most of what makes an investigation defensible happens when the evidence is ambiguous, so we designed that path first.
-
-**Stopping rules.** The agent stops gathering evidence only when the fraud probability is strongly one way with at least two independent pieces of evidence, when a customer's answer settles the question, or when further investigation is unlikely to change the decision. Otherwise it asks.
-
-**It chooses its question by value of information.** Before asking for anything, the agent simulates every possible answer to every request it could make (the customer denies, confirms or doesn't reply; step-up passes, fails or isn't completed), runs each through the full assessment, and asks for the evidence whose answers lead to the most different decisions. The analyst sees every branch before the answer arrives.
-
-**It shows its recommendation before and after the evidence.** HHG-010 is a $1,000.03 risk alert the graph can't settle on its own. Before any evidence, the agent recommends escalating to an analyst. It asks the customer and requests step-up authentication; when the answers come back as no reply and not completed, it adds monitoring the card and declining the transaction (at L1), and records why: *"Step-up authentication evidence (not completed) moved fraud probability to 0.34. Added: monitor card, decline transaction."*
-
-**Every verdict has its counterfactual.** A waterfall shows how many points each signal added to the probability, and marks a signal *decisive* if removing it alone would change the verdict, so the analyst can see whether a call rests on one fact or five.
-
-![Decisions before and after the evidence](https://raw.githubusercontent.com/ankit25bcs10610/TigerGraph-Agentic-Fraud-Investigation-HHGOA/main/docs/screenshots/decisions.png)
-
-## Where the LLM is, and where it isn't
-
-We drew a hard line. The language model never computes the probability, never picks an action and never approves anything. It does two jobs:
-
-- **Choosing the next tool**, from an allow-list, with a reason, falling back to rules if its answer isn't valid.
-- **Writing the narrative**, from cited evidence only. It receives the evidence, the policy passages GraphRAG retrieved, and the actions, and every identifier it writes must appear in that context. Our validator throws the narrative away otherwise.
-
-GraphRAG runs vector search over the `KnowledgeChunk` vertices in TigerGraph, which hold policy passages, pattern documents and closed-case narratives, and labels every citation with the method that found it.
-
-## Controls, and proof
-
-- **Approvals.** Every action carries a route (`auto`, `L1` or `L2`) derived from policy and exposure. Card blocks and report filings wait for a recorded human decision.
-- **Receipts.** Approved actions run through simulated bank systems (card platform, customer messaging, case management, regulatory filing), and each returns a receipt.
-- **A verifiable record.** Every event (each graph call, assessment, evidence request, response, approval and receipt) extends a SHA-256 hash chain, and the browser recomputes every hash before it shows *Case record verified*.
-
-![Audit chain verified in the browser](https://raw.githubusercontent.com/ankit25bcs10610/TigerGraph-Agentic-Fraud-Investigation-HHGOA/main/docs/screenshots/audit-verified.png)
-
-## How well does it work?
-
-We'll be straight about the numbers.
-
-**On the 20 benchmark cases, live on TigerGraph.** Every answer was produced through TigerGraph MCP, written back to the graph, and passes our output validator (entity IDs, action routes, legitimate-case rules). Before and after the device work:
-
-| | First live run | Final run |
-|---|---:|---:|
-| Cases labelled undocumented | 13 | 3 |
-| Largest "ring" behind one alert | 6,322 customers | 38 customers |
-| Size of the answer files | ~8,000 lines each | 5,310 lines for all 20 |
-| Valid answers written to the graph | 20 | 20 |
-
-The three remaining undocumented cases each rest on evidence an analyst can check: one phone build serving 24 customers in a week (HHG-014), a card inside the 36-card ring (HHG-016), and a 33-customer ring around a rare device (HHG-019). HHG-011 is card testing at 0.99, HHG-004 is card-not-present fraud, and the customer disputes are settled as fraud with the dispute cited. Cases the graph can't settle stay uncertain and go to the evidence-request branch instead of straight to a block.
-
-**Against the bank's history.** We replayed 49 closed cases, sampled evenly across the seven analyst labels, hiding the case under test and every case opened after it. Pattern recall was 71% for card testing (100% precision in the sample), 43% for out-of-region use, 29% for card-not-present from a new device, 14% for account takeover and for undocumented activity, and 0% for plain card-not-present fraud. The agent settled only four cases without asking for more evidence and kept the rest uncertain. That was measured before the device work above, and it is a modest number. We'd rather publish it than a flattering one.
-
-The honest limitation: the live graph we benchmarked on doesn't yet carry the identity signals (new-device flags, proxy and match status) on its transactions, so the new-device and account-takeover detectors can fire in our CSV replay but not live. We wrote a loader that adds them over MCP.
+We also keep the limitations visible. The closed-case notes often contain customer reports that are not available in a blindfolded trigger-only replay. Therefore several confirmed cases correctly remain uncertain until the workflow gathers more evidence. That is a calibration limitation we expose rather than hide behind a hard-coded answer.
 
 ## What we learned
 
-- **A graph agent needs to know which edges mean something.** A vertex shared by 250 people is not evidence of anything. The code that decides whether a device is one physical device or a fingerprint changed more answers than any other part of the project, and it came from looking at the data, not from the model.
-- **Graphs make the second question cheap.** "Who else used this device, and who else used *their* devices, in the same week?" is two hops in TigerGraph and a painful self-join anywhere else. Our best evidence came from the second and third hop.
-- **Measure the definition before you trust it.** Every version of our ring definition sounded reasonable. Only running it across 590,000 transactions showed which ones produced one blob of 1,881 customers.
-- **Uncertainty is a feature.** Designing the "not enough evidence yet" path first made the agent more trustworthy than tuning it for confident verdicts.
-- **Keep facts and prose apart.** Letting the LLM only narrate cited facts kept the explanations readable without letting them drift from the evidence.
+### A graph makes the second question cheap
 
-## What's next
+The first question is “is this transaction unusual?” The more valuable question is often “what else is connected to it?” TigerGraph makes device, card, customer and prior-case relationships available in a bounded investigation instead of forcing a sequence of expensive joins.
 
-- Load the identity signals onto every transaction in the live graph and re-run the calibration, so the new-device and account-takeover detectors are measured on TigerGraph, not only on CSVs.
-- Run Louvain from the TigerGraph Graph Data Science library alongside our connected components, and track how rings grow over time.
-- Connect real customer messaging and step-up providers in place of the labelled, simulated responses.
+### Uncertainty is a product capability
+
+A fraud system that must always answer fraud or not-fraud will overstate weak evidence. Sentinel has an explicit uncertain state, evidence requests, stopping criteria and a before/after decision record.
+
+### Grounding is a systems problem
+
+Good prompts are not enough. Grounding requires an evidence allow-list, policy attribution, output validation, and a fallback when the model is unavailable. Those controls are implemented outside the LLM.
+
+### Accuracy improves when relationships are time-aware
+
+A historical relationship is not automatically evidence for the current episode. Scoping network signals to the investigation window improved precision without adding case-specific rules.
+
+## What we would build next
+
+- Run a larger, time-split evaluation with separate trigger-only and post-customer-report metrics.
+- Tune pattern thresholds from documented policy and training-period distributions, with precision/recall plots and confidence intervals.
+- Add more real-time customer and step-up integrations instead of simulated evidence responses.
+- Expand graph-wide ring analytics and monitor how rings evolve across cases.
+- Add analyst feedback loops so resolved cases improve retrieval and detector calibration without leaking future labels into historical evaluations.
 
 ## Try it
 
-The code, the GSQL queries, the 20 benchmark answers and the demo are open:
+- **Repository:** [TigerGraph-Agentic-Fraud-Investigation-HHGOA](https://github.com/ankit25bcs10610/TigerGraph-Agentic-Fraud-Investigation-HHGOA)
+- **Benchmark answers:** [`outputs/benchmark_final/answers/`](../../outputs/benchmark_final/answers/)
+- **Calibration:** [`outputs/CALIBRATION_REAL.md`](../../outputs/CALIBRATION_REAL.md)
+- **Architecture:** [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md)
+- **Demo video:** *add the final recording link here before submission*
 
-- **Code and benchmark answers:** https://github.com/ankit25bcs10610/TigerGraph-Agentic-Fraud-Investigation-HHGOA
-- **Demo video:** *(add link)*
+Sentinel is built on TigerGraph Savanna for the TigerGraph Hacker House Goa challenge.
 
-Sentinel runs on TigerGraph Savanna with the official TigerGraph MCP server, a FastAPI backend in Python, and a Next.js, React and Cytoscape.js workbench, with 167 deterministic tests. Thanks to the TigerGraph team and @TigerGraphDB for Hacker House Goa.
-
-*#TigerGraph #GraphDatabase #FraudDetection #AIAgents #GraphRAG #HackerHouseGoa*
+**Team:** Kartikeya Yadav and Ankit Pandey

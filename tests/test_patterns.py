@@ -228,6 +228,51 @@ def test_account_takeover_rejects_mixed_channel_activity_without_anomalies() -> 
     assert result.strength == 0
 
 
+def test_account_takeover_accepts_one_identity_anomaly_with_mixed_channels() -> None:
+    result = detect_account_takeover(
+        PatternContext(
+            target=tx("target", 0, device="device-new", device_status="New", match="match_status:2"),
+            card_history=(
+                tx("old-online", -24, channel="online", device="device-old", match="match_status:2"),
+                tx("old-present", -23, channel="in_person", device="device-old", match=None),
+            ),
+        )
+    )
+
+    assert result.pattern is FraudPattern.ACCOUNT_TAKEOVER
+    assert result.strength == 0.72
+
+
+def test_account_takeover_detects_unmarked_new_device_from_prior_baseline() -> None:
+    result = detect_account_takeover(
+        PatternContext(
+            target=tx("target", 0, channel="online", device="device-new", device_status=None),
+            card_history=(
+                tx("old-online", -24, channel="online", device="device-old", match="match_status:2"),
+                tx("old-present", -23, channel="in_person", device="device-old", match=None),
+            ),
+        )
+    )
+
+    assert result.pattern is FraudPattern.ACCOUNT_TAKEOVER
+    assert "device/identity" in result.supporting_evidence[1]
+
+
+def test_account_takeover_ignores_distant_network_activity() -> None:
+    result = detect_account_takeover(
+        PatternContext(
+            target=tx("target", 0, device="device-new", device_status="New", match="match_status:2"),
+            card_history=(
+                tx("old-online", -24, channel="online", device="device-old", match="match_status:2"),
+                tx("old-present", -23, channel="in_person", device="device-old", match=None),
+            ),
+            network_transactions=(tx("distant", -720, customer="C2"),),
+        )
+    )
+
+    assert result.pattern is FraudPattern.ACCOUNT_TAKEOVER
+
+
 def test_undocumented_detects_coordinated_activity_without_known_pattern() -> None:
     result = detect_undocumented(
         PatternContext(
@@ -270,6 +315,37 @@ def test_undocumented_requires_cross_customer_coordination() -> None:
     )
 
     assert result.pattern is FraudPattern.NONE
+
+
+def test_undocumented_ignores_distant_shared_device_activity() -> None:
+    result = detect_undocumented(
+        PatternContext(
+            target=tx("target"),
+            network_transactions=(
+                tx("network-1", -168, customer="C2"),
+                tx("network-2", -120, customer="C3"),
+            ),
+            connected_card_ids=("C2-K2", "C3-K3"),
+        )
+    )
+
+    assert result.pattern is FraudPattern.NONE
+
+
+def test_undocumented_detects_repeated_subthreshold_online_burst() -> None:
+    result = detect_undocumented(
+        PatternContext(
+            target=tx("target", 0, amount=480),
+            card_history=(
+                tx("burst-1", -1, amount=475),
+                tx("burst-2", 1, amount=499),
+                tx("burst-3", 2, amount=450),
+            ),
+        )
+    )
+
+    assert result.pattern is FraudPattern.UNDOCUMENTED
+    assert any("authorization threshold" in item for item in result.supporting_evidence)
 
 
 def test_none_has_positive_strength_only_after_legitimacy_confirmation() -> None:
