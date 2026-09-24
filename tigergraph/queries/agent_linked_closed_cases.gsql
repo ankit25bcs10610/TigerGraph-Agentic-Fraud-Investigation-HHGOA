@@ -1,13 +1,20 @@
-// Agent tool: closed cases on the same customer or card, or that list the card as connected,
-// with the transactions each case involved.
+// Agent tool: closed cases on the same customer or card, on any card the customer owns,
+// or that list the card as connected, with the transactions each case involved.
+// Empty arguments match nothing (an empty customer_id must not match every case).
 CREATE QUERY agent_linked_closed_cases(STRING customer_id, STRING card_id) FOR GRAPH FraudInvestigationGraph {
-  SetAccum<STRING> @@cards;
+  SetAccum<STRING> @@customers, @@cards;
   ListAccum<STRING> @txn_ids;
-  @@cards += card_id;
-  direct = SELECT cc FROM ClosedCase:cc WHERE cc.customer_id == customer_id OR cc.card_id == card_id;
+  IF customer_id != "" THEN @@customers += customer_id; END;
+  IF card_id != "" THEN @@cards += card_id; END;
+  direct = SELECT cc FROM ClosedCase:cc
+           WHERE (customer_id != "" AND cc.customer_id == customer_id) OR (card_id != "" AND cc.card_id == card_id);
+  customer = to_vertex_set(@@customers, "Customer");
+  owned = SELECT k FROM customer:c -(OWNS>)- Card:k;
   card = to_vertex_set(@@cards, "Card");
+  on_owned = SELECT cc FROM owned:k -(<ON_CARD)- ClosedCase:cc;
+  on_card = SELECT cc FROM card:k -(<ON_CARD)- ClosedCase:cc;
   connected = SELECT cc FROM card:k -(<CONNECTED_TO)- ClosedCase:cc;
-  cases = direct UNION connected;
+  cases = direct UNION on_owned UNION on_card UNION connected;
   involved = SELECT t FROM cases:cc -(INVOLVES>)- Transaction:t ACCUM cc.@txn_ids += t.transaction_id;
   PRINT cases[cases.case_id AS case_id, cases.customer_id AS customer_id, cases.card_id AS card_id, cases.outcome AS outcome,
               cases.pattern AS pattern, cases.@txn_ids AS txn_ids,

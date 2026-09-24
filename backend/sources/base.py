@@ -2,8 +2,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Protocol
+
+# Device fingerprints in this dataset (model / browser / screen) are often generic: one
+# "Windows / chrome / 1920x1080" profile serves hundreds of customers. A device seen with more
+# customers than this does not identify a device, so it is not used as sharing or ring evidence.
+COMMON_DEVICE_CUSTOMERS = 10
+# A fraud ring is people sharing devices at the same time: ring expansion only follows
+# transactions within this window of the flagged one, and stops at RING_MAX_CARDS cards.
+RING_WINDOW = timedelta(days=7)
+RING_MAX_CARDS = 60
+# Graph-wide ring discovery: a device links cards when it behaves like one physical device
+# serving several people in a burst (between these customer counts, within BURST_SPAN_HOURS).
+BURST_MIN_CUSTOMERS = 3
+BURST_SPAN_HOURS = 72
 
 
 def parse_time(value: Any) -> datetime | None:
@@ -49,6 +62,11 @@ class Txn:
     device_status: str | None = None
     proxy_type: str | None = None
     match_status: str | None = None
+    device_customers: int | None = None   # distinct customers ever seen on device_profile_id
+
+    @property
+    def generic_device(self) -> bool:
+        return bool(self.device_profile_id) and (self.device_customers or 0) > COMMON_DEVICE_CUSTOMERS
 
 
 @dataclass(frozen=True)
@@ -111,6 +129,6 @@ class CaseDataSource(Protocol):
     def device_transactions(self, device_profile_id: str) -> list[Txn]: ...
     def linked_closed_cases(self, customer_id: str, card_id: str, related_customers: set[str], related_txns: set[str]) -> list[ClosedCaseRecord]: ...
     def closed_cases_by_pattern(self, pattern: str, limit: int) -> list[ClosedCaseRecord]: ...
-    def device_ring(self, device_profile_id: str, max_hops: int) -> RingResult: ...
+    def device_ring(self, device_profile_id: str, max_hops: int, around: datetime | None = None) -> RingResult: ...
     def communities(self, min_customers: int, top_k: int) -> list[Community]: ...
     def exists(self, entity_type: str, entity_id: str) -> bool: ...

@@ -1,32 +1,44 @@
-// Graph algorithm: weakly connected components over the card-transaction-device projection.
-// Label propagation (minimum vertex id) along MADE and FROM_DEVICE in both directions groups every
-// card with the devices it used and every other card seen on those devices. Communities that span
-// at least min_customers customers are returned, largest first, with their confirmed-fraud cases.
-// Used to surface coordinated activity that no documented pattern describes.
-CREATE QUERY agent_fraud_communities(INT min_customers, INT max_iterations, INT top_k) FOR GRAPH FraudInvestigation SYNTAX v2 {
+// Graph algorithm: weakly connected components over the card <-> burst-device projection.
+// A device links cards only when it behaves like one physical device serving several people:
+// between min_device_customers and max_device_customers customers, all within max_span_hours.
+// Generic fingerprints (hundreds of customers over months) are excluded; without that, every
+// component chains into most of the graph (measured on the full dataset: one component of
+// 1,881 customers even with at most 5 customers per device). Label propagation (minimum vertex
+// id) runs card -> transaction -> device -> transaction -> card until no label changes.
+// Communities that span at least min_customers customers are returned, largest first, with
+// their confirmed-fraud closed cases. Used to surface coordinated activity that no documented
+// pattern describes.
+CREATE QUERY agent_fraud_communities(INT min_customers, INT max_iterations, INT top_k,
+                                     INT min_device_customers, INT max_device_customers, INT max_span_hours) FOR GRAPH FraudInvestigationGraph {
   TYPEDEF TUPLE<INT community, INT customers, INT cards, INT devices, INT confirmed_cases> Community;
+  SetAccum<VERTEX<Customer>> @users;
+  MinAccum<DATETIME> @first;
+  MaxAccum<DATETIME> @last;
+  OrAccum @shared, @on_shared;
   MinAccum<INT> @cc;
   MapAccum<INT, SetAccum<STRING>> @@customers, @@cards, @@devices, @@confirmed;
   HeapAccum<Community>(top_k, customers DESC, confirmed_cases DESC) @@largest;
   MapAccum<INT, ListAccum<STRING>> @@card_members, @@device_members, @@case_members;
 
-  members = {Card.*, Transaction.*, DeviceProfile.*};
-  members = SELECT v FROM members:v POST-ACCUM v.@cc = getvid(v);
-  active = members;
+  measured = SELECT d FROM DeviceProfile:d -(<FROM_DEVICE)- Transaction:t -(<made)- Card:k -(<OWNS)- Customer:c ACCUM d.@users += c, d.@first += t.ts, d.@last += t.ts;
+  shared = SELECT d FROM measured:d
+           WHERE d.@users.size() >= min_device_customers AND d.@users.size() <= max_device_customers
+             AND datetime_diff(d.@last, d.@first) <= max_span_hours * 3600
+           POST-ACCUM d.@shared = TRUE, d.@cc += getvid(d);
+  shared_txns = SELECT t FROM shared:d -(<FROM_DEVICE)- Transaction:t POST-ACCUM t.@on_shared = TRUE;
+  cards = SELECT k FROM shared_txns:t -(<made)- Card:k POST-ACCUM k.@cc += getvid(k);
+  active = cards;
   WHILE active.size() > 0 LIMIT max_iterations DO
-    active = SELECT t FROM active:s -(made>|<made|FROM_DEVICE>|<FROM_DEVICE)- :t
-             WHERE s.@cc < t.@cc
-             ACCUM t.@cc += s.@cc;
+    to_txns = SELECT t FROM active:k -(made>)- Transaction:t WHERE t.@on_shared == TRUE AND k.@cc < t.@cc ACCUM t.@cc += k.@cc;
+    to_devices = SELECT d FROM to_txns:t -(FROM_DEVICE>)- DeviceProfile:d WHERE d.@shared == TRUE AND t.@cc < d.@cc ACCUM d.@cc += t.@cc;
+    back_txns = SELECT t FROM to_devices:d -(<FROM_DEVICE)- Transaction:t WHERE d.@cc < t.@cc ACCUM t.@cc += d.@cc;
+    active = SELECT k FROM back_txns:t -(<made)- Card:k WHERE t.@cc < k.@cc ACCUM k.@cc += t.@cc;
   END;
 
-  cards = SELECT c FROM Card:c ACCUM @@cards += (c.@cc -> c.card_id);
-  customers = SELECT customer FROM Customer:customer -(OWNS>)- Card:card
-              WHERE card.@cc == customer.@cc
-              ACCUM @@customers += (card.@cc -> customer.customer_id);
-  devices = SELECT d FROM DeviceProfile:d ACCUM @@devices += (d.@cc -> d.device_profile_id);
-  confirmed = SELECT t FROM ClosedCase:cc -(INVOLVES>)- Transaction:t
-              WHERE cc.outcome == "confirmed_fraud"
-              ACCUM @@confirmed += (t.@cc -> cc.case_id);
+  labelled = SELECT k FROM cards:k -(<OWNS)- Customer:c ACCUM @@customers += (k.@cc -> c.customer_id), @@cards += (k.@cc -> k.card_id);
+  labelled_devices = SELECT d FROM shared:d ACCUM @@devices += (d.@cc -> d.device_profile_id);
+  confirmed = SELECT cc FROM cards:k -(<ON_CARD)- ClosedCase:cc WHERE cc.outcome == "confirmed_fraud"
+              ACCUM @@confirmed += (k.@cc -> cc.case_id);
 
   FOREACH (community, people) IN @@customers DO
     IF people.size() >= min_customers THEN

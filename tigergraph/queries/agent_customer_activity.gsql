@@ -1,14 +1,18 @@
-// Agent tool: every transaction a customer made, across all of their cards, with device signals.
+// Agent tool: every transaction a customer made, across all of their cards,
+// with billing region, purchaser email and device for each one.
 CREATE QUERY agent_customer_activity(STRING customer_id) FOR GRAPH FraudInvestigationGraph {
   SetAccum<STRING> @@ids;
-  SumAccum<STRING> @card_id, @device_id;
+  SumAccum<STRING> @card_id, @customer_id;
+  SetAccum<VERTEX> @region, @email, @device;
   @@ids += customer_id;
   customer = to_vertex_set(@@ids, "Customer");
   cards = SELECT k FROM customer:c -(OWNS>)- Card:k;
-  txns = SELECT t FROM cards:k -(made>)- Transaction:t ACCUM t.@card_id = k.card_id;
-  devices = SELECT d FROM txns:t -(FROM_DEVICE>)- DeviceProfile:d
-            ACCUM t.@device_id = d.device_profile_id;
-  PRINT txns[txns.transaction_id AS transaction_id, txns.@card_id AS card_id,
+  txns = SELECT t FROM cards:k -(made>)- Transaction:t ACCUM t.@card_id = k.card_id, t.@customer_id = customer_id;
+  regions = SELECT t FROM txns:t -(BILLED_IN>)- BillingRegion:reg ACCUM t.@region += reg;
+  emails = SELECT t FROM txns:t -(PURCHASER_EMAIL>)- EmailDomain:dom ACCUM t.@email += dom;
+  devices = SELECT t FROM txns:t -(FROM_DEVICE>)- DeviceProfile:dv ACCUM t.@device += dv;
+  PRINT txns[txns.transaction_id AS transaction_id, txns.@customer_id AS customer_id, txns.@card_id AS card_id,
              txns.ts AS ts, txns.transaction_amt AS amount, txns.channel AS channel, txns.risk_score AS risk_score,
-             txns.product_cd AS product_code, txns.@device_id AS device_profile_id] AS rows;
+             txns.product_cd AS product_code, txns.@region AS region, txns.@email AS email,
+             txns.@device AS device_profile_id] AS rows;
 }

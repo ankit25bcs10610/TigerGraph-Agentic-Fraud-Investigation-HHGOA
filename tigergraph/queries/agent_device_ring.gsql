@@ -1,30 +1,46 @@
 // Agent tool / graph algorithm: bounded connected component around a device.
 // Alternates device -> transactions -> cards -> their transactions -> devices, for up to max_hops rounds,
-// and reports the ring's devices, cards, customers and any confirmed-fraud closed cases touching it.
-// This is a seeded weakly-connected-component expansion over the device/card projection of the graph.
-CREATE QUERY agent_device_ring(STRING device_profile_id, INT max_hops) FOR GRAPH FraudInvestigationGraph {
-  SetAccum<STRING> @@ids, @@devices, @@cards, @@customers, @@confirmed;
-  SumAccum<INT> @@transactions;
+// and reports the ring's devices, cards, customers and any confirmed-fraud closed cases on its cards or transactions.
+// Only transactions between from_ts and to_ts are followed: a ring is people sharing devices at the same
+// time, not everyone who ever used a similar browser. Generic fingerprints (devices seen with more than
+// max_device_customers customers) are not expanded: they connect unrelated people and would turn every
+// ring into most of the graph. The walk also stops once it has reached max_cards cards.
+CREATE QUERY agent_device_ring(STRING device_profile_id, INT max_hops, INT max_device_customers, INT max_cards,
+                               DATETIME from_ts, DATETIME to_ts) FOR GRAPH FraudInvestigationGraph {
+  SetAccum<STRING> @@ids, @@devices, @@cards, @@customers, @@confirmed, @@skipped;
+  SetAccum<VERTEX<Card>> @@card_set;
+  SetAccum<VERTEX<Transaction>> @@txn_set;
+  SetAccum<VERTEX<Customer>> @users;
+  SumAccum<INT> @@transactions, @@hops;
   OrAccum @seen;
-  SumAccum<INT> @@hops;
   @@ids += device_profile_id;
   frontier = to_vertex_set(@@ids, "DeviceProfile");
-  frontier = SELECT d FROM frontier:d POST-ACCUM d.@seen = TRUE, @@devices += d.device_profile_id;
   WHILE frontier.size() > 0 LIMIT max_hops DO
+    measured = SELECT d FROM frontier:d -(<FROM_DEVICE)- Transaction:t -(<made)- Card:k -(<OWNS)- Customer:c ACCUM d.@users += c;
+    frontier = SELECT d FROM frontier:d
+               POST-ACCUM d.@seen = TRUE,
+                          IF d.@users.size() > max_device_customers THEN @@skipped += d.device_profile_id ELSE @@devices += d.device_profile_id END
+               HAVING d.@users.size() <= max_device_customers;
+    IF frontier.size() == 0 THEN BREAK; END;
     @@hops += 1;
-    txns = SELECT t FROM frontier:d -(<FROM_DEVICE)- Transaction:t WHERE t.@seen == FALSE
-           POST-ACCUM t.@seen = TRUE, @@transactions += 1;
+    txns = SELECT t FROM frontier:d -(<FROM_DEVICE)- Transaction:t
+           WHERE t.@seen == FALSE AND t.ts >= from_ts AND t.ts <= to_ts
+           POST-ACCUM t.@seen = TRUE, @@transactions += 1, @@txn_set += t;
     cards = SELECT k FROM txns:t -(<made)- Card:k WHERE k.@seen == FALSE
-            POST-ACCUM k.@seen = TRUE, @@cards += k.card_id;
-    card_txns = SELECT t FROM cards:k -(made>)- Transaction:t WHERE t.@seen == FALSE
-                POST-ACCUM t.@seen = TRUE, @@transactions += 1;
-    frontier = SELECT d FROM card_txns:t -(FROM_DEVICE>)- DeviceProfile:d WHERE d.@seen == FALSE
-               POST-ACCUM d.@seen = TRUE, @@devices += d.device_profile_id;
+            POST-ACCUM k.@seen = TRUE, @@cards += k.card_id, @@card_set += k;
+    IF @@cards.size() >= max_cards THEN BREAK; END;
+    card_txns = SELECT t FROM cards:k -(made>)- Transaction:t
+                WHERE t.@seen == FALSE AND t.ts >= from_ts AND t.ts <= to_ts
+                POST-ACCUM t.@seen = TRUE, @@transactions += 1, @@txn_set += t;
+    frontier = SELECT d FROM card_txns:t -(FROM_DEVICE>)- DeviceProfile:d WHERE d.@seen == FALSE;
   END;
-  seen_txns = SELECT t FROM Transaction:t WHERE t.@seen == TRUE;
-  customers = SELECT c FROM cards:k -(<OWNS)- Customer:c POST-ACCUM @@customers += c.customer_id;
-  cases = SELECT cc FROM seen_txns:t -(<INVOLVES)- ClosedCase:cc WHERE cc.outcome == "confirmed_fraud"
+  all_cards = {@@card_set};
+  all_txns = {@@txn_set};
+  customers = SELECT c FROM all_cards:k -(<OWNS)- Customer:c POST-ACCUM @@customers += c.customer_id;
+  cases = SELECT cc FROM all_txns:t -(<INVOLVES)- ClosedCase:cc WHERE cc.outcome == "confirmed_fraud"
           ACCUM @@confirmed += cc.case_id;
+  card_cases = SELECT cc FROM all_cards:k -(<ON_CARD)- ClosedCase:cc WHERE cc.outcome == "confirmed_fraud"
+               ACCUM @@confirmed += cc.case_id;
   PRINT @@devices AS devices, @@cards AS cards, @@customers AS customers, @@transactions AS transactions,
-        @@confirmed AS confirmed_cases, @@hops AS hops;
+        @@confirmed AS confirmed_cases, @@hops AS hops, @@skipped AS common_devices_skipped;
 }

@@ -45,11 +45,12 @@ from backend.policy.approvals import get_approval_route
 from backend.policy.knowledge import PolicyKnowledge
 from backend.policy.rules import CustomerResponse, PolicyContext, recommend_actions
 from backend.policy.sar import build_sar, evaluate_sar, generate_grounded_sar
-from backend.sources.base import CaseDataSource, ClosedCaseRecord, RingResult, Txn
+from backend.sources.base import COMMON_DEVICE_CUSTOMERS, CaseDataSource, ClosedCaseRecord, RingResult, Txn
 
 PATTERN_WINDOW = timedelta(hours=48)
 NETWORK_WINDOW = timedelta(days=7)
 RING_HOPS = 2
+MAX_CONNECTED_CARDS = 25
 
 
 # Every input to the weighted fraud probability, with the weight that scales it.
@@ -218,7 +219,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         """The graph tools that make sense right now, in the investigator's default order."""
         target: Txn = gathered["target"]
         done = gathered["done"]
-        device = target.device_profile_id
+        device = None if target.generic_device else target.device_profile_id
         options = []
         if "get_customer_activity" not in done:
             options.append(ToolOption("get_customer_activity", f"All transactions of customer {target.customer_id} across their cards: the behavioural baseline.", "Build the customer's baseline across every card they hold."))
@@ -235,6 +236,8 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         target: Txn = gathered["target"]
         lines = [f"Flagged transaction {target.transaction_id}: {_money(target.amount)} {target.channel} on card {target.card_id or 'unknown'}, region {target.region or 'unknown'}, "
                  f"device {target.device_profile_id or 'none'} (status {target.device_status or 'unknown'}, proxy {target.proxy_type or 'none'})."]
+        if target.generic_device:
+            lines.append(f"Device {target.device_profile_id} is a generic fingerprint seen with {target.device_customers} customers, so it does not identify one device.")
         if "get_customer_activity" in gathered["done"]:
             prior = [item for item in gathered["history"] if item.ts < target.ts]
             typical = median(item.amount for item in prior) if prior else 0
@@ -260,10 +263,10 @@ class LocalInvestigationEngine(ReferenceWorkflow):
             device = target.device_profile_id
             on_device = trace.call(name, {"device_profile_id": device}, reason, lambda: source.device_transactions(device),
                                    lambda rows: f"{len(rows)} transactions from {len({row.customer_id for row in rows})} customers", planner=planner) or []
-            gathered["network"] = [item for item in on_device if item.customer_id != target.customer_id and abs(item.ts - target.ts) <= NETWORK_WINDOW]
+            gathered["network"] = [item for item in on_device if item.customer_id and item.customer_id != target.customer_id and abs(item.ts - target.ts) <= NETWORK_WINDOW]
         elif name == "detect_device_ring":
             device = target.device_profile_id
-            gathered["ring"] = trace.call(name, {"device_profile_id": device, "max_hops": RING_HOPS}, reason, lambda: source.device_ring(device, RING_HOPS),
+            gathered["ring"] = trace.call(name, {"device_profile_id": device, "max_hops": RING_HOPS, "window": "±7 days"}, reason, lambda: source.device_ring(device, RING_HOPS, target.ts),
                                           lambda result: f"{len(result.customers)} customers, {len(result.cards)} cards, {len(result.devices)} devices, {len(result.confirmed_cases)} confirmed cases" if result else "no ring", planner=planner)
         elif name == "get_linked_closed_cases":
             network = gathered["network"]
@@ -284,6 +287,10 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         if not target.card_id and case_input.get("card_id") and target.customer_id == case_input.get("customer_id"):
             target = Txn(**{**target.__dict__, "card_id": case_input["card_id"]})
         gathered: dict[str, Any] = {"target": target, "history": [target], "network": [], "ring": None, "linked": [], "done": set()}
+        if target.generic_device:
+            trace.note("skip_device_tools", "rules", {"device_profile_id": target.device_profile_id, "customers_on_device": target.device_customers},
+                       f"A fingerprint seen with more than {COMMON_DEVICE_CUSTOMERS} customers is shared by unrelated people, not one device.",
+                       "device sharing and ring expansion skipped")
         budget = self.MAX_TOOL_STEPS
         while budget > 0:
             options = self._tool_options(gathered)
@@ -390,6 +397,8 @@ class LocalInvestigationEngine(ReferenceWorkflow):
             fact(f"Device {target.device_profile_id or 'on the flagged transaction'} is new for this card{' (identity marks it New)' if device_new else ''}.", [target.transaction_id, target.device_profile_id or ""], "device")
         elif target.device_profile_id and target.device_profile_id in prior_devices:
             fact(f"Device {target.device_profile_id} has been used on this card before.", [target.device_profile_id], "device_known", EvidenceDirection.LEGITIMATE)
+        if target.generic_device:
+            fact(f"Device {target.device_profile_id} is a generic fingerprint seen with {target.device_customers} customers across the graph, so sharing it is not evidence of a ring.", [target.device_profile_id])
         if ring and (len(ring.customers) >= 3 or ring.confirmed_cases):
             touching = f", touching confirmed fraud case(s) {', '.join(ring.confirmed_cases[:4])}" if ring.confirmed_cases else ""
             fact(f"Fraud-ring analysis: device {ring.seed_device} sits in a connected component of {len(ring.customers)} customers, {len(ring.cards)} cards and {len(ring.devices)} devices within {ring.hops} hops{touching}.",
@@ -482,7 +491,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
             shared_fraud_origin=shared_origin, conflicting_evidence=conflicting > 0 and verdict is not Verdict.LEGITIMATE,
             coordinated_undocumented_abuse=coordinated, confirmed_fraud_cards_for_customer=len(confirmed_cards),
         ))
-        connected_cards = sorted(set(other_cards) | set(ring_cards))
+        connected_cards = sorted(set(other_cards) | set(ring_cards))[:MAX_CONNECTED_CARDS]
         sar_decision = evaluate_sar(verdict=verdict, fraud_probability=probability, exposure_usd=exposure, shared_fraud_origin=shared_origin,
                                     connected_to_other_card_fraud=bool(confirmed_links) and bool(other_customers), coordinated_undocumented_abuse=coordinated)
         if sar_decision.file:
