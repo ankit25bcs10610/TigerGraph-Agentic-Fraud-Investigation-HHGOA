@@ -14,7 +14,9 @@ class ScoringConfig:
     shared_device_weight: float = 0.10
     region_evidence_weight: float = 0.10
     prior_confirmed_case_weight: float = 0.10
-    customer_evidence_weight: float = 0.05
+    # A first-party denial is the strongest single signal (policy R2 acts on it directly),
+    # so it moves the probability as much as a matched fraud pattern does.
+    customer_evidence_weight: float = 0.30
     step_up_weight: float = 0.10
     conflicting_evidence_weight: float = 0.25
 
