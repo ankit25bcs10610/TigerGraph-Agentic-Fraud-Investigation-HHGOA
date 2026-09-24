@@ -1,0 +1,24 @@
+// Graph analytics: what a ring actually did. Profiles the transactions its member cards made on its
+// shared devices: how many, how much, how fast, how much online, which products, purchaser email
+// domains and device models. Turns an anonymous connected component into a describable pattern.
+CREATE QUERY agent_ring_profile(SET<STRING> card_ids, SET<STRING> device_ids) FOR GRAPH FraudInvestigationGraph {
+  SumAccum<INT> @@txns, @@online;
+  SumAccum<DOUBLE> @@total;
+  MinAccum<DATETIME> @@first;
+  MaxAccum<DATETIME> @@last;
+  ListAccum<DOUBLE> @@amounts;
+  MapAccum<STRING, SumAccum<INT>> @@products, @@emails, @@models;
+  OrAccum @member;
+  cards = to_vertex_set(card_ids, "Card");
+  cards = SELECT k FROM cards:k POST-ACCUM k.@member = TRUE;
+  devices = to_vertex_set(device_ids, "DeviceProfile");
+  devices = SELECT d FROM devices:d POST-ACCUM @@models += (d.device_info -> 1);
+  on_devices = SELECT t FROM devices:d -(<FROM_DEVICE)- Transaction:t;
+  kept = SELECT t FROM on_devices:t -(<made)- Card:k WHERE k.@member == TRUE
+         POST-ACCUM @@txns += 1, @@total += t.transaction_amt, @@amounts += t.transaction_amt,
+                    @@first += t.ts, @@last += t.ts, @@products += (t.product_cd -> 1),
+                    IF t.channel == "online" THEN @@online += 1 END;
+  emails = SELECT t FROM kept:t -(PURCHASER_EMAIL>)- EmailDomain:e ACCUM @@emails += (e.email_domain -> 1);
+  PRINT @@txns AS transactions, @@online AS online, @@total AS total_amount, @@amounts AS amounts,
+        @@first AS first_ts, @@last AS last_ts, @@products AS products, @@emails AS emails, @@models AS models;
+}

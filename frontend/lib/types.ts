@@ -59,7 +59,8 @@ export type DecisionPath = { request_type: string; distinct_decisions: number; s
 export type Contribution = { signal: string; label: string; value: number; weight: number; points: number; without: number; decisive: boolean };
 export type BlastRadius = { target?: { card_id: string; first_seen: string; spend_usd: number }; cards: { card_id: string; customer_id: string; transactions: number; spend_usd: number; first_seen?: string; last_seen: string; link: string }[]; card_count: number; customers: number; recent_spend_usd: number; confirmed_cases: string[] };
 export type Ring = { community_id: string; label: "known_ring" | "candidate_undocumented"; customers: number; cards: number; devices: number; transactions: number; confirmed_cases: string[];
-  confirmed_patterns: Record<string, number>; online_share: number | null; total_amount_usd: number | null; span_hours: number | null; benchmark_cases: string[]; sample_cards: string[]; sample_devices: string[] };
+  confirmed_patterns: Record<string, number>; online_share: number | null; total_amount_usd: number | null; span_hours: number | null; benchmark_cases: string[]; sample_cards: string[]; sample_devices: string[];
+  median_amount_usd?: number | null; products?: { value: string; share: number }[]; emails?: { value: string; share: number }[]; device_models?: string[]; signature?: string };
 
 export type AgentStep = { step: number; tool: string; source: string; args: Record<string, unknown>; reason: string; result: string; ok: boolean; ms: number; planner?: string };
 export type PolicyCitation = { ref: string; title: string; text: string; source: string; supports: string[]; score?: number };

@@ -150,6 +150,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         self.case_service = case_service
         self._rag: Any = None
         self._rings_by_card: dict[str, Community] | None = None
+        self._ring_signatures: dict[str, str] = {}
         self._closed_index = {case.case_id: case for case in getattr(source, "_closed", ())}
 
     def _persist_formal_case(self, state: dict[str, Any]) -> None:
@@ -218,6 +219,16 @@ class LocalInvestigationEngine(ReferenceWorkflow):
             communities = self.source.communities(3, 50) if self.source is not None and hasattr(self.source, "communities") else []
             self._rings_by_card = {card: community for community in communities for card in community.cards}
         return self._rings_by_card.get(card_id)
+
+    def _ring_signature(self, community: Community) -> str:
+        """The ring's behaviour in one line (agent_ring_profile), computed once per ring."""
+        if community.community_id not in self._ring_signatures:
+            from backend.discovery import describe, ring_profile
+            try:
+                self._ring_signatures[community.community_id] = describe(ring_profile(self.source, community), community)
+            except Exception:  # noqa: BLE001 - the profile only enriches the explanation
+                self._ring_signatures[community.community_id] = ""
+        return self._ring_signatures[community.community_id]
 
     # ------------------------------------------------------------ investigate
 
@@ -496,8 +507,9 @@ class LocalInvestigationEngine(ReferenceWorkflow):
                  [ring.seed_device, *ring.cards[:6]], "ring")
         if community:
             touching = f", touching confirmed fraud case(s) {', '.join(community.confirmed_cases[:4])}" if community.confirmed_cases else ""
+            signature = self._ring_signature(community)
             fact(f"Graph-wide ring: card {target.card_id} is one of {len(community.cards)} cards of {community.size} customers linked through {len(community.devices)} burst devices "
-                 f"(each used by 3–10 customers within 72 hours){touching}.", [target.card_id, *community.devices[:4]], "ring")
+                 f"(each used by 3–10 customers within 72 hours){touching}." + (f" What the ring did: {signature}" if signature else ""), [target.card_id, *community.devices[:4]], "ring")
 
         region = 0.0
         prior_regions = {item.region for item in prior if item.region}

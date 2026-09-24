@@ -819,6 +819,9 @@ td > .tag:first-child, .request-head .tag:first-child, .sar-status .tag:first-ch
 .ring-grid dt { color: var(--muted); font-size: 11.5px; }
 .ring-grid dd { margin: 0; font-size: 18px; font-weight: 600; }
 .ring-facts { color: var(--soft-text); font-size: 12.5px; }
+.ring-signature { color: var(--text); font-size: 13px; line-height: 1.5; }
+.ring-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.ring-chips .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .ring-ids { overflow: hidden; color: var(--faint); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
 .ring-cases { display: flex; flex-wrap: wrap; gap: 6px; }
 

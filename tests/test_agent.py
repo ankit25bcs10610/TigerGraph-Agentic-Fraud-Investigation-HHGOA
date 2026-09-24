@@ -257,3 +257,12 @@ def test_graph_memory_recalls_only_earlier_investigations_and_counts_fraud(agent
     assert any(step["tool"] == "recall_graph_memory" and "1 concluded fraud" in step["result"] for step in state["agent_trace"])
     claim = next(item for item in state["case"]["evidence"] if "SMP-900" in item["claim"])
     assert claim["ref"] == "tigergraph:InvestigationCase" and "its card is in this card's ring: SMP-C302-K1" in claim["claim"]
+
+
+def test_ring_signature_describes_what_the_ring_did():
+    from backend.discovery import discover
+
+    source = CsvSource(str(SAMPLE / "transactions.csv"), None, str(SAMPLE / "closed_cases_history.csv"))
+    ring = next(ring for ring in discover(source, CasePackProvider(str(SAMPLE / "case_pack.csv")).list()) if ring["benchmark_cases"] == ["SMP-007"])
+    assert ring["signature"].startswith("3 transactions by 3 cards on 1 shared devices") and "100% online" in ring["signature"]
+    assert ring["products"][0]["value"] == "W" and ring["total_amount_usd"] == 885.0

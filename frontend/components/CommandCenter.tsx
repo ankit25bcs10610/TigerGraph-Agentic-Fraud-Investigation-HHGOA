@@ -280,15 +280,21 @@ function RingsView({ onOpen }: { onOpen: (id: string) => void }) {
   if (!rings.length) return <p className="empty">No card-device community spans three or more customers.</p>;
   const candidates = rings.filter((ring) => ring.label === "candidate_undocumented").length;
   return <div className="rings">
-    <p className="rings-intro"><Icon name="graph" size={15} />Weakly connected components over cards and devices, across the whole graph. <b>{candidates} of {rings.length}</b> match no documented pattern: candidates for the undocumented fraud the brief warns about.</p>
+    <p className="rings-intro"><Icon name="graph" size={15} />Weakly connected components across the whole graph, over cards and <b>burst devices</b> (3–10 customers on one device within 72 hours). <b>{candidates} of {rings.length}</b> match no documented pattern: candidates for the undocumented fraud the brief warns about.</p>
     <div className="ring-grid">{rings.map((ring, index) => <article className={ring.label} key={ring.community_id}>
       <header><strong>Ring {index + 1}</strong><span className={`tag ${ring.label === "candidate_undocumented" ? "warn" : "risk"}`}>{ring.label === "candidate_undocumented" ? "Undocumented pattern" : "Known pattern"}</span></header>
       <dl>
         <div><dt>Customers</dt><dd>{ring.customers}</dd></div><div><dt>Cards</dt><dd>{ring.cards}</dd></div><div><dt>Devices</dt><dd>{ring.devices}</dd></div>
         <div><dt>Total</dt><dd>{ring.total_amount_usd !== null ? money(ring.total_amount_usd, true) : "—"}</dd></div>
       </dl>
-      <p className="ring-facts">{[ring.online_share !== null ? `${Math.round(ring.online_share * 100)}% online` : "", ring.span_hours !== null ? `over ${ring.span_hours < 48 ? `${Math.round(ring.span_hours)} h` : `${Math.round(ring.span_hours / 24)} days`}` : "",
-        ring.confirmed_cases.length ? `${ring.confirmed_cases.length} confirmed fraud case${ring.confirmed_cases.length === 1 ? "" : "s"} (${Object.keys(ring.confirmed_patterns).map((name) => humanize(name).toLowerCase()).join(", ")})` : "no closed case touches it"].filter(Boolean).join(", ")}.</p>
+      {ring.signature && <p className="ring-signature">{ring.signature}</p>}
+      {(ring.products?.length || ring.device_models?.length) ? <div className="ring-chips">
+        {ring.products?.slice(0, 2).map((item) => <span className="chip" key={`p-${item.value}`}>Product {item.value} · {Math.round(item.share * 100)}%</span>)}
+        {ring.emails?.slice(0, 1).map((item) => <span className="chip" key={`e-${item.value}`}>{item.value} · {Math.round(item.share * 100)}%</span>)}
+        {ring.device_models?.slice(0, 2).map((model) => <span className="chip mono" key={`d-${model}`}>{model}</span>)}
+      </div> : null}
+      <p className="ring-facts">{[ring.online_share !== null && !ring.signature ? `${Math.round(ring.online_share * 100)}% online` : "",
+        ring.confirmed_cases.length ? `${ring.confirmed_cases.length} confirmed fraud case${ring.confirmed_cases.length === 1 ? "" : "s"}${Object.keys(ring.confirmed_patterns).length ? ` (${Object.keys(ring.confirmed_patterns).map((name) => humanize(name).toLowerCase()).join(", ")})` : ""}` : "No closed case touches it"].filter(Boolean).join(", ")}.</p>
       <p className="ring-ids mono">{ring.sample_devices.join(", ")}</p>
       {ring.benchmark_cases.length > 0 && <div className="ring-cases">{ring.benchmark_cases.map((id) => <button className="button ghost small" key={id} onClick={() => onOpen(id)} type="button">Open {id}</button>)}</div>}
     </article>)}</div>
