@@ -237,6 +237,9 @@ class InvestigationCaseService:
         self._writer.upsert_vertex(
             "InvestigationCase", case_id, _case_attributes(request)
         )
+        reset = getattr(self._writer, "reset_edges", None)
+        if callable(reset):
+            reset("InvestigationCase", case_id)
         edges: list[tuple[str, str, str, str, str, Mapping[str, Any] | None]] = [
             ("InvestigationCase", case_id, "FLAGGED_TXN", "Transaction", request.flagged_transaction_id, None),
             ("InvestigationCase", case_id, "ON_CUSTOMER", "Customer", request.customer_id, None),

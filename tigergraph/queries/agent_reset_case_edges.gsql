@@ -1,0 +1,12 @@
+// Case write support: remove an InvestigationCase's outgoing edges before the case is written again,
+// so a re-investigated case links only to what its latest investigation found (upserts alone would
+// keep every card and device an earlier, different run connected it to).
+CREATE QUERY agent_reset_case_edges(STRING case_id) FOR GRAPH FraudInvestigationGraph {
+  SetAccum<STRING> @@ids;
+  SumAccum<INT> @@removed;
+  @@ids += case_id;
+  cases = to_vertex_set(@@ids, "InvestigationCase");
+  linked = SELECT t FROM cases:c -((FLAGGED_TXN>|ON_CUSTOMER>|ON_CARDS>|AFFECTS>|CONNECTED_CARD>|CONNECTED_DEVICE>|SIMILAR_TO>):e)- :t
+           ACCUM DELETE(e), @@removed += 1;
+  PRINT @@removed AS removed;
+}

@@ -9,7 +9,7 @@ import { Panel } from "./Panels";
 const toolIcon: Record<string, IconName> = {
   get_transaction: "swap", get_customer_activity: "user", get_device_activity: "device", detect_device_ring: "graph",
   get_linked_closed_cases: "folder", get_closed_cases_by_pattern: "folder", recall_case_memory: "ledger", synthesize_explanation: "doc",
-  graphrag_retrieve: "search", finish_investigation: "check", skip_device_tools: "shield", find_ring_membership: "graph",
+  graphrag_retrieve: "search", finish_investigation: "check", skip_device_tools: "shield", find_ring_membership: "graph", recall_graph_memory: "ledger",
 };
 
 const plannerLabel: Record<string, string> = { llm: "Chosen by LLM", "llm-fallback": "LLM fallback: rules", rules: "Rule planner", required: "Required step" };

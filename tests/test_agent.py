@@ -239,3 +239,21 @@ def test_ring_membership_links_a_card_whose_own_device_is_common(agent):
     state = engine.start_investigation(provider.get("SMP-007"))
     assert any(step["tool"] == "find_ring_membership" and "ring of 3 customers" in step["result"] for step in state["agent_trace"])
     assert any(item["claim"].startswith("Graph-wide ring:") for item in state["case"]["evidence"])
+
+
+def test_graph_memory_recalls_only_earlier_investigations_and_counts_fraud(agent):
+    provider, engine = agent
+    asked = {}
+
+    class GraphMemorySource(CsvSource):
+        def prior_investigations(self, customer_id, card_ids, device_ids, before, exclude_case):
+            asked.update(customer_id=customer_id, cards=list(card_ids), before=before, exclude=exclude_case)
+            return [{"case_id": "INV-SMP-900", "verdict": "fraud", "pattern": "card_testing", "opened_at": "2026-09-01 10:00:00", "reasons": ["card SMP-C302-K1"]}]
+
+    source = GraphMemorySource(str(SAMPLE / "transactions.csv"), None, str(SAMPLE / "closed_cases_history.csv"))
+    engine = LocalInvestigationEngine(source, memory=CaseMemory())
+    state = engine.start_investigation(provider.get("SMP-002"))
+    assert asked["exclude"] == "INV-SMP-002" and "SMP-C202-K1" in asked["cards"]
+    assert any(step["tool"] == "recall_graph_memory" and "1 concluded fraud" in step["result"] for step in state["agent_trace"])
+    claim = next(item for item in state["case"]["evidence"] if "SMP-900" in item["claim"])
+    assert claim["ref"] == "tigergraph:InvestigationCase" and "its card is in this card's ring: SMP-C302-K1" in claim["claim"]

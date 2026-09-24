@@ -180,3 +180,15 @@ def test_benchmark_force_create_writes_legitimate_case() -> None:
 def test_similarity_reasons_must_match_retrieved_prior_cases() -> None:
     with pytest.raises(ValueError, match="similar_prior_case_reasons"):
         request(similar_prior_case_reasons={})
+
+
+def test_rewriting_a_case_resets_its_edges_before_linking_again() -> None:
+    calls: list[str] = []
+
+    class ResettingWriter(FakeTigerGraphWriter):
+        def reset_edges(self, vertex_type: str, vertex_id: str) -> None:
+            calls.append(f"reset {vertex_type} {vertex_id} after {len(self.edges)} edges")
+
+    writer = ResettingWriter()
+    InvestigationCaseService(writer).persist(request())
+    assert calls == ["reset InvestigationCase INV-001 after 0 edges"] and writer.edges

@@ -25,6 +25,8 @@ QUERIES = {
     "pattern_cases": "agent_closed_cases_by_pattern",
     "ring": "agent_device_ring",
     "communities": "agent_fraud_communities",
+    "prior_investigations": "agent_prior_investigations",
+    "reset_case_edges": "agent_reset_case_edges",
 }
 
 
@@ -211,6 +213,13 @@ class TigerGraphSource:
             found.append(Community(str(community), members("cards", community), members("devices", community), (), members("confirmed_cases", community), 0, int(row.get("customers") or 0)))
         return found
 
+    def prior_investigations(self, customer_id: str, card_ids: Iterable[str], device_ids: Iterable[str], before: datetime, exclude_case: str) -> list[dict[str, Any]]:
+        """Graph memory: this agent's earlier InvestigationCase vertices on these entities, opened before ``before`` (never cached)."""
+        params = {"customer_id": customer_id, "card_ids": sorted({item for item in card_ids if item}), "device_ids": sorted({item for item in device_ids if item}),
+                  "before_ts": before.strftime("%Y-%m-%d %H:%M:%S"), "exclude_case": exclude_case}
+        payload = self._with_retries(lambda: self.service.run_installed_query(QUERIES["prior_investigations"], params))
+        return [{**row, "reasons": list(_split(row.get("reasons")))} for row in _rows(payload) if row.get("case_id")]
+
     def exists(self, entity_type: str, entity_id: str) -> bool:
         try:
             self._loop.run(self.service.get_vertex(entity_type, entity_id), self._timeout)
@@ -237,6 +246,11 @@ class MCPGraphWriter:
             from scripts.setup_tigergraph import connect
             self._fallback = PyTigerGraphWriter(connect())
         return self._fallback
+
+    def reset_edges(self, vertex_type: str, vertex_id: str) -> None:
+        """Drop a case's outgoing edges so a rewrite links only what the latest investigation found."""
+        if vertex_type == "InvestigationCase":
+            self.source._with_retries(lambda: self.source.service.run_installed_query(QUERIES["reset_case_edges"], {"case_id": vertex_id}))
 
     def upsert_vertex(self, vertex_type: str, vertex_id: str, attributes: Mapping[str, Any]) -> None:
         try:

@@ -1,0 +1,22 @@
+// Agent tool: graph memory. The agent's own earlier InvestigationCase vertices that touch this
+// customer, any of the given cards (the flagged card and the cards of its ring), or any of the given
+// devices, through the edges each case was written with. Only cases opened before before_ts count:
+// an investigation never learns from a later one.
+CREATE QUERY agent_prior_investigations(STRING customer_id, SET<STRING> card_ids, SET<STRING> device_ids,
+                                        DATETIME before_ts, STRING exclude_case) FOR GRAPH FraudInvestigationGraph {
+  SetAccum<STRING> @@customers;
+  SetAccum<STRING> @reasons;
+  IF customer_id != "" THEN @@customers += customer_id; END;
+  customer = to_vertex_set(@@customers, "Customer");
+  cards = to_vertex_set(card_ids, "Card");
+  devices = to_vertex_set(device_ids, "DeviceProfile");
+  by_customer = SELECT ic FROM customer:c -(<ON_CUSTOMER)- InvestigationCase:ic ACCUM ic.@reasons += ("same customer " + c.customer_id);
+  by_card = SELECT ic FROM cards:k -(<ON_CARDS)- InvestigationCase:ic ACCUM ic.@reasons += ("card " + k.card_id);
+  by_connected = SELECT ic FROM cards:k -(<CONNECTED_CARD)- InvestigationCase:ic ACCUM ic.@reasons += ("connected card " + k.card_id);
+  by_device = SELECT ic FROM devices:d -(<CONNECTED_DEVICE)- InvestigationCase:ic ACCUM ic.@reasons += ("device " + d.device_profile_id);
+  found = by_customer UNION by_card UNION by_connected UNION by_device;
+  found = SELECT ic FROM found:ic WHERE ic.opened_at < before_ts AND ic.case_id != exclude_case;
+  PRINT found[found.case_id AS case_id, found.verdict AS verdict, found.pattern AS pattern, found.fraud_probability AS fraud_probability,
+              found.summary AS summary, found.opened_at AS opened_at, found.customer_id AS customer_id, found.card_id AS card_id,
+              found.@reasons AS reasons] AS rows;
+}

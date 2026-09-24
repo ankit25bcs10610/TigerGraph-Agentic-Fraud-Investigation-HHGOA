@@ -135,7 +135,9 @@ def main() -> int:
     (out / "answers").mkdir(parents=True, exist_ok=True)
     written: set[str] = set()
     rows = []
-    for item in provider.list():
+    # Chronological order: each case is investigated after every case opened before it, so the agent's
+    # graph memory (earlier InvestigationCase vertices) holds exactly what an analyst would have had.
+    for item in sorted(provider.list(), key=lambda entry: (str(entry.get("opened_at") or ""), entry["case_id"])):
         case_id = item["case_id"]
         started = time.perf_counter()
         state = agent.start_investigation(provider.get(case_id))
@@ -180,7 +182,9 @@ def main() -> int:
                      "final": [f"{a.action.value} ({a.route.value})" for a in output.next_best_actions.final], "requests": [f"{r.type.value}={r.assumed_response}" for r in requests],
                      "sar": output.sar.file, "written": output.case.written_to_graph, "graph_pending": graph_pending, "error": error})
 
+    rows.sort(key=lambda row: row["case_id"])
     lines = ["# Benchmark run", "", f"Source: `{source.name}`. Cases: {len(rows)}. Valid and written to the graph: {sum(1 for row in rows if not row.get('error') and not row.get('graph_pending'))}. Valid but waiting for a graph write: {sum(1 for row in rows if row.get('graph_pending'))}. Needing review: {sum(1 for row in rows if row.get('error'))}.", "",
+             "Cases were investigated in the order they were opened, so each one could recall the agent's earlier investigations from the graph.", "",
              "| Case | Pattern | Verdict | P(fraud) | Exposure | Evidence requested (assumed) | Final actions | SAR | In graph | Issue |", "|---|---|---|---|---|---|---|---|---|---|"]
     for row in rows:
         if "pattern" not in row:

@@ -45,7 +45,7 @@ from backend.policy.approvals import get_approval_route
 from backend.policy.knowledge import PolicyKnowledge
 from backend.policy.rules import CustomerResponse, PolicyContext, recommend_actions
 from backend.policy.sar import build_sar, evaluate_sar, generate_grounded_sar
-from backend.sources.base import COMMON_DEVICE_CUSTOMERS, CaseDataSource, ClosedCaseRecord, Community, RingResult, Txn, generic_device
+from backend.sources.base import COMMON_DEVICE_CUSTOMERS, CaseDataSource, ClosedCaseRecord, Community, RingResult, Txn, generic_device, parse_time
 
 PATTERN_WINDOW = timedelta(hours=48)
 NETWORK_WINDOW = timedelta(days=7)
@@ -333,9 +333,68 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         remembered = self.memory.related(case_id=case_input["case_id"], customer_id=target.customer_id, card_id=target.card_id, devices=devices)
         if len(self.memory):
             trace.note("recall_case_memory", "case-memory", {"customer_id": target.customer_id}, "Check this agent's own earlier investigations on the same entities.", f"{len(remembered)} related investigations")
+        remembered = self._merge_memory(remembered, self._recall_graph_memory(case_input, gathered, trace))
         card_history = [item for item in history if item.card_id == target.card_id] if target.card_id else history
         return {"input": dict(case_input), "target": target, "history": history, "card_history": card_history, "network": gathered["network"], "ring": gathered["ring"], "device_view": gathered.get("device_view"), "community": gathered["community"],
                 "linked": gathered["linked"], "remembered": remembered, "trace": trace}
+
+    def _recall_graph_memory(self, case_input: dict[str, Any], gathered: dict[str, Any], trace: ToolTrace) -> list[tuple[dict[str, Any], list[str]]]:
+        """Graph memory: earlier InvestigationCase vertices on this customer, card, its ring's cards or devices, opened before this case."""
+        source = self.source
+        if source is None or not hasattr(source, "prior_investigations"):
+            return []
+        target: Txn = gathered["target"]
+        ring: RingResult | None = gathered["ring"]
+        community: Community | None = gathered["community"]
+        cards = [target.card_id, *(ring.cards if ring else ()), *(community.cards if community else ())][:80]
+        view = gathered.get("device_view") or {}
+        devices = [*([target.device_profile_id] if target.device_profile_id and not view.get("generic") else []), *(ring.devices if ring else ())][:40]
+        before = parse_time(case_input.get("opened_at")) or target.ts
+        rows = trace.call("recall_graph_memory", {"customer_id": target.customer_id, "cards": len(cards), "devices": len(devices), "opened_before": before.strftime("%Y-%m-%d %H:%M")},
+                          "Graph memory: this agent's own earlier investigations (InvestigationCase vertices) on this customer, card, the cards of its ring or its devices, opened before this case.",
+                          lambda: source.prior_investigations(target.customer_id, cards, devices, before, f"INV-{case_input['case_id']}"),
+                          lambda found: f"{len(found)} earlier investigations ({sum(1 for row in found if row.get('verdict') == 'fraud')} concluded fraud)") or []
+        def listed(label: str, items: list[str]) -> str:
+            shown = ", ".join(items[:2]) + (f" and {len(items) - 2} more" if len(items) > 2 else "")
+            return f"{label} {shown}"
+
+        recalled = []
+        for row in rows:
+            groups: dict[str, list[str]] = {}
+            for reason in row.get("reasons", []):
+                kind, _, entity = reason.rpartition(" ")
+                if kind == "card":
+                    key = "same card" if entity == target.card_id else "its card is in this card's ring:"
+                elif kind == "connected card":
+                    key = "it linked this card" if entity == target.card_id else "it linked cards of this ring:"
+                elif kind == "device":
+                    key = "shared device"
+                else:
+                    key, entity = reason, ""
+                groups.setdefault(key, []).extend([entity] if entity else [])
+            reasons = [listed(key, sorted(set(items))) if items else key for key, items in groups.items()]
+            record = {"case_id": str(row["case_id"]).removeprefix("INV-"), "verdict": row.get("verdict"), "pattern": row.get("pattern") or "none",
+                      "opened_at": str(row.get("opened_at") or ""), "source": "graph"}
+            recalled.append((record, reasons))
+        return recalled
+
+    @staticmethod
+    def _merge_memory(local: list[tuple[dict[str, Any], list[str]]], graph: list[tuple[dict[str, Any], list[str]]]) -> list[tuple[dict[str, Any], list[str]]]:
+        """One entry per earlier case, fraud conclusions first, then the most recent."""
+        merged: dict[str, tuple[dict[str, Any], list[str]]] = {}
+        for record, reasons in [*graph, *local]:
+            if record["case_id"] in merged:
+                known, known_reasons = merged[record["case_id"]]
+                merged[record["case_id"]] = (known, sorted(set(known_reasons) | set(reasons)))
+            else:
+                merged[record["case_id"]] = (record, reasons)
+        rank = {"fraud": 0, "uncertain": 1, "legitimate": 2}
+
+        def order(item: tuple[dict[str, Any], list[str]]) -> tuple[int, float]:
+            opened = parse_time(item[0].get("opened_at"))
+            return rank.get(str(item[0].get("verdict")), 3), -(opened.timestamp() if opened else 0.0)
+
+        return sorted(merged.values(), key=order)
 
     def _retrieve_grounding(self, context: dict[str, Any], assessment: dict[str, Any]) -> None:
         """GraphRAG: retrieve the policy passages and prior-case narratives relevant to this assessment."""
@@ -450,8 +509,10 @@ class LocalInvestigationEngine(ReferenceWorkflow):
         for case, reasons in confirmed_links[:3]:
             history_signal = 1.0
             fact(f"Closed case {case.case_id} ({case.outcome.replace('_', ' ')}, {(case.pattern or 'unknown').replace('_', ' ')}) involved the {', '.join(reasons)}.", [case.case_id, case.customer_id, case.card_id], "history", ref=cases_ref)
-        for record, reasons in context["remembered"][:2]:
-            fact(f"This agent's earlier investigation {record['case_id']} ({record.get('verdict')}, {str(record.get('pattern', 'none')).replace('_', ' ')}) shares the {', '.join(reasons)}.", [record["case_id"]], ref="case_memory")
+        for record, reasons in context["remembered"][:3]:
+            opened = f", opened {str(record['opened_at'])[:10]}" if record.get("opened_at") else ""
+            fact(f"This agent's earlier investigation {record['case_id']} ({record.get('verdict')}, {str(record.get('pattern', 'none')).replace('_', ' ')}{opened}) is linked: {'; '.join(reasons)}.",
+                 [record["case_id"]], "memory" if record.get("verdict") == "fraud" else None, ref="tigergraph:InvestigationCase" if record.get("source") == "graph" else "case_memory")
             if record.get("verdict") == "fraud":
                 history_signal = 1.0
 
@@ -536,7 +597,7 @@ class LocalInvestigationEngine(ReferenceWorkflow):
             sar = generate_grounded_sar(
                 decision=sar_decision, customer_id=target.customer_id, card_id=subject_card, connected_card_ids=connected_cards[:10],
                 episode_transactions=episode_rows, pattern=pattern.pattern,
-                linkage_claims=[item["claim"] for item in evidence if item["ref"] in {cases_ref, "case_memory"}],
+                linkage_claims=[item["claim"] for item in evidence if item["ref"] in {cases_ref, "case_memory", "tigergraph:InvestigationCase"}],
                 evidence_response="; ".join(f"{item.get('type', '').replace('_', ' ')}: {item.get('result')}" for item in responses),
                 known_subject_ids=[target.customer_id, subject_card, *connected_cards[:10]], investigation_case_created=True,
             ).sar
