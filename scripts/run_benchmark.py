@@ -29,6 +29,10 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from dotenv import load_dotenv  # noqa: E402
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
 from backend.app.output.models import CaseOutput  # noqa: E402
 from backend.app.output.validator import OutputValidationError, StopContext, validate_output  # noqa: E402
 from backend.cases.service import InvestigationCaseRequest, InvestigationCaseService  # noqa: E402
@@ -114,7 +118,7 @@ def main() -> int:
     parser.add_argument("--transactions", default=os.getenv("TRANSACTIONS_PATH"))
     parser.add_argument("--identity", default=os.getenv("IDENTITY_PATH"))
     parser.add_argument("--closed-cases", default=os.getenv("CLOSED_CASES_PATH"))
-    parser.add_argument("--source", default="csv", help="csv or tigergraph")
+    parser.add_argument("--source", default=os.getenv("DATA_SOURCE", "csv"), help="csv or tigergraph (default: DATA_SOURCE)")
     parser.add_argument("--assumptions", help="JSON: {case_id: {request_type: result}}")
     parser.add_argument("--write-graph", action="store_true", help="write each formal case to TigerGraph (requires --source tigergraph)")
     parser.add_argument("--out", default="outputs")
@@ -124,9 +128,9 @@ def main() -> int:
     provider = CasePackProvider(args.case_pack)
     agent = LocalInvestigationEngine(source)
     assumptions = load_assumptions(args.assumptions)
-    service = InvestigationCaseService(MCPGraphWriter(source)) if args.write_graph else None
     if args.write_graph and source.name != "tigergraph-mcp":
         parser.error("--write-graph needs --source tigergraph")
+    service = InvestigationCaseService(MCPGraphWriter(source)) if args.write_graph else None
     out = Path(args.out)
     (out / "answers").mkdir(parents=True, exist_ok=True)
     written: set[str] = set()
