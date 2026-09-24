@@ -42,11 +42,11 @@
     ],
     "similar_prior_cases": [
       "CC-2935",
-      "CC-3327",
       "CC-4957",
+      "CC-3327",
+      "CC-1589",
       "CC-2817",
       "CC-3682",
-      "CC-1589",
       "CC-4989",
       "CC-2539",
       "CC-4994"
@@ -104,7 +104,7 @@
       "planner": "rules",
       "result": "$49.00 in_person on C08623-K2",
       "ok": true,
-      "ms": 37.5
+      "ms": 30.7
     },
     {
       "step": 2,
@@ -113,11 +113,11 @@
       "args": {
         "customer_id": "C08623"
       },
-      "reason": "Understanding the full transaction history of customer C08623 will help establish a behavioral baseline to assess the flagged transaction.",
+      "reason": "Understanding the full transaction history of customer C08623 will help establish a behavioral baseline and identify any anomalies.",
       "planner": "llm",
       "result": "1140 transactions",
       "ok": true,
-      "ms": 158.2
+      "ms": 145.5
     },
     {
       "step": 3,
@@ -126,7 +126,7 @@
       "args": {
         "card_id": "C08623-K2"
       },
-      "reason": "The transaction amount is significantly lower than the customer's prior median, suggesting potential fraud, and checking for connections in the graph could reveal patterns.",
+      "reason": "Determining if card C08623-K2 is part of any fraud rings could provide insights into its legitimacy and potential connections to other fraudulent activities.",
       "planner": "llm",
       "result": "not in any ring",
       "ok": true,
@@ -140,23 +140,27 @@
         "customer_id": "C08623",
         "card_id": "C08623-K2"
       },
-      "reason": "Investigating closed cases related to this customer or card may provide insights into similar fraudulent activities or patterns.",
+      "reason": "Investigating past cases related to this customer or card may reveal patterns or previous fraudulent activities that could inform the current case.",
       "planner": "llm",
       "result": "6 closed cases",
       "ok": true,
-      "ms": 60.9
+      "ms": 31.7
     },
     {
       "step": 5,
-      "tool": "recall_case_memory",
-      "source": "case-memory",
+      "tool": "recall_graph_memory",
+      "source": "tigergraph-mcp",
       "args": {
-        "customer_id": "C08623"
+        "customer_id": "C08623",
+        "cards": 1,
+        "devices": 0,
+        "opened_before": "2016-12-10 15:01"
       },
-      "reason": "Check this agent's own earlier investigations on the same entities.",
-      "result": "0 related investigations",
+      "reason": "Graph memory: this agent's own earlier investigations (InvestigationCase vertices) on this customer, card, the cards of its ring or its devices, opened before this case.",
+      "planner": "rules",
+      "result": "0 earlier investigations (0 concluded fraud)",
       "ok": true,
-      "ms": 0.0
+      "ms": 30.2
     },
     {
       "step": 6,
@@ -170,7 +174,7 @@
       "planner": "rules",
       "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 1559.4
+      "ms": 1010.3
     },
     {
       "tool": "execute_action",
@@ -181,10 +185,10 @@
       "system": "case-management",
       "detail": "Fraud case opened in case management",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T09:28:22.100357+00:00",
+      "executed_at": "2026-09-24T10:19:58.442077+00:00",
       "simulated": true
     }
   ],
   "tokens": 0,
-  "latency_s": 5.71
+  "latency_s": 4.947
 }

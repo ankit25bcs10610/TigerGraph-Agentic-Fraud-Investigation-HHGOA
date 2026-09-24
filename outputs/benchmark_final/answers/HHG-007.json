@@ -27,34 +27,18 @@
         "entity_ids": [
           "3514948"
         ]
-      },
-      {
-        "claim": "This agent's earlier investigation HHG-001 (legitimate, none) shares the shared device DP-d9ac4af4720f519bd7dc657dd2480356.",
-        "source": "graph",
-        "ref": "case_memory",
-        "entity_ids": [
-          "HHG-001"
-        ]
-      },
-      {
-        "claim": "This agent's earlier investigation HHG-005 (legitimate, none) shares the shared device DP-bfbf4ee7cbf4f1ee6f3acfeb95b44c40, DP-c3bc72b2c593dde6c41b02604480e4c3, DP-cc325f4ee784989670fd6625c3af1b44.",
-        "source": "graph",
-        "ref": "case_memory",
-        "entity_ids": [
-          "HHG-005"
-        ]
       }
     ],
     "similar_prior_cases": [
       "CC-0104",
-      "CC-1524",
-      "CC-0657",
-      "CC-2834",
       "CC-3821",
       "CC-4196",
-      "CC-3119",
+      "CC-5092",
+      "CC-2565",
+      "CC-1228",
+      "CC-1114",
       "CC-1119",
-      "CC-2113"
+      "CC-3119"
     ],
     "summary": "No documented fraud pattern on C09933-K2: fraud probability 0.13, exposure $0.00 across 0 transaction(s). Fraud probability 0.13 meets the strong-legitimate threshold with 2 independent supporting evidence sources.",
     "written_to_graph": true,
@@ -87,7 +71,7 @@
       "planner": "rules",
       "result": "$111.92 in_person on C09933-K2",
       "ok": true,
-      "ms": 40.0
+      "ms": 30.8
     },
     {
       "step": 2,
@@ -96,11 +80,11 @@
       "args": {
         "customer_id": "C09933"
       },
-      "reason": "Understanding the full transaction history of customer C09933 will help establish a behavioral baseline to identify any anomalies.",
+      "reason": "Understanding the full transaction history of customer C09933 will help establish a behavioral baseline to assess the flagged transaction.",
       "planner": "llm",
       "result": "2792 transactions",
       "ok": true,
-      "ms": 347.3
+      "ms": 387.9
     },
     {
       "step": 3,
@@ -109,7 +93,7 @@
       "args": {
         "card_id": "C09933-K2"
       },
-      "reason": "Determining if card C09933-K2 is part of a larger network of potentially fraudulent activity could provide insights into the legitimacy of the flagged transaction.",
+      "reason": "Determining if card C09933-K2 is part of a larger network of fraudulent activity could provide insights into the legitimacy of the flagged transaction.",
       "planner": "llm",
       "result": "not in any ring",
       "ok": true,
@@ -123,23 +107,27 @@
         "customer_id": "C09933",
         "card_id": "C09933-K2"
       },
-      "reason": "Investigating past cases related to this customer or card may reveal patterns or similar fraudulent activities.",
+      "reason": "Investigating past cases related to this customer or card may reveal patterns or previous fraudulent activities that could inform the current case.",
       "planner": "llm",
       "result": "19 closed cases",
       "ok": true,
-      "ms": 38.7
+      "ms": 37.2
     },
     {
       "step": 5,
-      "tool": "recall_case_memory",
-      "source": "case-memory",
+      "tool": "recall_graph_memory",
+      "source": "tigergraph-mcp",
       "args": {
-        "customer_id": "C09933"
+        "customer_id": "C09933",
+        "cards": 1,
+        "devices": 0,
+        "opened_before": "2016-12-05 03:46"
       },
-      "reason": "Check this agent's own earlier investigations on the same entities.",
-      "result": "2 related investigations",
+      "reason": "Graph memory: this agent's own earlier investigations (InvestigationCase vertices) on this customer, card, the cards of its ring or its devices, opened before this case.",
+      "planner": "rules",
+      "result": "0 earlier investigations (0 concluded fraud)",
       "ok": true,
-      "ms": 0.0
+      "ms": 32.1
     },
     {
       "step": 6,
@@ -153,9 +141,9 @@
       "planner": "rules",
       "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 1061.4
+      "ms": 1098.4
     }
   ],
   "tokens": 0,
-  "latency_s": 4.792
+  "latency_s": 4.77
 }

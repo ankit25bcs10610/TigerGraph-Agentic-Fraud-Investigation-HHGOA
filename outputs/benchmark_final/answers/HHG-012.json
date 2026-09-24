@@ -27,30 +27,14 @@
         "entity_ids": [
           "3553342"
         ]
-      },
-      {
-        "claim": "This agent's earlier investigation HHG-005 (legitimate, none) shares the shared device DP-d97ac40e9e087b27c99236b96334898b.",
-        "source": "graph",
-        "ref": "case_memory",
-        "entity_ids": [
-          "HHG-005"
-        ]
-      },
-      {
-        "claim": "This agent's earlier investigation HHG-007 (legitimate, none) shares the shared device DP-05bb4e46874299d01c8a9db90740a835, DP-0c3cabf7a514603d7d7013dda3d7e3a4, DP-357ea50e98c211c363f086f89b3fd299, DP-399140ba94cd5ab0d1d78f3fc66b6c37, DP-5cc9dfb336c8c705b70fc94bf4e6fbb5, DP-814c060c16a6c343de3a8788494e1e29, DP-937c13eb7c10d79ad3aabd22755d3c8e, DP-9a0fa3e23978d6bb0a9ef266df19d0e5, DP-b78ef7a771a24e6bd89424041414098f, DP-c5a7d3f9f599523c15376f87eccd2857, DP-e85892ef2441e5921f0e0339afc798e0, DP-e8f6957452eb6495796c0d739c18b2b2.",
-        "source": "graph",
-        "ref": "case_memory",
-        "entity_ids": [
-          "HHG-007"
-        ]
       }
     ],
     "similar_prior_cases": [
       "CC-0003",
       "CC-2370",
-      "CC-3170",
-      "CC-2969",
-      "CC-2963"
+      "CC-2539",
+      "CC-2989",
+      "CC-2969"
     ],
     "summary": "No documented fraud pattern on C05876-K2: fraud probability 0.08, exposure $0.00 across 0 transaction(s). Fraud probability 0.08 meets the strong-legitimate threshold with 2 independent supporting evidence sources.",
     "written_to_graph": true,
@@ -83,7 +67,7 @@
       "planner": "rules",
       "result": "$30.91 in_person on C05876-K2",
       "ok": true,
-      "ms": 33.3
+      "ms": 30.9
     },
     {
       "step": 2,
@@ -92,11 +76,11 @@
       "args": {
         "customer_id": "C05876"
       },
-      "reason": "Understanding the full transaction history of customer C05876 will help establish a behavioral baseline to assess the flagged transaction.",
+      "reason": "Understanding the overall transaction history of customer C05876 will help establish a behavioral baseline to assess the flagged transaction.",
       "planner": "llm",
       "result": "991 transactions",
       "ok": true,
-      "ms": 185.3
+      "ms": 126.6
     },
     {
       "step": 3,
@@ -105,7 +89,7 @@
       "args": {
         "card_id": "C05876-K2"
       },
-      "reason": "The transaction amount is significantly lower than the customer's prior median, suggesting potential fraud, and checking for connections in the graph could reveal patterns.",
+      "reason": "Determining if card C05876-K2 is part of any fraud rings could provide insights into its legitimacy and potential connections to other fraudulent activities.",
       "planner": "llm",
       "result": "not in any ring",
       "ok": true,
@@ -123,19 +107,23 @@
       "planner": "llm",
       "result": "2 closed cases",
       "ok": true,
-      "ms": 38.4
+      "ms": 33.9
     },
     {
       "step": 5,
-      "tool": "recall_case_memory",
-      "source": "case-memory",
+      "tool": "recall_graph_memory",
+      "source": "tigergraph-mcp",
       "args": {
-        "customer_id": "C05876"
+        "customer_id": "C05876",
+        "cards": 1,
+        "devices": 0,
+        "opened_before": "2016-12-18 05:00"
       },
-      "reason": "Check this agent's own earlier investigations on the same entities.",
-      "result": "2 related investigations",
+      "reason": "Graph memory: this agent's own earlier investigations (InvestigationCase vertices) on this customer, card, the cards of its ring or its devices, opened before this case.",
+      "planner": "rules",
+      "result": "0 earlier investigations (0 concluded fraud)",
       "ok": true,
-      "ms": 0.0
+      "ms": 31.3
     },
     {
       "step": 6,
@@ -149,9 +137,9 @@
       "planner": "rules",
       "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 1134.3
+      "ms": 1000.6
     }
   ],
   "tokens": 0,
-  "latency_s": 4.921
+  "latency_s": 4.909
 }

@@ -117,7 +117,7 @@
       "planner": "rules",
       "result": "$128.33 online on C08106-K1",
       "ok": true,
-      "ms": 32.7
+      "ms": 33.4
     },
     {
       "step": 2,
@@ -130,7 +130,7 @@
       "planner": "llm",
       "result": "8 transactions from 6 customers",
       "ok": true,
-      "ms": 37.5
+      "ms": 34.0
     },
     {
       "step": 3,
@@ -143,7 +143,7 @@
       "planner": "llm",
       "result": "216 transactions",
       "ok": true,
-      "ms": 55.8
+      "ms": 78.4
     },
     {
       "step": 4,
@@ -166,7 +166,7 @@
         "customer_id": "C08106",
         "card_id": "C08106-K1"
       },
-      "reason": "Investigating past cases related to the customer or the device may provide insights into potential fraudulent patterns or behaviors.",
+      "reason": "Investigating past cases related to the customer or device may reveal patterns or previous fraudulent activities that could inform the current case.",
       "planner": "llm",
       "result": "4 closed cases",
       "ok": true,
@@ -174,15 +174,19 @@
     },
     {
       "step": 6,
-      "tool": "recall_case_memory",
-      "source": "case-memory",
+      "tool": "recall_graph_memory",
+      "source": "tigergraph-mcp",
       "args": {
-        "customer_id": "C08106"
+        "customer_id": "C08106",
+        "cards": 1,
+        "devices": 1,
+        "opened_before": "2016-12-29 07:53"
       },
-      "reason": "Check this agent's own earlier investigations on the same entities.",
-      "result": "0 related investigations",
+      "reason": "Graph memory: this agent's own earlier investigations (InvestigationCase vertices) on this customer, card, the cards of its ring or its devices, opened before this case.",
+      "planner": "rules",
+      "result": "0 earlier investigations (0 concluded fraud)",
       "ok": true,
-      "ms": 0.0
+      "ms": 33.3
     },
     {
       "step": 7,
@@ -196,7 +200,7 @@
       "planner": "rules",
       "result": "0 closed cases",
       "ok": true,
-      "ms": 34.6
+      "ms": 32.7
     },
     {
       "step": 8,
@@ -210,7 +214,7 @@
       "planner": "rules",
       "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 1150.7
+      "ms": 1673.1
     },
     {
       "tool": "execute_action",
@@ -221,10 +225,10 @@
       "system": "case-management",
       "detail": "Fraud case opened in case management",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T09:28:28.257904+00:00",
+      "executed_at": "2026-09-24T10:21:32.426002+00:00",
       "simulated": true
     }
   ],
   "tokens": 0,
-  "latency_s": 6.244
+  "latency_s": 8.835
 }

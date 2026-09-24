@@ -51,14 +51,6 @@
         ]
       },
       {
-        "claim": "This agent's earlier investigation HHG-007 (legitimate, none) shares the shared device DP-0799b665d9c9d9b5853112a6e6e03219, DP-0c3cabf7a514603d7d7013dda3d7e3a4, DP-5e2fac456fb12993d58f7991e150d031, DP-a7acf3036f840df29137c5d688158899, DP-b78ef7a771a24e6bd89424041414098f.",
-        "source": "graph",
-        "ref": "case_memory",
-        "entity_ids": [
-          "HHG-007"
-        ]
-      },
-      {
         "claim": "The customer did not reply to the verification request (simulated response).",
         "source": "customer",
         "ref": "HHG-010-customer-validation",
@@ -78,8 +70,8 @@
     "similar_prior_cases": [
       "CC-0873",
       "CC-2790",
-      "CC-2290",
-      "CC-3170"
+      "CC-3170",
+      "CC-2290"
     ],
     "summary": "No documented fraud pattern on C10434-K1: fraud probability 0.34, exposure $1,000.03 across 1 transaction(s). Further investigation is unlikely to change the decision.",
     "written_to_graph": true,
@@ -145,7 +137,7 @@
       "planner": "rules",
       "result": "$1,000.03 online on C10434-K1",
       "ok": true,
-      "ms": 46.9
+      "ms": 42.4
     },
     {
       "step": 2,
@@ -154,11 +146,11 @@
       "args": {
         "device_profile_id": "DP-fc8aaa0e6e5e9351742c0232d890c7e4"
       },
-      "reason": "Understanding all transactions associated with the device can reveal patterns or anomalies that may indicate fraudulent behavior.",
+      "reason": "Understanding all transactions associated with device DP-fc8aaa0e6e5e9351742c0232d890c7e4 will help identify any suspicious patterns or connections.",
       "planner": "llm",
       "result": "1249 transactions from 208 customers",
       "ok": true,
-      "ms": 144.5
+      "ms": 155.3
     },
     {
       "step": 3,
@@ -186,7 +178,7 @@
       "planner": "llm",
       "result": "36 transactions",
       "ok": true,
-      "ms": 36.0
+      "ms": 33.2
     },
     {
       "step": 5,
@@ -195,7 +187,7 @@
       "args": {
         "card_id": "C10434-K1"
       },
-      "reason": "Determining if card C10434-K1 is part of a larger network of fraudulent activity could provide insights into the legitimacy of the transaction.",
+      "reason": "Determining if card C10434-K1 is part of a larger network of fraudulent activity could provide insights into the nature of the transaction.",
       "planner": "llm",
       "result": "not in any ring",
       "ok": true,
@@ -213,19 +205,23 @@
       "planner": "llm",
       "result": "1 closed cases",
       "ok": true,
-      "ms": 34.1
+      "ms": 31.8
     },
     {
       "step": 7,
-      "tool": "recall_case_memory",
-      "source": "case-memory",
+      "tool": "recall_graph_memory",
+      "source": "tigergraph-mcp",
       "args": {
-        "customer_id": "C10434"
+        "customer_id": "C10434",
+        "cards": 1,
+        "devices": 0,
+        "opened_before": "2016-12-02 18:18"
       },
-      "reason": "Check this agent's own earlier investigations on the same entities.",
-      "result": "1 related investigations",
+      "reason": "Graph memory: this agent's own earlier investigations (InvestigationCase vertices) on this customer, card, the cards of its ring or its devices, opened before this case.",
+      "planner": "rules",
+      "result": "0 earlier investigations (0 concluded fraud)",
       "ok": true,
-      "ms": 0.0
+      "ms": 33.8
     },
     {
       "step": 8,
@@ -239,7 +235,7 @@
       "planner": "rules",
       "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 1178.2
+      "ms": 1359.8
     },
     {
       "step": 9,
@@ -253,7 +249,7 @@
       "planner": "rules",
       "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 1101.2
+      "ms": 1051.6
     },
     {
       "step": 10,
@@ -267,7 +263,7 @@
       "planner": "rules",
       "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 1140.5
+      "ms": 1551.8
     },
     {
       "step": 11,
@@ -278,8 +274,8 @@
       },
       "reason": "Write the case narrative from the cited evidence and policy only.",
       "ok": true,
-      "ms": 3106.3,
-      "result": "grounded narrative, 3153 tokens"
+      "ms": 3495.0,
+      "result": "grounded narrative, 3010 tokens"
     },
     {
       "tool": "execute_action",
@@ -290,7 +286,7 @@
       "system": "case-management",
       "detail": "Case routed to the analyst review queue",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T09:29:08.325203+00:00",
+      "executed_at": "2026-09-24T10:18:54.355516+00:00",
       "simulated": true
     },
     {
@@ -302,10 +298,10 @@
       "system": "transaction-monitoring",
       "detail": "Card added to enhanced monitoring for 30 days",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T09:29:12.755552+00:00",
+      "executed_at": "2026-09-24T10:18:59.696028+00:00",
       "simulated": true
     }
   ],
-  "tokens": 3153,
-  "latency_s": 14.456
+  "tokens": 3010,
+  "latency_s": 16.255
 }

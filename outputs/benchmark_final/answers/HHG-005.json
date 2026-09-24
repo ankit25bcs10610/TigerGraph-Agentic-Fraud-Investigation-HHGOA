@@ -48,11 +48,11 @@
     ],
     "similar_prior_cases": [
       "CC-2400",
-      "CC-2857",
       "CC-2717",
-      "CC-5529",
+      "CC-2857",
+      "CC-2532",
       "CC-2537",
-      "CC-2532"
+      "CC-5529"
     ],
     "summary": "No documented fraud pattern on C02923-K1: fraud probability 0.13, exposure $0.00 across 0 transaction(s). Fraud probability 0.13 meets the strong-legitimate threshold with 2 independent supporting evidence sources.",
     "written_to_graph": true,
@@ -97,7 +97,7 @@
       "planner": "rules",
       "result": "$100.07 online on C02923-K1",
       "ok": true,
-      "ms": 37.5
+      "ms": 35.9
     },
     {
       "step": 2,
@@ -110,7 +110,7 @@
       "planner": "llm",
       "result": "168 transactions from 112 customers",
       "ok": true,
-      "ms": 49.3
+      "ms": 50.2
     },
     {
       "step": 3,
@@ -138,7 +138,7 @@
       "planner": "llm",
       "result": "92 transactions",
       "ok": true,
-      "ms": 43.1
+      "ms": 38.4
     },
     {
       "step": 5,
@@ -165,19 +165,23 @@
       "planner": "llm",
       "result": "3 closed cases",
       "ok": true,
-      "ms": 34.7
+      "ms": 31.6
     },
     {
       "step": 7,
-      "tool": "recall_case_memory",
-      "source": "case-memory",
+      "tool": "recall_graph_memory",
+      "source": "tigergraph-mcp",
       "args": {
-        "customer_id": "C02923"
+        "customer_id": "C02923",
+        "cards": 1,
+        "devices": 0,
+        "opened_before": "2016-12-08 03:38"
       },
-      "reason": "Check this agent's own earlier investigations on the same entities.",
-      "result": "0 related investigations",
+      "reason": "Graph memory: this agent's own earlier investigations (InvestigationCase vertices) on this customer, card, the cards of its ring or its devices, opened before this case.",
+      "planner": "rules",
+      "result": "0 earlier investigations (0 concluded fraud)",
       "ok": true,
-      "ms": 0.0
+      "ms": 30.3
     },
     {
       "step": 8,
@@ -191,7 +195,7 @@
       "planner": "rules",
       "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 1372.3
+      "ms": 1034.8
     },
     {
       "tool": "execute_action",
@@ -202,10 +206,10 @@
       "system": "customer-messaging",
       "detail": "Verification request sent to the customer's registered phone",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T09:28:34.200350+00:00",
+      "executed_at": "2026-09-24T10:19:33.149873+00:00",
       "simulated": true
     }
   ],
   "tokens": 0,
-  "latency_s": 5.85
+  "latency_s": 5.624
 }

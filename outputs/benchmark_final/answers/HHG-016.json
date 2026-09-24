@@ -77,7 +77,7 @@
         ]
       },
       {
-        "claim": "Graph-wide ring: card C09988-K1 is one of 36 cards of 36 customers linked through 16 burst devices (each used by 3\u201310 customers within 72 hours).",
+        "claim": "Graph-wide ring: card C09988-K1 is one of 36 cards of 36 customers linked through 16 burst devices (each used by 3\u201310 customers within 72 hours). What the ring did: 73 transactions by 36 cards on 16 shared devices; device builds such as BLADE V8Q Build/N2G47H, E2104 Build/24.0.A.5.14; 100% online; 99% product C; median $31.70, total $3,386.49; 2016-07-05 to 2016-12-31.",
         "source": "graph",
         "ref": "tigergraph",
         "entity_ids": [
@@ -86,14 +86,6 @@
           "DP-30d21d126762fad9ec32ee853b6617b5",
           "DP-31ec32e1b94489d8cd998dde0dcf1415",
           "DP-5c3473138a43cd687281f0c8a6601ede"
-        ]
-      },
-      {
-        "claim": "This agent's earlier investigation HHG-007 (legitimate, none) shares the shared device DP-113906cbc95925dfbd056050a1ee2ceb, DP-2cbd8506e77fcc79806a112c177929c2, DP-d0cbe4b01ca6300c83ee80f2241c87bd, DP-dfc04b24c6237405d348bec38396f854.",
-        "source": "graph",
-        "ref": "case_memory",
-        "entity_ids": [
-          "HHG-007"
         ]
       },
       {
@@ -176,7 +168,7 @@
   "sar": {
     "file": true,
     "reason": "README section 3a: confirmed or strongly suspected fraud and shared device, region, or email origin; coordinated or undocumented activity",
-    "narrative": "Customer C09988 and card C09988-K1 are the report subjects. The identified episode contains transactions 3534820 between 2016-12-11 and 2016-12-11. The deterministic episode exposure is USD 59.67. The deterministic investigation classified the observed pattern as undocumented. Connected cards supplied by graph evidence: C00294-K2, C02147-K2, C02181-K2, C02782-K2, C03095-K2, C03938-K1, C04034-K2, C04386-K1, C04597-K2, C04743-K1. Grounded linkage evidence: This agent's earlier investigation HHG-007 (legitimate, none) shares the shared device DP-113906cbc95925dfbd056050a1ee2ceb, DP-2cbd8506e77fcc79806a112c177929c2, DP-d0cbe4b01ca6300c83ee80f2241c87bd, DP-dfc04b24c6237405d348bec38396f854. The report reason is: README section 3a: confirmed or strongly suspected fraud and shared device, region, or email origin; coordinated or undocumented activity",
+    "narrative": "Customer C09988 and card C09988-K1 are the report subjects. The identified episode contains transactions 3534820 between 2016-12-11 and 2016-12-11. The deterministic episode exposure is USD 59.67. The deterministic investigation classified the observed pattern as undocumented. Connected cards supplied by graph evidence: C00294-K2, C02147-K2, C02181-K2, C02782-K2, C03095-K2, C03938-K1, C04034-K2, C04386-K1, C04597-K2, C04743-K1. The report reason is: README section 3a: confirmed or strongly suspected fraud and shared device, region, or email origin; coordinated or undocumented activity",
     "subjects": [
       "C09988",
       "C09988-K1",
@@ -210,7 +202,7 @@
       "planner": "rules",
       "result": "$59.67 online on C09988-K1",
       "ok": true,
-      "ms": 40.1
+      "ms": 39.6
     },
     {
       "step": 2,
@@ -219,11 +211,11 @@
       "args": {
         "device_profile_id": "DP-6904f298486705e29eef7a5644158a34"
       },
-      "reason": "Understanding all transactions associated with device DP-6904f298486705e29eef7a5644158a34 will help identify any suspicious patterns or connections.",
+      "reason": "Understanding all transactions associated with the device will help identify any patterns or anomalies that could indicate fraudulent behavior.",
       "planner": "llm",
       "result": "592 transactions from 158 customers",
       "ok": true,
-      "ms": 81.9
+      "ms": 79.5
     },
     {
       "step": 3,
@@ -251,7 +243,7 @@
       "planner": "llm",
       "result": "61 transactions",
       "ok": true,
-      "ms": 38.9
+      "ms": 36.8
     },
     {
       "step": 5,
@@ -260,7 +252,7 @@
       "args": {
         "card_id": "C09988-K1"
       },
-      "reason": "Determining if card C09988-K1 is part of a larger network could reveal connections to other suspicious activities.",
+      "reason": "Determining if card C09988-K1 is part of a larger network of fraudulent activity could provide insights into the nature of the transaction.",
       "planner": "llm",
       "result": "ring of 36 customers, 36 cards, 16 burst devices",
       "ok": true,
@@ -278,19 +270,23 @@
       "planner": "llm",
       "result": "0 closed cases",
       "ok": true,
-      "ms": 34.7
+      "ms": 38.4
     },
     {
       "step": 7,
-      "tool": "recall_case_memory",
-      "source": "case-memory",
+      "tool": "recall_graph_memory",
+      "source": "tigergraph-mcp",
       "args": {
-        "customer_id": "C09988"
+        "customer_id": "C09988",
+        "cards": 37,
+        "devices": 0,
+        "opened_before": "2016-12-12 01:39"
       },
-      "reason": "Check this agent's own earlier investigations on the same entities.",
-      "result": "1 related investigations",
+      "reason": "Graph memory: this agent's own earlier investigations (InvestigationCase vertices) on this customer, card, the cards of its ring or its devices, opened before this case.",
+      "planner": "rules",
+      "result": "0 earlier investigations (0 concluded fraud)",
       "ok": true,
-      "ms": 0.0
+      "ms": 30.4
     },
     {
       "step": 8,
@@ -318,7 +314,7 @@
       "planner": "rules",
       "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 1211.3
+      "ms": 1305.3
     },
     {
       "tool": "execute_action",
@@ -329,7 +325,7 @@
       "system": "case-management",
       "detail": "Fraud case opened in case management",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T09:31:36.851339+00:00",
+      "executed_at": "2026-09-24T10:20:04.454757+00:00",
       "simulated": true
     },
     {
@@ -341,7 +337,7 @@
       "system": "transaction-monitoring",
       "detail": "Connected cards added to enhanced monitoring",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T09:31:36.851364+00:00",
+      "executed_at": "2026-09-24T10:20:04.454782+00:00",
       "simulated": true
     },
     {
@@ -353,10 +349,10 @@
       "system": "case-management",
       "detail": "Case routed to the analyst review queue",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T09:31:36.851383+00:00",
+      "executed_at": "2026-09-24T10:20:04.454801+00:00",
       "simulated": true
     }
   ],
   "tokens": 0,
-  "latency_s": 6.2
+  "latency_s": 6.049
 }

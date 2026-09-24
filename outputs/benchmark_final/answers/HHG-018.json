@@ -31,22 +31,6 @@
         ]
       },
       {
-        "claim": "This agent's earlier investigation HHG-001 (legitimate, none) shares the shared device DP-1cc0d180e3d2884d79a2fad3951094db, DP-d9ac4af4720f519bd7dc657dd2480356.",
-        "source": "graph",
-        "ref": "case_memory",
-        "entity_ids": [
-          "HHG-001"
-        ]
-      },
-      {
-        "claim": "This agent's earlier investigation HHG-005 (legitimate, none) shares the shared device DP-37f66bb71ca97d53775442b6d7610024, DP-542bff8d7a8bc4c9858e0bac7b52d577, DP-804609024e8ecb4b7a7e3808673a6d9f, DP-a910843ce194bfc86273d01aeb0a7869, DP-ba5ece7542600af0ffb84019857422f4, DP-bfbf4ee7cbf4f1ee6f3acfeb95b44c40, DP-c3bc72b2c593dde6c41b02604480e4c3, DP-caccf24c06a310a1017e0f8bc47b5a2b, DP-d6e01f0ae29036c0bd532647c28aae47, DP-d97ac40e9e087b27c99236b96334898b.",
-        "source": "graph",
-        "ref": "case_memory",
-        "entity_ids": [
-          "HHG-005"
-        ]
-      },
-      {
         "claim": "The customer reported the transaction as not made by them: \u201cCustomer C02354 message: 'I never made this $39.08 purchase. Please check my card.' Refers to 3491361.\u201d",
         "source": "customer",
         "ref": "case_pack.trigger_text",
@@ -58,14 +42,14 @@
     ],
     "similar_prior_cases": [
       "CC-0454",
-      "CC-0631",
-      "CC-2051",
       "CC-3537",
       "CC-4942",
       "CC-1450",
-      "CC-3989",
-      "CC-2969",
-      "CC-3982"
+      "CC-0255",
+      "CC-0631",
+      "CC-2539",
+      "CC-2393",
+      "CC-3933"
     ],
     "summary": "No documented fraud pattern on C02354-K2: fraud probability 0.37, exposure $39.08 across 1 transaction(s). Verification response case_pack.trigger_text settled the question as fraud.",
     "written_to_graph": true,
@@ -120,7 +104,7 @@
       "planner": "rules",
       "result": "$39.08 in_person on C02354-K2",
       "ok": true,
-      "ms": 32.5
+      "ms": 31.5
     },
     {
       "step": 2,
@@ -133,7 +117,7 @@
       "planner": "llm",
       "result": "7091 transactions",
       "ok": true,
-      "ms": 1124.2
+      "ms": 1523.8
     },
     {
       "step": 3,
@@ -142,7 +126,7 @@
       "args": {
         "card_id": "C02354-K2"
       },
-      "reason": "Determining if card C02354-K2 is part of any connected components could reveal potential links to other fraudulent activities.",
+      "reason": "Determining if card C02354-K2 is part of any connected components may reveal patterns of fraudulent activity.",
       "planner": "llm",
       "result": "not in any ring",
       "ok": true,
@@ -156,23 +140,27 @@
         "customer_id": "C02354",
         "card_id": "C02354-K2"
       },
-      "reason": "Investigating past cases related to this customer or card may reveal patterns or previous fraudulent activities that could inform the current case.",
+      "reason": "Investigating past cases related to this customer or card may reveal patterns or similar fraudulent activities.",
       "planner": "llm",
       "result": "20 closed cases",
       "ok": true,
-      "ms": 68.2
+      "ms": 37.8
     },
     {
       "step": 5,
-      "tool": "recall_case_memory",
-      "source": "case-memory",
+      "tool": "recall_graph_memory",
+      "source": "tigergraph-mcp",
       "args": {
-        "customer_id": "C02354"
+        "customer_id": "C02354",
+        "cards": 1,
+        "devices": 0,
+        "opened_before": "2016-11-27 14:41"
       },
-      "reason": "Check this agent's own earlier investigations on the same entities.",
-      "result": "5 related investigations",
+      "reason": "Graph memory: this agent's own earlier investigations (InvestigationCase vertices) on this customer, card, the cards of its ring or its devices, opened before this case.",
+      "planner": "rules",
+      "result": "0 earlier investigations (0 concluded fraud)",
       "ok": true,
-      "ms": 0.0
+      "ms": 34.9
     },
     {
       "step": 6,
@@ -186,7 +174,7 @@
       "planner": "rules",
       "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 1411.2
+      "ms": 1105.0
     },
     {
       "tool": "execute_action",
@@ -197,10 +185,10 @@
       "system": "case-management",
       "detail": "Fraud case opened in case management",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T09:31:48.576041+00:00",
+      "executed_at": "2026-09-24T10:18:32.302307+00:00",
       "simulated": true
     }
   ],
   "tokens": 0,
-  "latency_s": 5.999
+  "latency_s": 6.116
 }

@@ -49,22 +49,6 @@
         ]
       },
       {
-        "claim": "This agent's earlier investigation HHG-005 (legitimate, none) shares the shared device DP-542bff8d7a8bc4c9858e0bac7b52d577, DP-9918e46a062964ba240417409f5fca08.",
-        "source": "graph",
-        "ref": "case_memory",
-        "entity_ids": [
-          "HHG-005"
-        ]
-      },
-      {
-        "claim": "This agent's earlier investigation HHG-007 (legitimate, none) shares the shared device DP-0c3cabf7a514603d7d7013dda3d7e3a4, DP-244df68b5142a2e6387df952eb049cef, DP-b643aa6978068906501e9bae1d9f56d2, DP-c0f0edfb7fd94cd38f28f53ac434fb08, DP-d3496c935016fe6af243b9fe1306b01b, DP-e8f6957452eb6495796c0d739c18b2b2, DP-f6db7b747d5fbb977ed2c8a1cce1309e.",
-        "source": "graph",
-        "ref": "case_memory",
-        "entity_ids": [
-          "HHG-007"
-        ]
-      },
-      {
         "claim": "The customer reported the transaction as not made by them: \u201cCustomer C08299 message: 'I never made this $30.02 purchase. Please check my card.' Refers to 3581141.\u201d",
         "source": "customer",
         "ref": "case_pack.trigger_text",
@@ -75,9 +59,9 @@
       }
     ],
     "similar_prior_cases": [
-      "CC-2537",
       "CC-2630",
-      "CC-2532"
+      "CC-2532",
+      "CC-2537"
     ],
     "summary": "No documented fraud pattern on C08299-K1: fraud probability 0.34, exposure $30.02 across 1 transaction(s). Verification response case_pack.trigger_text settled the question as fraud.",
     "written_to_graph": true,
@@ -132,7 +116,7 @@
       "planner": "rules",
       "result": "$30.02 online on C08299-K1",
       "ok": true,
-      "ms": 36.1
+      "ms": 34.7
     },
     {
       "step": 2,
@@ -141,11 +125,11 @@
       "args": {
         "device_profile_id": "DP-87208ef77607dc38bdefbe2ec5f5d393"
       },
-      "reason": "Understanding all transactions associated with device DP-87208ef77607dc38bdefbe2ec5f5d393 will help identify any suspicious patterns or connections.",
+      "reason": "Understanding all transactions associated with the device will help identify any patterns or anomalies that could indicate fraudulent behavior.",
       "planner": "llm",
       "result": "257 transactions from 72 customers",
       "ok": true,
-      "ms": 54.5
+      "ms": 51.1
     },
     {
       "step": 3,
@@ -173,7 +157,7 @@
       "planner": "llm",
       "result": "56 transactions",
       "ok": true,
-      "ms": 38.1
+      "ms": 38.3
     },
     {
       "step": 5,
@@ -200,19 +184,23 @@
       "planner": "llm",
       "result": "0 closed cases",
       "ok": true,
-      "ms": 33.0
+      "ms": 33.3
     },
     {
       "step": 7,
-      "tool": "recall_case_memory",
-      "source": "case-memory",
+      "tool": "recall_graph_memory",
+      "source": "tigergraph-mcp",
       "args": {
-        "customer_id": "C08299"
+        "customer_id": "C08299",
+        "cards": 1,
+        "devices": 0,
+        "opened_before": "2016-12-28 17:10"
       },
-      "reason": "Check this agent's own earlier investigations on the same entities.",
-      "result": "2 related investigations",
+      "reason": "Graph memory: this agent's own earlier investigations (InvestigationCase vertices) on this customer, card, the cards of its ring or its devices, opened before this case.",
+      "planner": "rules",
+      "result": "0 earlier investigations (0 concluded fraud)",
       "ok": true,
-      "ms": 0.0
+      "ms": 30.1
     },
     {
       "step": 8,
@@ -226,7 +214,7 @@
       "planner": "rules",
       "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 1129.5
+      "ms": 7043.9
     },
     {
       "tool": "execute_action",
@@ -237,10 +225,10 @@
       "system": "case-management",
       "detail": "Fraud case opened in case management",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T09:29:02.547869+00:00",
+      "executed_at": "2026-09-24T10:20:27.799329+00:00",
       "simulated": true
     }
   ],
   "tokens": 0,
-  "latency_s": 5.947
+  "latency_s": 12.042
 }

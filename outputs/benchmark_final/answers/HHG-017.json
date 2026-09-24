@@ -43,29 +43,13 @@
         "entity_ids": [
           "DP-937c13eb7c10d79ad3aabd22755d3c8e"
         ]
-      },
-      {
-        "claim": "This agent's earlier investigation HHG-007 (legitimate, none) shares the shared device DP-357ea50e98c211c363f086f89b3fd299, DP-399140ba94cd5ab0d1d78f3fc66b6c37, DP-56977fb654ec6b788359e70e69343c7e, DP-5cc9dfb336c8c705b70fc94bf4e6fbb5, DP-937c13eb7c10d79ad3aabd22755d3c8e, DP-9a0fa3e23978d6bb0a9ef266df19d0e5, DP-b643aa6978068906501e9bae1d9f56d2, DP-e8f6957452eb6495796c0d739c18b2b2.",
-        "source": "graph",
-        "ref": "case_memory",
-        "entity_ids": [
-          "HHG-007"
-        ]
-      },
-      {
-        "claim": "This agent's earlier investigation HHG-012 (legitimate, none) shares the shared device DP-357ea50e98c211c363f086f89b3fd299, DP-399140ba94cd5ab0d1d78f3fc66b6c37, DP-5cc9dfb336c8c705b70fc94bf4e6fbb5, DP-937c13eb7c10d79ad3aabd22755d3c8e, DP-9a0fa3e23978d6bb0a9ef266df19d0e5, DP-e8f6957452eb6495796c0d739c18b2b2.",
-        "source": "graph",
-        "ref": "case_memory",
-        "entity_ids": [
-          "HHG-012"
-        ]
       }
     ],
     "similar_prior_cases": [
       "CC-1383",
       "CC-2290",
-      "CC-2537",
-      "CC-3170"
+      "CC-3170",
+      "CC-2537"
     ],
     "summary": "No documented fraud pattern on C04570-K1: fraud probability 0.09, exposure $0.00 across 0 transaction(s). Fraud probability 0.09 meets the strong-legitimate threshold with 3 independent supporting evidence sources.",
     "written_to_graph": true,
@@ -98,7 +82,7 @@
       "planner": "rules",
       "result": "$100.09 online on C04570-K1",
       "ok": true,
-      "ms": 42.8
+      "ms": 4235.5
     },
     {
       "step": 2,
@@ -111,7 +95,7 @@
       "planner": "llm",
       "result": "621 transactions from 299 customers",
       "ok": true,
-      "ms": 119.9
+      "ms": 165.9
     },
     {
       "step": 3,
@@ -135,11 +119,11 @@
       "args": {
         "customer_id": "C04570"
       },
-      "reason": "Understanding the overall transaction history of customer C04570 will help establish a behavioral baseline to assess the flagged transaction.",
+      "reason": "Understanding the transaction history of customer C04570 will help establish their behavioral baseline and identify any anomalies.",
       "planner": "llm",
       "result": "59 transactions",
       "ok": true,
-      "ms": 38.8
+      "ms": 36.1
     },
     {
       "step": 5,
@@ -152,7 +136,7 @@
       "planner": "llm",
       "result": "not in any ring",
       "ok": true,
-      "ms": 0.0
+      "ms": 936.6
     },
     {
       "step": 6,
@@ -166,19 +150,23 @@
       "planner": "llm",
       "result": "1 closed cases",
       "ok": true,
-      "ms": 39.2
+      "ms": 33.4
     },
     {
       "step": 7,
-      "tool": "recall_case_memory",
-      "source": "case-memory",
+      "tool": "recall_graph_memory",
+      "source": "tigergraph-mcp",
       "args": {
-        "customer_id": "C04570"
+        "customer_id": "C04570",
+        "cards": 1,
+        "devices": 0,
+        "opened_before": "2016-11-12 00:46"
       },
-      "reason": "Check this agent's own earlier investigations on the same entities.",
-      "result": "2 related investigations",
+      "reason": "Graph memory: this agent's own earlier investigations (InvestigationCase vertices) on this customer, card, the cards of its ring or its devices, opened before this case.",
+      "planner": "rules",
+      "result": "0 earlier investigations (0 concluded fraud)",
       "ok": true,
-      "ms": 0.0
+      "ms": 30.9
     },
     {
       "step": 8,
@@ -192,9 +180,9 @@
       "planner": "rules",
       "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 1496.5
+      "ms": 3540.4
     }
   ],
   "tokens": 0,
-  "latency_s": 5.618
+  "latency_s": 19.929
 }

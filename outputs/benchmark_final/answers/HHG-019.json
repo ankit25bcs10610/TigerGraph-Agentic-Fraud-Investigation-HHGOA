@@ -3,7 +3,7 @@
   "case": {
     "status": "escalated",
     "verdict": "uncertain",
-    "fraud_probability": 0.475,
+    "fraud_probability": 0.575,
     "pattern": "undocumented",
     "pattern_description": "coordinated activity spans 4 other customers; 32 connected cards were supplied; 0 related confirmed cases were supplied",
     "affected_txn_ids": [
@@ -87,19 +87,19 @@
         ]
       },
       {
-        "claim": "This agent's earlier investigation HHG-005 (legitimate, none) shares the shared device DP-542bff8d7a8bc4c9858e0bac7b52d577, DP-bfbf4ee7cbf4f1ee6f3acfeb95b44c40.",
+        "claim": "This agent's earlier investigation HHG-018 (fraud, none, opened 2016-11-27) is linked: its card is in this card's ring: C02354-K2.",
         "source": "graph",
-        "ref": "case_memory",
+        "ref": "tigergraph:InvestigationCase",
         "entity_ids": [
-          "HHG-005"
+          "HHG-018"
         ]
       },
       {
-        "claim": "This agent's earlier investigation HHG-007 (legitimate, none) shares the shared device DP-0ba37a46a61b4b9d69d2b8a939383125, DP-1124db7c2bafcf5ea4f088af86838459, DP-1885278596030be40f883793756c58a6, DP-319dc72ace4dfcb1dbf920491401cf0f, DP-357ea50e98c211c363f086f89b3fd299, DP-4c593aa3046917b0bf575466ca1ad801, DP-59a3100880d437a48509ac5ea2d24f69, DP-5cc9dfb336c8c705b70fc94bf4e6fbb5, DP-937c13eb7c10d79ad3aabd22755d3c8e, DP-996783aa703e97331e9a6ab77d5f33fe, DP-a1bc2c101e7d6f92f6a076c57bd82250, DP-b78ef7a771a24e6bd89424041414098f, DP-bc201956d1654ea465f733feb1b1164b, DP-bfbf4ee7cbf4f1ee6f3acfeb95b44c40, DP-c5a7d3f9f599523c15376f87eccd2857, DP-f6db7b747d5fbb977ed2c8a1cce1309e, DP-ffba8482aec3de5dce7f25d1946768cf.",
+        "claim": "This agent's earlier investigation HHG-014 (uncertain, undocumented, opened 2016-11-22) is linked: it linked cards of this ring: C00854-K2, C05704-K2.",
         "source": "graph",
-        "ref": "case_memory",
+        "ref": "tigergraph:InvestigationCase",
         "entity_ids": [
-          "HHG-007"
+          "HHG-014"
         ]
       },
       {
@@ -122,15 +122,15 @@
     "similar_prior_cases": [
       "CC-2011",
       "CC-2087",
-      "CC-5026",
       "CC-2860",
+      "CC-5026",
       "CC-2375",
-      "CC-2165",
+      "CC-0862",
+      "CC-2870",
       "CC-5350",
-      "CC-3170",
-      "CC-2870"
+      "CC-3170"
     ],
-    "summary": "Undocumented pattern on C07987-K2: fraud probability 0.47, exposure $216.83 across 2 transaction(s). Further investigation is unlikely to change the decision.",
+    "summary": "Undocumented pattern on C07987-K2: fraud probability 0.57, exposure $216.83 across 2 transaction(s). Further investigation is unlikely to change the decision.",
     "written_to_graph": true,
     "graph_case_id": "INV-HHG-019"
   },
@@ -201,7 +201,7 @@
         "reason": "R9: undocumented coordinated abuse requires analyst review"
       }
     ],
-    "what_changed": "Step-up authentication evidence (not completed) moved fraud probability to 0.47. Added: monitor card, decline transaction."
+    "what_changed": "Step-up authentication evidence (not completed) moved fraud probability to 0.57. Added: monitor card, decline transaction."
   },
   "sar": {
     "file": false,
@@ -224,7 +224,7 @@
       "planner": "rules",
       "result": "$99.92 online on C07987-K2",
       "ok": true,
-      "ms": 32.7
+      "ms": 33.9
     },
     {
       "step": 2,
@@ -233,11 +233,11 @@
       "args": {
         "device_profile_id": "DP-3f1a81e154414ba7ed263975d88b5740"
       },
-      "reason": "Understanding all transactions associated with device DP-3f1a81e154414ba7ed263975d88b5740 will help identify any suspicious patterns or connections.",
+      "reason": "Understanding all transactions associated with device DP-3f1a81e154414ba7ed263975d88b5740 can reveal patterns or connections to other flagged activities.",
       "planner": "llm",
       "result": "5 transactions from 5 customers",
       "ok": true,
-      "ms": 38.0
+      "ms": 32.9
     },
     {
       "step": 3,
@@ -252,33 +252,33 @@
       "planner": "llm",
       "result": "33 customers, 33 cards, 37 devices, 0 confirmed cases",
       "ok": true,
-      "ms": 214.8
+      "ms": 203.8
     },
     {
       "step": 4,
-      "tool": "find_ring_membership",
-      "source": "tigergraph-mcp",
-      "args": {
-        "card_id": "C07987-K2"
-      },
-      "reason": "Understanding if card C07987-K2 is part of any larger fraudulent network could provide insights into potential risks and connections.",
-      "planner": "llm",
-      "result": "not in any ring",
-      "ok": true,
-      "ms": 0.0
-    },
-    {
-      "step": 5,
       "tool": "get_customer_activity",
       "source": "tigergraph-mcp",
       "args": {
         "customer_id": "C07987"
       },
-      "reason": "Understanding the transaction history of customer C07987 will help establish a behavioral baseline and identify any anomalies.",
+      "reason": "Understanding the transaction history of customer C07987 will help establish their behavioral baseline and identify any anomalies.",
       "planner": "llm",
       "result": "248 transactions",
       "ok": true,
-      "ms": 59.3
+      "ms": 55.0
+    },
+    {
+      "step": 5,
+      "tool": "find_ring_membership",
+      "source": "tigergraph-mcp",
+      "args": {
+        "card_id": "C07987-K2"
+      },
+      "reason": "Determining if card C07987-K2 is part of a larger network could reveal potential connections to other fraudulent activities.",
+      "planner": "llm",
+      "result": "not in any ring",
+      "ok": true,
+      "ms": 0.0
     },
     {
       "step": 6,
@@ -288,23 +288,27 @@
         "customer_id": "C07987",
         "card_id": "C07987-K2"
       },
-      "reason": "Investigating closed cases related to the shared device or customer may provide insights into potential patterns of fraud.",
+      "reason": "Investigating closed cases related to the customer or shared device may reveal patterns or previous fraud incidents that could inform the current case.",
       "planner": "llm",
       "result": "51 closed cases",
       "ok": true,
-      "ms": 180.8
+      "ms": 164.5
     },
     {
       "step": 7,
-      "tool": "recall_case_memory",
-      "source": "case-memory",
+      "tool": "recall_graph_memory",
+      "source": "tigergraph-mcp",
       "args": {
-        "customer_id": "C07987"
+        "customer_id": "C07987",
+        "cards": 34,
+        "devices": 38,
+        "opened_before": "2016-12-01 22:28"
       },
-      "reason": "Check this agent's own earlier investigations on the same entities.",
-      "result": "4 related investigations",
+      "reason": "Graph memory: this agent's own earlier investigations (InvestigationCase vertices) on this customer, card, the cards of its ring or its devices, opened before this case.",
+      "planner": "rules",
+      "result": "2 earlier investigations (1 concluded fraud)",
       "ok": true,
-      "ms": 0.0
+      "ms": 37.2
     },
     {
       "step": 8,
@@ -332,7 +336,7 @@
       "planner": "rules",
       "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 1591.3
+      "ms": 1145.3
     },
     {
       "step": 10,
@@ -346,7 +350,7 @@
       "planner": "rules",
       "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 991.3
+      "ms": 1040.3
     },
     {
       "step": 11,
@@ -360,7 +364,7 @@
       "planner": "rules",
       "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 1581.6
+      "ms": 1184.1
     },
     {
       "step": 12,
@@ -371,8 +375,8 @@
       },
       "reason": "Write the case narrative from the cited evidence and policy only.",
       "ok": true,
-      "ms": 3310.3,
-      "result": "grounded narrative, 3970 tokens"
+      "ms": 3034.3,
+      "result": "grounded narrative, 3567 tokens"
     },
     {
       "tool": "execute_action",
@@ -383,7 +387,7 @@
       "system": "case-management",
       "detail": "Fraud case opened in case management",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T09:31:56.118058+00:00",
+      "executed_at": "2026-09-24T10:18:39.373861+00:00",
       "simulated": true
     },
     {
@@ -395,7 +399,7 @@
       "system": "transaction-monitoring",
       "detail": "Connected cards added to enhanced monitoring",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T09:31:56.118083+00:00",
+      "executed_at": "2026-09-24T10:18:39.373890+00:00",
       "simulated": true
     },
     {
@@ -407,7 +411,7 @@
       "system": "case-management",
       "detail": "Case routed to the analyst review queue",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T09:31:56.118102+00:00",
+      "executed_at": "2026-09-24T10:18:39.373909+00:00",
       "simulated": true
     },
     {
@@ -419,10 +423,10 @@
       "system": "transaction-monitoring",
       "detail": "Card added to enhanced monitoring for 30 days",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T09:32:00.511413+00:00",
+      "executed_at": "2026-09-24T10:18:44.203773+00:00",
       "simulated": true
     }
   ],
-  "tokens": 3970,
-  "latency_s": 16.959
+  "tokens": 3567,
+  "latency_s": 16.227
 }

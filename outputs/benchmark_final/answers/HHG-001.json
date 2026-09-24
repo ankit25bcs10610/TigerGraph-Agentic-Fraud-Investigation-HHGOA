@@ -31,12 +31,12 @@
     ],
     "similar_prior_cases": [
       "CC-1066",
-      "CC-3587",
       "CC-2964",
+      "CC-3587",
       "CC-1673",
-      "CC-2778",
+      "CC-2773",
       "CC-2779",
-      "CC-2773"
+      "CC-2778"
     ],
     "summary": "No documented fraud pattern on C12382-K1: fraud probability 0.09, exposure $0.00 across 0 transaction(s). Fraud probability 0.09 meets the strong-legitimate threshold with 2 independent supporting evidence sources.",
     "written_to_graph": true,
@@ -69,7 +69,7 @@
       "planner": "rules",
       "result": "$77.07 in_person on C12382-K1",
       "ok": true,
-      "ms": 218.7
+      "ms": 29.6
     },
     {
       "step": 2,
@@ -78,11 +78,11 @@
       "args": {
         "customer_id": "C12382"
       },
-      "reason": "Understanding the full transaction history of customer C12382 will help establish a behavioral baseline and identify any anomalies.",
+      "reason": "Understanding the full transaction history of customer C12382 will help establish a behavioral baseline to assess the flagged transaction.",
       "planner": "llm",
       "result": "422 transactions",
       "ok": true,
-      "ms": 148.6
+      "ms": 75.8
     },
     {
       "step": 3,
@@ -95,7 +95,7 @@
       "planner": "llm",
       "result": "not in any ring",
       "ok": true,
-      "ms": 977.9
+      "ms": 0.0
     },
     {
       "step": 4,
@@ -109,10 +109,26 @@
       "planner": "llm",
       "result": "4 closed cases",
       "ok": true,
-      "ms": 38.4
+      "ms": 33.7
     },
     {
       "step": 5,
+      "tool": "recall_graph_memory",
+      "source": "tigergraph-mcp",
+      "args": {
+        "customer_id": "C12382",
+        "cards": 1,
+        "devices": 0,
+        "opened_before": "2016-12-05 01:55"
+      },
+      "reason": "Graph memory: this agent's own earlier investigations (InvestigationCase vertices) on this customer, card, the cards of its ring or its devices, opened before this case.",
+      "planner": "rules",
+      "result": "0 earlier investigations (0 concluded fraud)",
+      "ok": true,
+      "ms": 30.3
+    },
+    {
+      "step": 6,
       "tool": "graphrag_retrieve",
       "source": "graphrag:tigergraph-vector",
       "args": {
@@ -123,9 +139,9 @@
       "planner": "rules",
       "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 2384.8
+      "ms": 1385.9
     }
   ],
   "tokens": 0,
-  "latency_s": 8.645
+  "latency_s": 11.291
 }

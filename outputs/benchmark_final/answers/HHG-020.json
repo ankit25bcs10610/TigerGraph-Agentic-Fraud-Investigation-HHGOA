@@ -44,27 +44,11 @@
         "entity_ids": [
           "DP-a910843ce194bfc86273d01aeb0a7869"
         ]
-      },
-      {
-        "claim": "This agent's earlier investigation HHG-005 (legitimate, none) shares the shared device DP-a910843ce194bfc86273d01aeb0a7869.",
-        "source": "graph",
-        "ref": "case_memory",
-        "entity_ids": [
-          "HHG-005"
-        ]
-      },
-      {
-        "claim": "This agent's earlier investigation HHG-007 (legitimate, none) shares the shared device DP-b78ef7a771a24e6bd89424041414098f, DP-b880aa587bf9444dd8f13c955d2fa602.",
-        "source": "graph",
-        "ref": "case_memory",
-        "entity_ids": [
-          "HHG-007"
-        ]
       }
     ],
     "similar_prior_cases": [
-      "CC-2447",
       "CC-2277",
+      "CC-2447",
       "CC-2537",
       "CC-2547",
       "CC-1252"
@@ -112,7 +96,7 @@
       "planner": "rules",
       "result": "$125.08 online on C12265-K2",
       "ok": true,
-      "ms": 43.6
+      "ms": 39.5
     },
     {
       "step": 2,
@@ -121,11 +105,11 @@
       "args": {
         "device_profile_id": "DP-a910843ce194bfc86273d01aeb0a7869"
       },
-      "reason": "Understanding all transactions associated with the device can reveal patterns or anomalies that may indicate fraudulent behavior.",
+      "reason": "Understanding all transactions associated with the device will help identify any patterns or anomalies related to the flagged transaction.",
       "planner": "llm",
       "result": "462 transactions from 253 customers",
       "ok": true,
-      "ms": 88.2
+      "ms": 95.2
     },
     {
       "step": 3,
@@ -153,7 +137,7 @@
       "planner": "llm",
       "result": "112 transactions",
       "ok": true,
-      "ms": 46.2
+      "ms": 41.7
     },
     {
       "step": 5,
@@ -180,19 +164,23 @@
       "planner": "llm",
       "result": "2 closed cases",
       "ok": true,
-      "ms": 34.7
+      "ms": 32.4
     },
     {
       "step": 7,
-      "tool": "recall_case_memory",
-      "source": "case-memory",
+      "tool": "recall_graph_memory",
+      "source": "tigergraph-mcp",
       "args": {
-        "customer_id": "C12265"
+        "customer_id": "C12265",
+        "cards": 1,
+        "devices": 0,
+        "opened_before": "2016-12-03 12:04"
       },
-      "reason": "Check this agent's own earlier investigations on the same entities.",
-      "result": "3 related investigations",
+      "reason": "Graph memory: this agent's own earlier investigations (InvestigationCase vertices) on this customer, card, the cards of its ring or its devices, opened before this case.",
+      "planner": "rules",
+      "result": "0 earlier investigations (0 concluded fraud)",
       "ok": true,
-      "ms": 0.0
+      "ms": 30.3
     },
     {
       "step": 8,
@@ -206,7 +194,7 @@
       "planner": "rules",
       "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 1182.1
+      "ms": 1247.9
     },
     {
       "tool": "execute_action",
@@ -217,10 +205,10 @@
       "system": "customer-messaging",
       "detail": "Verification request sent to the customer's registered phone",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T09:32:12.019777+00:00",
+      "executed_at": "2026-09-24T10:19:11.464593+00:00",
       "simulated": true
     }
   ],
   "tokens": 0,
-  "latency_s": 6.481
+  "latency_s": 6.674
 }

@@ -49,14 +49,6 @@
         ]
       },
       {
-        "claim": "This agent's earlier investigation HHG-007 (legitimate, none) shares the shared device DP-0d1ecc7eeab90971ce09129b1c380a9c, DP-113906cbc95925dfbd056050a1ee2ceb, DP-2cbd8506e77fcc79806a112c177929c2, DP-477f12482adfb35d8a41875869b07c6a, DP-59ff5574599911ef3f5306bfe836edf3, DP-7215b397bc1a19fb372b41fbb047305a, DP-d0cbe4b01ca6300c83ee80f2241c87bd, DP-d317e13702aeff857d5fc1904b454bcf, DP-dfc04b24c6237405d348bec38396f854.",
-        "source": "graph",
-        "ref": "case_memory",
-        "entity_ids": [
-          "HHG-007"
-        ]
-      },
-      {
         "claim": "The customer reported the transaction as not made by them: \u201cCustomer C13171 message: 'I never made this $55.68 purchase. Please check my card.' Refers to 3558054.\u201d",
         "source": "customer",
         "ref": "case_pack.trigger_text",
@@ -69,13 +61,13 @@
     "similar_prior_cases": [
       "CC-1715",
       "CC-3422",
-      "CC-0056",
-      "CC-3728",
-      "CC-5010",
       "CC-3566",
-      "CC-4260",
+      "CC-0056",
+      "CC-5010",
+      "CC-4819",
       "CC-2537",
-      "CC-2546"
+      "CC-2546",
+      "CC-4260"
     ],
     "summary": "No documented fraud pattern on C13171-K2: fraud probability 0.36, exposure $55.68 across 1 transaction(s). Verification response case_pack.trigger_text settled the question as fraud.",
     "written_to_graph": true,
@@ -130,7 +122,7 @@
       "planner": "rules",
       "result": "$55.68 online on C13171-K2",
       "ok": true,
-      "ms": 51.2
+      "ms": 40.2
     },
     {
       "step": 2,
@@ -143,7 +135,7 @@
       "planner": "llm",
       "result": "663 transactions from 171 customers",
       "ok": true,
-      "ms": 118.0
+      "ms": 92.4
     },
     {
       "step": 3,
@@ -171,7 +163,7 @@
       "planner": "llm",
       "result": "928 transactions",
       "ok": true,
-      "ms": 198.7
+      "ms": 175.2
     },
     {
       "step": 5,
@@ -194,23 +186,27 @@
         "customer_id": "C13171",
         "card_id": "C13171-K2"
       },
-      "reason": "Investigating closed cases related to the customer or device may reveal patterns or previous fraudulent activities that could inform the current case.",
+      "reason": "Investigating closed cases related to the customer or the device may reveal patterns or previous fraudulent activities that could inform the current case.",
       "planner": "llm",
       "result": "19 closed cases",
       "ok": true,
-      "ms": 38.3
+      "ms": 36.3
     },
     {
       "step": 7,
-      "tool": "recall_case_memory",
-      "source": "case-memory",
+      "tool": "recall_graph_memory",
+      "source": "tigergraph-mcp",
       "args": {
-        "customer_id": "C13171"
+        "customer_id": "C13171",
+        "cards": 1,
+        "devices": 0,
+        "opened_before": "2016-12-20 03:08"
       },
-      "reason": "Check this agent's own earlier investigations on the same entities.",
-      "result": "1 related investigations",
+      "reason": "Graph memory: this agent's own earlier investigations (InvestigationCase vertices) on this customer, card, the cards of its ring or its devices, opened before this case.",
+      "planner": "rules",
+      "result": "0 earlier investigations (0 concluded fraud)",
       "ok": true,
-      "ms": 0.0
+      "ms": 30.5
     },
     {
       "step": 8,
@@ -224,7 +220,7 @@
       "planner": "rules",
       "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 5469.1
+      "ms": 1237.1
     },
     {
       "tool": "execute_action",
@@ -235,10 +231,10 @@
       "system": "case-management",
       "detail": "Fraud case opened in case management",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T09:28:56.587786+00:00",
+      "executed_at": "2026-09-24T10:20:15.754687+00:00",
       "simulated": true
     }
   ],
   "tokens": 0,
-  "latency_s": 10.773
+  "latency_s": 6.302
 }

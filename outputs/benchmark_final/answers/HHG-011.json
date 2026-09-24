@@ -3,7 +3,7 @@
   "case": {
     "status": "escalated",
     "verdict": "fraud",
-    "fraud_probability": 0.8935,
+    "fraud_probability": 0.9935,
     "pattern": "card_testing",
     "pattern_description": "",
     "affected_txn_ids": [
@@ -162,7 +162,7 @@
         ]
       },
       {
-        "claim": "Graph-wide ring: card C11923-K2 is one of 36 cards of 36 customers linked through 16 burst devices (each used by 3\u201310 customers within 72 hours).",
+        "claim": "Graph-wide ring: card C11923-K2 is one of 36 cards of 36 customers linked through 16 burst devices (each used by 3\u201310 customers within 72 hours). What the ring did: 73 transactions by 36 cards on 16 shared devices; device builds such as BLADE V8Q Build/N2G47H, E2104 Build/24.0.A.5.14; 100% online; 99% product C; median $31.70, total $3,386.49; 2016-07-05 to 2016-12-31.",
         "source": "graph",
         "ref": "tigergraph",
         "entity_ids": [
@@ -174,11 +174,27 @@
         ]
       },
       {
-        "claim": "This agent's earlier investigation HHG-007 (legitimate, none) shares the shared device DP-0d1ecc7eeab90971ce09129b1c380a9c, DP-113906cbc95925dfbd056050a1ee2ceb, DP-2cbd8506e77fcc79806a112c177929c2, DP-357ea50e98c211c363f086f89b3fd299, DP-3ca5a3f0f42f4b4fc35dd9c64a9f4dcf, DP-477f12482adfb35d8a41875869b07c6a, DP-59ff5574599911ef3f5306bfe836edf3, DP-7215b397bc1a19fb372b41fbb047305a, DP-d0cbe4b01ca6300c83ee80f2241c87bd, DP-d317e13702aeff857d5fc1904b454bcf, DP-dfc04b24c6237405d348bec38396f854, DP-f923b271946a586d8f31ddbb4c7f6ad4.",
+        "claim": "This agent's earlier investigation HHG-016 (fraud, undocumented, opened 2016-12-12) is linked: it linked cards of this ring: C00294-K2, C02147-K2 and 23 more; its card is in this card's ring: C09988-K1.",
         "source": "graph",
-        "ref": "case_memory",
+        "ref": "tigergraph:InvestigationCase",
         "entity_ids": [
-          "HHG-007"
+          "HHG-016"
+        ]
+      },
+      {
+        "claim": "This agent's earlier investigation HHG-019 (uncertain, undocumented, opened 2016-12-01) is linked: it linked cards of this ring: C00854-K2.",
+        "source": "graph",
+        "ref": "tigergraph:InvestigationCase",
+        "entity_ids": [
+          "HHG-019"
+        ]
+      },
+      {
+        "claim": "This agent's earlier investigation HHG-014 (uncertain, undocumented, opened 2016-11-22) is linked: it linked cards of this ring: C00854-K2.",
+        "source": "graph",
+        "ref": "tigergraph:InvestigationCase",
+        "entity_ids": [
+          "HHG-014"
         ]
       },
       {
@@ -193,16 +209,16 @@
     ],
     "similar_prior_cases": [
       "CC-3039",
-      "CC-4501",
-      "CC-1056",
-      "CC-2247",
       "CC-3905",
       "CC-2799",
+      "CC-2673",
+      "CC-4501",
+      "CC-1056",
+      "CC-3120",
       "CC-5180",
-      "CC-5110",
-      "CC-3120"
+      "CC-5110"
     ],
-    "summary": "Card testing pattern on C11923-K2: fraud probability 0.89, exposure $2,586.86 across 59 transaction(s). Verification response case_pack.trigger_text settled the question as fraud.",
+    "summary": "Card testing pattern on C11923-K2: fraud probability 0.99, exposure $2,586.86 across 59 transaction(s). Verification response case_pack.trigger_text settled the question as fraud.",
     "written_to_graph": true,
     "graph_case_id": "INV-HHG-011"
   },
@@ -277,7 +293,7 @@
   "sar": {
     "file": true,
     "reason": "README section 3a: confirmed or strongly suspected fraud and exposure exceeds $1,000; shared device, region, or email origin",
-    "narrative": "Customer C11923 and card C11923-K2 are the report subjects. The identified episode contains transactions 3578405, 3578451, 3578471, 3578475, 3578483, 3578486, 3578491, 3578496, 3578506, 3578817, 3578995, 3578997, 3579400, 3579407, 3579576, 3579597, 3580137, 3580202, 3580219, 3580232, 3580348, 3580380, 3580403, 3580417, 3580427, 3580478, 3580544, 3580712, 3580765, 3580776, 3580815, 3580821, 3580907, 3580933, 3580951, 3580992, 3581048, 3581345, 3582082, 3582107, 3582142, 3582175, 3582178, 3582327, 3582338, 3582375, 3582413, 3582602, 3582624, 3582671, 3582738, 3582868, 3582897, 3583101, 3583140, 3583199, 3583229, 3583348, 3583368 between 2016-12-27 and 2016-12-29. The deterministic episode exposure is USD 2586.86. The deterministic investigation classified the observed pattern as card_testing. Connected cards supplied by graph evidence: C00073-K2, C00294-K2, C00583-K1, C00854-K2, C01370-K1, C01521-K2, C02147-K2, C02170-K1, C02181-K2, C02782-K2. Grounded linkage evidence: This agent's earlier investigation HHG-007 (legitimate, none) shares the shared device DP-0d1ecc7eeab90971ce09129b1c380a9c, DP-113906cbc95925dfbd056050a1ee2ceb, DP-2cbd8506e77fcc79806a112c177929c2, DP-357ea50e98c211c363f086f89b3fd299, DP-3ca5a3f0f42f4b4fc35dd9c64a9f4dcf, DP-477f12482adfb35d8a41875869b07c6a, DP-59ff5574599911ef3f5306bfe836edf3, DP-7215b397bc1a19fb372b41fbb047305a, DP-d0cbe4b01ca6300c83ee80f2241c87bd, DP-d317e13702aeff857d5fc1904b454bcf, DP-dfc04b24c6237405d348bec38396f854, DP-f923b271946a586d8f31ddbb4c7f6ad4. The report reason is: README section 3a: confirmed or strongly suspected fraud and exposure exceeds $1,000; shared device, region, or email origin",
+    "narrative": "Customer C11923 and card C11923-K2 are the report subjects. The identified episode contains transactions 3578405, 3578451, 3578471, 3578475, 3578483, 3578486, 3578491, 3578496, 3578506, 3578817, 3578995, 3578997, 3579400, 3579407, 3579576, 3579597, 3580137, 3580202, 3580219, 3580232, 3580348, 3580380, 3580403, 3580417, 3580427, 3580478, 3580544, 3580712, 3580765, 3580776, 3580815, 3580821, 3580907, 3580933, 3580951, 3580992, 3581048, 3581345, 3582082, 3582107, 3582142, 3582175, 3582178, 3582327, 3582338, 3582375, 3582413, 3582602, 3582624, 3582671, 3582738, 3582868, 3582897, 3583101, 3583140, 3583199, 3583229, 3583348, 3583368 between 2016-12-27 and 2016-12-29. The deterministic episode exposure is USD 2586.86. The deterministic investigation classified the observed pattern as card_testing. Connected cards supplied by graph evidence: C00073-K2, C00294-K2, C00583-K1, C00854-K2, C01370-K1, C01521-K2, C02147-K2, C02170-K1, C02181-K2, C02782-K2. Grounded linkage evidence: This agent's earlier investigation HHG-016 (fraud, undocumented, opened 2016-12-12) is linked: it linked cards of this ring: C00294-K2, C02147-K2 and 23 more; its card is in this card's ring: C09988-K1. This agent's earlier investigation HHG-019 (uncertain, undocumented, opened 2016-12-01) is linked: it linked cards of this ring: C00854-K2. This agent's earlier investigation HHG-014 (uncertain, undocumented, opened 2016-11-22) is linked: it linked cards of this ring: C00854-K2. The report reason is: README section 3a: confirmed or strongly suspected fraud and exposure exceeds $1,000; shared device, region, or email origin",
     "subjects": [
       "C11923",
       "C11923-K2",
@@ -311,7 +327,7 @@
       "planner": "rules",
       "result": "$131.30 online on C11923-K2",
       "ok": true,
-      "ms": 32.6
+      "ms": 31.0
     },
     {
       "step": 2,
@@ -320,11 +336,11 @@
       "args": {
         "device_profile_id": "DP-b0380f0d2ffbe507b8830be2300dd281"
       },
-      "reason": "Understanding all transactions associated with the device can reveal patterns or connections to other fraudulent activities.",
+      "reason": "Understanding all transactions associated with the device will help identify any patterns or anomalies that could indicate fraudulent behavior.",
       "planner": "llm",
       "result": "4 transactions from 4 customers",
       "ok": true,
-      "ms": 36.5
+      "ms": 33.3
     },
     {
       "step": 3,
@@ -339,7 +355,7 @@
       "planner": "llm",
       "result": "37 customers, 37 cards, 73 devices, 0 confirmed cases",
       "ok": true,
-      "ms": 162.0
+      "ms": 167.9
     },
     {
       "step": 4,
@@ -352,7 +368,7 @@
       "planner": "llm",
       "result": "10361 transactions",
       "ok": true,
-      "ms": 2685.0
+      "ms": 2347.3
     },
     {
       "step": 5,
@@ -375,23 +391,27 @@
         "customer_id": "C11923",
         "card_id": "C11923-K2"
       },
-      "reason": "Investigating closed cases related to the device or customers may reveal patterns or previous fraud incidents that could inform the current case.",
+      "reason": "Investigating closed cases related to the shared device may reveal patterns or previous fraud incidents that could inform the current case.",
       "planner": "llm",
       "result": "19 closed cases",
       "ok": true,
-      "ms": 154.0
+      "ms": 138.6
     },
     {
       "step": 7,
-      "tool": "recall_case_memory",
-      "source": "case-memory",
+      "tool": "recall_graph_memory",
+      "source": "tigergraph-mcp",
       "args": {
-        "customer_id": "C11923"
+        "customer_id": "C11923",
+        "cards": 74,
+        "devices": 40,
+        "opened_before": "2016-12-29 06:27"
       },
-      "reason": "Check this agent's own earlier investigations on the same entities.",
-      "result": "1 related investigations",
+      "reason": "Graph memory: this agent's own earlier investigations (InvestigationCase vertices) on this customer, card, the cards of its ring or its devices, opened before this case.",
+      "planner": "rules",
+      "result": "3 earlier investigations (1 concluded fraud)",
       "ok": true,
-      "ms": 0.0
+      "ms": 32.1
     },
     {
       "step": 8,
@@ -405,7 +425,7 @@
       "planner": "rules",
       "result": "0 closed cases",
       "ok": true,
-      "ms": 144.7
+      "ms": 128.5
     },
     {
       "step": 9,
@@ -419,7 +439,7 @@
       "planner": "rules",
       "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 5542.5
+      "ms": 1684.7
     },
     {
       "tool": "execute_action",
@@ -430,7 +450,7 @@
       "system": "case-management",
       "detail": "Fraud case opened in case management",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T09:30:17.900712+00:00",
+      "executed_at": "2026-09-24T10:21:23.540950+00:00",
       "simulated": true
     },
     {
@@ -442,7 +462,7 @@
       "system": "identity",
       "detail": "Step-up authentication challenge issued on next use",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T09:30:17.900747+00:00",
+      "executed_at": "2026-09-24T10:21:23.540980+00:00",
       "simulated": true
     },
     {
@@ -454,10 +474,10 @@
       "system": "transaction-monitoring",
       "detail": "Connected cards added to enhanced monitoring",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T09:30:17.900777+00:00",
+      "executed_at": "2026-09-24T10:21:23.540999+00:00",
       "simulated": true
     }
   ],
   "tokens": 0,
-  "latency_s": 60.986
+  "latency_s": 55.827
 }

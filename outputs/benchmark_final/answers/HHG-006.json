@@ -117,7 +117,7 @@
       "planner": "rules",
       "result": "$482.12 online on C07297-K1",
       "ok": true,
-      "ms": 48.0
+      "ms": 45.6
     },
     {
       "step": 2,
@@ -130,7 +130,7 @@
       "planner": "llm",
       "result": "1220 transactions from 543 customers",
       "ok": true,
-      "ms": 160.4
+      "ms": 203.9
     },
     {
       "step": 3,
@@ -154,11 +154,11 @@
       "args": {
         "customer_id": "C07297"
       },
-      "reason": "Understanding the overall transaction history of customer C07297 will help establish a behavioral baseline to assess the flagged transaction.",
+      "reason": "Understanding the transaction history of customer C07297 will help establish a behavioral baseline to assess the legitimacy of the flagged transaction.",
       "planner": "llm",
       "result": "261 transactions",
       "ok": true,
-      "ms": 80.7
+      "ms": 55.0
     },
     {
       "step": 5,
@@ -167,7 +167,7 @@
       "args": {
         "card_id": "C07297-K1"
       },
-      "reason": "Determining if card C07297-K1 is part of a larger network of fraudulent activity could provide insights into the legitimacy of the transaction.",
+      "reason": "Determining if card C07297-K1 is part of a larger network of fraudulent activity could provide insights into the nature of the transaction.",
       "planner": "llm",
       "result": "not in any ring",
       "ok": true,
@@ -181,23 +181,27 @@
         "customer_id": "C07297",
         "card_id": "C07297-K1"
       },
-      "reason": "Investigating closed cases related to the customer or the device may provide insights into similar fraudulent activities and their outcomes.",
+      "reason": "Investigating closed cases related to the customer or device may reveal patterns or previous fraudulent activities that could inform the current case.",
       "planner": "llm",
       "result": "0 closed cases",
       "ok": true,
-      "ms": 34.5
+      "ms": 31.9
     },
     {
       "step": 7,
-      "tool": "recall_case_memory",
-      "source": "case-memory",
+      "tool": "recall_graph_memory",
+      "source": "tigergraph-mcp",
       "args": {
-        "customer_id": "C07297"
+        "customer_id": "C07297",
+        "cards": 1,
+        "devices": 0,
+        "opened_before": "2016-11-22 02:30"
       },
-      "reason": "Check this agent's own earlier investigations on the same entities.",
-      "result": "0 related investigations",
+      "reason": "Graph memory: this agent's own earlier investigations (InvestigationCase vertices) on this customer, card, the cards of its ring or its devices, opened before this case.",
+      "planner": "rules",
+      "result": "0 earlier investigations (0 concluded fraud)",
       "ok": true,
-      "ms": 0.0
+      "ms": 35.4
     },
     {
       "step": 8,
@@ -211,7 +215,7 @@
       "planner": "rules",
       "result": "4 policy passages, 3 case narratives (tigergraph-vector)",
       "ok": true,
-      "ms": 1222.1
+      "ms": 1161.3
     },
     {
       "tool": "execute_action",
@@ -222,10 +226,10 @@
       "system": "case-management",
       "detail": "Fraud case opened in case management",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T09:28:41.023200+00:00",
+      "executed_at": "2026-09-24T10:17:45.628685+00:00",
       "simulated": true
     }
   ],
   "tokens": 0,
-  "latency_s": 6.878
+  "latency_s": 6.731
 }
