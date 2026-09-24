@@ -98,6 +98,7 @@ class InvestigationCaseRequest:
     trigger_type: str = ""
     trigger_text: str = ""
     closed_at: str = ""
+    stop_reason: str = ""
     sar_narrative: str = ""
     similar_prior_case_reasons: Mapping[str, str] = field(default_factory=dict)
 
@@ -198,6 +199,9 @@ def _case_attributes(request: InvestigationCaseRequest) -> dict[str, Any]:
             sorted({item.route.value for item in request.recommended_actions}),
             separators=(",", ":"),
         ),
+        "summary": case.summary,
+        "stop_reason": request.stop_reason,
+        "created_at": request.opened_at,
         "sar_narrative": request.sar_narrative,
     }
     if request.closed_at.strip():
@@ -230,37 +234,30 @@ class InvestigationCaseService:
         self._writer.upsert_vertex(
             "InvestigationCase", case_id, _case_attributes(request)
         )
-        self._writer.upsert_edge(
-            "InvestigationCase", case_id, "FLAGGED_TRANSACTION", "Transaction",
-            request.flagged_transaction_id,
-        )
-        self._writer.upsert_edge(
-            "InvestigationCase", case_id, "FOR_CUSTOMER", "Customer", request.customer_id,
-        )
-        self._writer.upsert_edge(
-            "InvestigationCase", case_id, "FOR_CARD", "Card", request.card_id,
-        )
+        edges: list[tuple[str, str, str, str, str, Mapping[str, Any] | None]] = [
+            ("InvestigationCase", case_id, "FLAGGED_TXN", "Transaction", request.flagged_transaction_id, None),
+            ("InvestigationCase", case_id, "ON_CUSTOMER", "Customer", request.customer_id, None),
+            ("InvestigationCase", case_id, "ON_CARDS", "Card", request.card_id, None),
+        ]
         for transaction_id in _unique_nonempty(
             request.case.affected_txn_ids, exclude=request.flagged_transaction_id,
         ):
-            self._writer.upsert_edge(
-                "InvestigationCase", case_id, "AFFECTS", "Transaction", transaction_id,
-            )
+            edges.append(("InvestigationCase", case_id, "AFFECTS", "Transaction", transaction_id, None))
         for connected_card_id in _unique_nonempty(
             request.case.connected_card_ids, exclude=request.card_id,
         ):
-            self._writer.upsert_edge(
-                "InvestigationCase", case_id, "CONNECTED_CARD", "Card", connected_card_id,
-            )
+            edges.append(("InvestigationCase", case_id, "CONNECTED_CARD", "Card", connected_card_id, None))
         for device_profile_id in _unique_nonempty(request.case.connected_device_profiles):
-            self._writer.upsert_edge(
-                "InvestigationCase", case_id, "CONNECTED_DEVICE", "DeviceProfile", device_profile_id,
-            )
+            edges.append(("InvestigationCase", case_id, "CONNECTED_DEVICE", "DeviceProfile", device_profile_id, None))
         for prior_case_id in _unique_nonempty(request.case.similar_prior_cases):
-            self._writer.upsert_edge(
-                "InvestigationCase", case_id, "SIMILAR_TO_CLOSED_CASE", "ClosedCase", prior_case_id,
-                {"similarity_reason": request.similar_prior_case_reasons[prior_case_id]},
-            )
+            edges.append(("InvestigationCase", case_id, "SIMILAR_TO", "ClosedCase", prior_case_id,
+                          {"similarity_reason": request.similar_prior_case_reasons[prior_case_id]}))
+        batch_writer = getattr(self._writer, "upsert_edges", None)
+        if callable(batch_writer):
+            batch_writer(edges)
+        else:
+            for source_type, source_id, edge_type, target_type, target_id, attributes in edges:
+                self._writer.upsert_edge(source_type, source_id, edge_type, target_type, target_id, attributes)
 
         persisted_case = request.case.model_copy(
             update={"written_to_graph": True, "graph_case_id": case_id}

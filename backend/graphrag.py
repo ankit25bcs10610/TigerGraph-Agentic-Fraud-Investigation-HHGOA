@@ -92,18 +92,26 @@ class LocalSemanticRAG:
 class TigerGraphVectorRAG:
     method = "tigergraph-vector"
 
-    def __init__(self, source: Any) -> None:
+    def __init__(self, source: Any, knowledge: PolicyKnowledge) -> None:
         from backend.app.rag.embeddings import EmbeddingSettings, create_embedding_provider
         from backend.app.rag.retriever import GraphRAGRetriever
 
         self.source = source
+        self.fallback = LocalSemanticRAG(knowledge, getattr(source, "_closed", ()))
+        self._vector_available = True
         self.retriever = GraphRAGRetriever(source.service, create_embedding_provider(EmbeddingSettings.from_environment()),
                                            vector_attribute=os.getenv("GRAPHRAG_VECTOR_ATTRIBUTE", "embedding"))
 
     def retrieve(self, query: str, kind: str, top_k: int) -> list[Passage]:
         search = {"policy": self.retriever.search_policy, "closed_case": self.retriever.search_similar_closed_cases,
                   "pattern_document": self.retriever.search_patterns}[kind]
-        chunks = self.source._loop.run(search(query, top_k), 60)
+        if not self._vector_available:
+            return self.fallback.retrieve(query, kind, top_k)
+        try:
+            chunks = self.source._loop.run(search(query, top_k), 60)
+        except Exception:  # noqa: BLE001 - keep investigations grounded when vector REST++ is unavailable.
+            self._vector_available = False
+            return self.fallback.retrieve(query, kind, top_k)
         return [Passage(item.source_reference, kind, item.chunk.title, item.chunk.text, item.chunk.source_id, round(item.similarity_score or 0.0, 3), self.method) for item in chunks]
 
 
@@ -111,7 +119,7 @@ def open_graphrag(source: Any, knowledge: PolicyKnowledge) -> Any:
     """Vector GraphRAG on TigerGraph when embeddings are configured, TF-IDF otherwise."""
     if getattr(source, "name", "") == "tigergraph-mcp" and os.getenv("EMBEDDING_PROVIDER"):
         try:
-            return TigerGraphVectorRAG(source)
+            return TigerGraphVectorRAG(source, knowledge)
         except Exception:  # noqa: BLE001 - fall back to local retrieval rather than failing the case
             pass
     return LocalSemanticRAG(knowledge, getattr(source, "_closed", ()))

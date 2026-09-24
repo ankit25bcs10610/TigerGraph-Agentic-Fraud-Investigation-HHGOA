@@ -7,7 +7,9 @@ without re-spawning the server for every question.
 from __future__ import annotations
 
 import asyncio
+import os
 import threading
+from collections import defaultdict
 from typing import Any, Iterable, Mapping
 
 from backend.sources.base import ClosedCaseRecord, Community, RingResult, Txn, clean, parse_float, parse_time
@@ -199,34 +201,76 @@ class MCPGraphWriter:
     def upsert_vertex(self, vertex_type: str, vertex_id: str, attributes: Mapping[str, Any]) -> None:
         try:
             self._mcp_vertex(vertex_type, vertex_id, attributes)
-        except Exception:  # noqa: BLE001 - tool missing or rejected: use the REST fallback
+        except Exception:  # noqa: BLE001 - optional compatibility fallback
+            if not self._rest_fallback_enabled():
+                raise
             self._rest().upsert_vertex(vertex_type, vertex_id, attributes)
 
     def upsert_edge(self, source_vertex_type: str, source_vertex_id: str, edge_type: str, target_vertex_type: str, target_vertex_id: str, attributes: Mapping[str, Any] | None = None) -> None:
         try:
             self._mcp_edge(source_vertex_type, source_vertex_id, edge_type, target_vertex_type, target_vertex_id, attributes)
         except Exception:  # noqa: BLE001
+            if not self._rest_fallback_enabled():
+                raise
             self._rest().upsert_edge(source_vertex_type, source_vertex_id, edge_type, target_vertex_type, target_vertex_id, attributes)
+
+    def upsert_edges(self, edges: Iterable[tuple[str, str, str, str, str, Mapping[str, Any] | None]]) -> None:
+        grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        types: dict[str, tuple[str, str]] = {}
+        for source_type, source_id, edge_type, target_type, target_id, attributes in edges:
+            types.setdefault(edge_type, (source_type, target_type))
+            source_type_for_edge, target_type_for_edge = types[edge_type]
+            if (source_type, target_type) != (source_type_for_edge, target_type_for_edge):
+                raise ValueError(f"MCP batch edge types must share endpoints for {edge_type}")
+            grouped[edge_type].append({
+                "source_id": source_id,
+                "target_id": target_id,
+                **({} if edge_type == "SIMILAR_TO" else dict(attributes or {})),
+            })
+        for edge_type, batch in grouped.items():
+            source_type, target_type = types[edge_type]
+            try:
+                self.source.call_tool("tigergraph__add_edges", {
+                    "graph_name": self.graph_name,
+                    "edge_type": edge_type,
+                    "edges": [
+                        {**item, "source_type": source_type, "target_type": target_type}
+                        for item in batch
+                    ],
+                })
+            except Exception:
+                if not self._rest_fallback_enabled():
+                    raise
+                for item in batch:
+                    self._rest().upsert_edge(
+                        source_type, item["source_id"], edge_type, target_type,
+                        item["target_id"], {key: value for key, value in item.items() if key not in {"source_id", "target_id", "source_type", "target_type"}},
+                    )
+
+    @staticmethod
+    def _rest_fallback_enabled() -> bool:
+        return os.getenv("TG_ENABLE_REST_FALLBACK", "false").strip().lower() in {"1", "true", "yes", "on"}
 
     def _mcp_vertex(self, vertex_type: str, vertex_id: str, attributes: Mapping[str, Any]) -> None:
         self.source.call_tool("tigergraph__add_node", {
-            "graph_name": self.graph_name, "node_type": vertex_type, "vertex_type": vertex_type,
-            "node_id": vertex_id, "vertex_id": vertex_id, "attributes": dict(attributes),
+            "graph_name": self.graph_name, "vertex_type": vertex_type,
+            "vertex_id": vertex_id, "attributes": dict(attributes),
         })
 
     def _mcp_edge(self, source_vertex_type: str, source_vertex_id: str, edge_type: str, target_vertex_type: str, target_vertex_id: str, attributes: Mapping[str, Any] | None = None) -> None:
         self.source.call_tool("tigergraph__add_edge", {
-            "graph_name": self.graph_name, "source_node_type": source_vertex_type, "source_vertex_type": source_vertex_type,
-            "source_node_id": source_vertex_id, "source_vertex_id": source_vertex_id, "edge_type": edge_type,
-            "target_node_type": target_vertex_type, "target_vertex_type": target_vertex_type,
-            "target_node_id": target_vertex_id, "target_vertex_id": target_vertex_id, "attributes": dict(attributes or {}),
+            "graph_name": self.graph_name, "source_vertex_type": source_vertex_type,
+            "source_vertex_id": source_vertex_id, "edge_type": edge_type,
+            "target_vertex_type": target_vertex_type, "target_vertex_id": target_vertex_id,
+            "attributes": dict(attributes or {}),
         })
 
 
 def open_source(kind: str | None, *, transactions: str | None, identity: str | None, closed_cases: str | None) -> Any:
     """``tigergraph`` for the live graph, anything else for the CSV files."""
     if (kind or "").lower() in {"tigergraph", "tigergraph-mcp", "mcp"}:
-        return TigerGraphSource()
+        timeout_s = float(os.getenv("TG_MCP_TIMEOUT_S", "60"))
+        return TigerGraphSource(timeout_s=timeout_s)
     from backend.sources.csv_source import CsvSource
     return CsvSource(transactions, identity, closed_cases)
 

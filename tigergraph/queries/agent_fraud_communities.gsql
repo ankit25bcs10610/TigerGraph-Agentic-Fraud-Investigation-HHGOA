@@ -14,12 +14,15 @@ CREATE QUERY agent_fraud_communities(INT min_customers, INT max_iterations, INT 
   members = SELECT v FROM members:v POST-ACCUM v.@cc = getvid(v);
   active = members;
   WHILE active.size() > 0 LIMIT max_iterations DO
-    active = SELECT t FROM active:s -(MADE>|<MADE|FROM_DEVICE>|<FROM_DEVICE)- :t
+    active = SELECT t FROM active:s -(made>|<made|FROM_DEVICE>|<FROM_DEVICE)- :t
              WHERE s.@cc < t.@cc
              ACCUM t.@cc += s.@cc;
   END;
 
-  cards = SELECT c FROM Card:c ACCUM @@cards += (c.@cc -> c.card_id), @@customers += (c.@cc -> c.customer_id);
+  cards = SELECT c FROM Card:c ACCUM @@cards += (c.@cc -> c.card_id);
+  customers = SELECT customer FROM Customer:customer -(OWNS>)- Card:card
+              WHERE card.@cc == customer.@cc
+              ACCUM @@customers += (card.@cc -> customer.customer_id);
   devices = SELECT d FROM DeviceProfile:d ACCUM @@devices += (d.@cc -> d.device_profile_id);
   confirmed = SELECT t FROM ClosedCase:cc -(INVOLVES>)- Transaction:t
               WHERE cc.outcome == "confirmed_fraud"

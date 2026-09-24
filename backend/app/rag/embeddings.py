@@ -69,8 +69,11 @@ class OpenAIEmbedding:
         return self._dimension
 
     def embed(self, texts: Sequence[str]) -> list[list[float]]:
-        response = self._client.embeddings.create(model=self._model, input=list(texts))
-        vectors = [list(item.embedding) for item in response.data]
+        vectors: list[list[float]] = []
+        inputs = list(texts)
+        for start in range(0, len(inputs), 2048):
+            response = self._client.embeddings.create(model=self._model, input=inputs[start:start + 2048])
+            vectors.extend(list(item.embedding) for item in response.data)
         if not vectors:
             raise EmbeddingConfigurationError("Embedding provider returned no vectors.")
         dimension = len(vectors[0])

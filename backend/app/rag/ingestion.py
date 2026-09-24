@@ -101,8 +101,12 @@ class GraphRAGIngestor:
         serialized = str(existing)
         if self.vector_attribute not in serialized:
             # A provider dimension is discovered from emitted embeddings, never a constant.
-            await self.service.add_vector_attribute(vertex_type=KNOWLEDGE_VERTEX_TYPE, vector_name=self.vector_attribute,
-                                                    dimension=self.embeddings.dimension, metric=self.metric)
+            try:
+                await self.service.add_vector_attribute(vertex_type=KNOWLEDGE_VERTEX_TYPE, vector_name=self.vector_attribute,
+                                                        dimension=self.embeddings.dimension, metric=self.metric)
+            except Exception as error:  # noqa: BLE001 - schema listing can lag global schema changes.
+                if self.vector_attribute not in str(error) or "conflict" not in str(error).lower():
+                    raise
 
     async def ingest(self, *, readme_path: Path, closed_case_limit: int, max_characters: int) -> dict[str, int]:
         vertices = await self.service.list_vertices("ClosedCase", limit=closed_case_limit)

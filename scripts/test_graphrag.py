@@ -7,8 +7,10 @@ import json
 import os
 import sys
 from pathlib import Path
+from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+load_dotenv(ROOT / ".env")
 from backend.app.mcp.tigergraph_client import TigerGraphMCPClient, TigerGraphMCPConfig
 from backend.app.rag.embeddings import EmbeddingSettings, create_embedding_provider
 from backend.app.rag.retriever import GraphRAGRetriever

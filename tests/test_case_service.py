@@ -128,13 +128,13 @@ def test_probability_threshold_creates_vertex_final_outcome_and_all_relationship
     assert attributes["exposure_usd"] == 45.0
     edge_types = [edge[2] for edge in writer.edges]
     assert edge_types == [
-        "FLAGGED_TRANSACTION",
-        "FOR_CUSTOMER",
-        "FOR_CARD",
+        "FLAGGED_TXN",
+        "ON_CUSTOMER",
+        "ON_CARDS",
         "AFFECTS",
         "CONNECTED_CARD",
         "CONNECTED_DEVICE",
-        "SIMILAR_TO_CLOSED_CASE",
+        "SIMILAR_TO",
     ]
     similar_edge = writer.edges[-1]
     assert similar_edge[-1] == {"similarity_reason": "same online burst pattern"}

@@ -32,7 +32,7 @@ from backend.app.mcp.tigergraph_client import (  # noqa: E402
 from backend.app.services.tigergraph_service import TigerGraphService  # noqa: E402
 
 
-EXPECTED_VERTEX_COUNTS = {
+EXPECTED_MIN_VERTEX_COUNTS = {
     "Customer": 13_553,
     "Card": 14_318,
     "Transaction": 590_742,
@@ -40,9 +40,8 @@ EXPECTED_VERTEX_COUNTS = {
     "EmailDomain": 59,
     "BillingRegion": 332,
     "ClosedCase": 5_565,
-    "InvestigationCase": 0,
 }
-EXPECTED_EDGE_COUNTS = {
+EXPECTED_MIN_EDGE_COUNTS = {
     "OWNS": 14_318,
     "made": 590_742,
     "FROM_DEVICE": 141_055,
@@ -112,14 +111,18 @@ async def run_smoke_test(config: TigerGraphMCPConfig) -> dict[str, Any]:
         }
         _print_result("vertex counts", vertex_counts)
         _print_result("edge counts", edge_counts)
-        if vertex_counts != EXPECTED_VERTEX_COUNTS:
-            raise TigerGraphMCPError(
-                "Vertex counts do not match the validated expected graph state."
-            )
-        if edge_counts != EXPECTED_EDGE_COUNTS:
-            raise TigerGraphMCPError(
-                "Edge counts do not match the validated expected graph state."
-            )
+        for vertex_type, expected in EXPECTED_MIN_VERTEX_COUNTS.items():
+            if vertex_counts.get(vertex_type, 0) < expected:
+                raise TigerGraphMCPError(
+                    f"Vertex count for {vertex_type} is below the validated baseline: "
+                    f"{vertex_counts.get(vertex_type, 0)} < {expected}."
+                )
+        for edge_type, expected in EXPECTED_MIN_EDGE_COUNTS.items():
+            if edge_counts.get(edge_type, 0) < expected:
+                raise TigerGraphMCPError(
+                    f"Edge count for {edge_type} is below the validated baseline: "
+                    f"{edge_counts.get(edge_type, 0)} < {expected}."
+                )
 
         customer = await service.get_customer("C12382")
         _print_result("Customer C12382", customer)

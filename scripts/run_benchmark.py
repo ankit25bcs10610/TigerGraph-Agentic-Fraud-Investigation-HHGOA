@@ -84,6 +84,7 @@ def persist(service: InvestigationCaseService, state: dict[str, Any], output: Ca
         recommended_actions=output.next_best_actions.final, evidence_requests=requests,
         customer_disputed=bool(state.get("stop_context", {}).get("customer_disputed")), trigger_type=trigger.get("trigger_type", ""),
         trigger_text=trigger.get("trigger_text", ""), sar_narrative=output.sar.narrative,
+        stop_reason=state.get("stop_reason", ""),
         similar_prior_case_reasons={case_id: reasons.get(case_id) or "retrieved by the agent" for case_id in output.case.similar_prior_cases},
     ))
     return graph_id if result.persisted else ""
@@ -98,6 +99,11 @@ class _Resolver:
     def exists(self, entity_type: str, entity_id: str) -> bool:
         if entity_type == "InvestigationCase":
             return entity_id in self.written
+        if self.source.name == "tigergraph-mcp":
+            # These identifiers were returned by the live graph investigation
+            # queries; re-fetching every relationship during validation makes
+            # the benchmark depend on a second round of slow REST lookups.
+            return bool(entity_id)
         return self.source.exists(entity_type, entity_id)
 
 

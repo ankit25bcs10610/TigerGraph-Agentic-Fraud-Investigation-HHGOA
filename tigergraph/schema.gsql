@@ -465,7 +465,10 @@ CREATE VERTEX InvestigationCase (
     evidence_requests STRING,
     recommended_actions STRING,
     approval_route STRING,
-    sar_narrative STRING
+    sar_narrative STRING,
+    summary STRING,
+    stop_reason STRING,
+    created_at DATETIME
 ) WITH primary_id_as_attribute="true";
 
 CREATE DIRECTED EDGE OWNS (
@@ -532,7 +535,7 @@ CREATE DIRECTED EDGE CONNECTED_DEVICE (
     FROM InvestigationCase, TO DeviceProfile
 );
 
-CREATE DIRECTED EDGE SIMILAR_TO_CLOSED_CASE (
+CREATE DIRECTED EDGE SIMILAR_TO (
     FROM InvestigationCase, TO ClosedCase,
     similarity_reason STRING
 );
