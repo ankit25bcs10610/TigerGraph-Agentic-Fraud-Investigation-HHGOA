@@ -40,11 +40,6 @@ services:
           type: web
           name: tigergraph-fraud-api
           envVarKey: RENDER_EXTERNAL_URL
-      - key: NEXT_PUBLIC_API_KEY
-        fromService:
-          type: web
-          name: tigergraph-fraud-api
-          envVarKey: APP_API_KEY
       - key: NEXT_PUBLIC_USER_ROLE
         value: fraud_approver
       - key: NEXT_PUBLIC_ANALYST_NAME
