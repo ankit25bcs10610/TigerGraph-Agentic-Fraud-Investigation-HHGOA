@@ -166,6 +166,17 @@ def test_customer_dispute_creates_formal_case_below_probability_threshold() -> N
     assert "customer disputed a transaction" in result.creation_decision.reasons
 
 
+def test_benchmark_force_create_writes_legitimate_case() -> None:
+    writer = FakeTigerGraphWriter()
+    result = InvestigationCaseService(writer).persist(
+        request(case=case(probability=0.01, status=CaseStatus.CLOSED_LEGITIMATE), force_create=True)
+    )
+
+    assert result.persisted is True
+    assert result.case.written_to_graph is True
+    assert "explicit graph record requested" in result.creation_decision.reasons
+
+
 def test_similarity_reasons_must_match_retrieved_prior_cases() -> None:
     with pytest.raises(ValueError, match="similar_prior_case_reasons"):
         request(similar_prior_case_reasons={})

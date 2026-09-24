@@ -101,6 +101,7 @@ class InvestigationCaseRequest:
     stop_reason: str = ""
     sar_narrative: str = ""
     similar_prior_case_reasons: Mapping[str, str] = field(default_factory=dict)
+    force_create: bool = False
 
     def __post_init__(self) -> None:
         for name in (
@@ -221,6 +222,8 @@ class InvestigationCaseService:
             evidence_requests=request.evidence_requests,
             customer_disputed=request.customer_disputed,
         )
+        if request.force_create and not decision.should_create:
+            decision = CaseCreationDecision(True, (*decision.reasons, "explicit graph record requested"))
         if not decision.should_create:
             return PersistenceResult(
                 persisted=False,

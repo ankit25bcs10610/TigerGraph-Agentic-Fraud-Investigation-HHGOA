@@ -86,6 +86,7 @@ def persist(service: InvestigationCaseService, state: dict[str, Any], output: Ca
         trigger_text=trigger.get("trigger_text", ""), sar_narrative=output.sar.narrative,
         stop_reason=state.get("stop_reason", ""),
         similar_prior_case_reasons={case_id: reasons.get(case_id) or "retrieved by the agent" for case_id in output.case.similar_prior_cases},
+        force_create=True,
     ))
     return graph_id if result.persisted else ""
 
