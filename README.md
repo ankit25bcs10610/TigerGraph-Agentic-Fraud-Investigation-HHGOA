@@ -19,7 +19,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Cytoscape](https://img.shields.io/badge/Cytoscape.js-graphs-F7DF1E?style=for-the-badge&logoColor=black)](https://js.cytoscape.org/)
 <br />
-[![Tests](https://img.shields.io/badge/tests-155_passing-2C8F5F?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
+[![Tests](https://img.shields.io/badge/tests-167_passing-2C8F5F?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
 [![License](https://img.shields.io/badge/license-MIT-C2611A?style=for-the-badge)](LICENSE)
 [![Hacker House Goa](https://img.shields.io/badge/Hacker_House-Goa-6F665B?style=for-the-badge)](#credits)
 
@@ -88,6 +88,26 @@ Warm light and dark themes, keyboard search (<kbd>Ctrl</kbd> <kbd>K</kbd>), case
 
 </td>
 </tr>
+<tr>
+<td width="33%" valign="top">
+
+### 🧠 Memory in the graph
+Every investigation is written back as an `InvestigationCase`, and later ones walk those edges to recall what the agent already concluded, only from cases opened earlier. HHG-011 inherits the fraud finding on HHG-016 through a shared ring.
+
+</td>
+<td width="33%" valign="top">
+
+### 📱 Burst, not fingerprint
+Asks of every device: how many customers ever used it, how many this week, and does it name a real model? A Galaxy S7 edge build used by 24 customers in one week is evidence; a Chrome release shared by 253 people is not.
+
+</td>
+<td width="33%" valign="top">
+
+### 🧬 Rings you can read
+Connected components over burst devices find eight rings across 590,742 transactions, and each is profiled: *36 cards, 16 shared phones, 100% online, 99% product C.* No documented pattern looks like that.
+
+</td>
+</tr>
 </table>
 
 <br />
@@ -149,7 +169,7 @@ After the tools, the agent scores the evidence, checks the stopping rules, reque
 - **Undocumented patterns, found across the whole graph.** `agent_fraud_communities` runs weakly connected components over cards and *burst devices*: a device links cards only when 3–10 customers used it within 72 hours, the way one physical device serving stolen cards behaves. The Fraud rings tab lists every ring spanning three or more customers, labelled *known pattern* when it touches confirmed fraud of a documented type, or *undocumented pattern* when nothing documented explains it.
 - **It knows a burst from a fingerprint.** Device profiles in this dataset are model / browser / screen fingerprints, and 116 of them are shared by 100–1,000 customers. Measured on the full graph, expanding through them turns every ring into one component of thousands of customers. New browser releases make it worse: "Windows / chrome 66" appears only in December and packs 250 customers into a few weeks. So the agent asks three questions of every device: how many customers ever used it, how many used it within seven days of the alert, and whether the profile names a specific device model or only an operating system. More than 10 customers on a blank or "Windows" profile is a generic fingerprint, however bursty: the agent skips sharing and ring expansion and says why in its trace. A specific build such as `SM-G935F Build/NRD90M` serving many cards in the alert week is the opposite, one unusual device, and becomes evidence. That is how HHG-014's "unusual device profile" (24 of its 52 customers in the alert week, a 38-card ring) is caught while browser rollouts are not.
 - **Memory that lives in the graph.** Every investigation is written back as an `InvestigationCase` linked to its customer, cards and devices, and later investigations read those links back through `agent_prior_investigations`, only ever from cases opened earlier. On the benchmark, HHG-011 (card testing, Dec 29) recalls the agent's own fraud finding on HHG-016 (Dec 12), a different customer whose card sits in the same ring. Rewriting a case first clears its old edges, so memory reflects the latest investigation.
-- **Rings you can read.** `agent_ring_profile` turns each ring into a sentence. The largest one on the live graph: *73 transactions by 36 cards on 16 shared devices, 15 different Android phone builds (Samsung, LG, Motorola, Huawei and others), 100% online, 99% product C, median $31.70*. No documented pattern describes phones shared across unrelated cards for small product-C purchases, which is why it is flagged as undocumented.
+- **Rings you can read.** `agent_ring_profile` turns each ring into a sentence. The largest one on the live graph: *73 transactions by 36 cards on 16 shared devices, 14 different Android phone builds (Samsung, LG, Motorola, Huawei and others), 100% online, 99% product C, median $31.70*. No documented pattern describes phones shared across unrelated cards for small product-C purchases, which is why it is flagged as undocumented.
 - **Blast radius.** When a case looks like fraud, the agent uses the shared device and the fraud ring to list the *other* cards and customers at risk now, with their recent spend. One alert becomes protection for the whole ring.
 
 ### From dataset to submission
@@ -164,6 +184,22 @@ After the tools, the agent scores the evidence, checks the stopping rules, reque
 | `scripts/load_dataset_to_graph.py` | Fills in closed-case attributes and transaction identity signals on a graph that was loaded without them, over MCP |
 
 The full order of operations, down to the submission form, is in [docs/submission/RUNBOOK.md](docs/submission/RUNBOOK.md), alongside the [demo script](docs/submission/DEMO_SCRIPT.md), [blog post](docs/submission/BLOG_POST.md) and [social posts](docs/submission/SOCIAL_POSTS.md).
+
+<br />
+
+## 📊 On the live graph
+
+The 20 benchmark cases were investigated on TigerGraph Savanna through the official MCP server, in the order they were opened, and every case was written back to the graph. The answers and report are in [`outputs/benchmark_final/`](outputs/benchmark_final/).
+
+| | First live run | Final run |
+|---|---:|---:|
+| Valid answers, written to the graph | 20 / 20 | **20 / 20** |
+| Cases labelled undocumented | 13 | **3**, each tied to a specific device or ring |
+| Largest "ring" behind one alert | 6,322 customers | **38 customers** |
+| Answer files | ~8,000 lines each | **5,310 lines for all 20** |
+| Graph-wide rings found | 0 | **8 rings**, each with a profile |
+
+What changed was the agent learning which devices mean something. The full story, with the GSQL, is in the [blog post](docs/submission/BLOG_POST.md).
 
 <br />
 
