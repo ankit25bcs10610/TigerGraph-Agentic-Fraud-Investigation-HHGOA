@@ -48,13 +48,7 @@ def create_app(workflow: Workflow | None = None, case_provider: CaseInputProvide
     app.state.case_provider = case_provider
     origins = [item.strip() for item in os.getenv("FRONTEND_ORIGINS", "").split(",") if item.strip()]
     if origins:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=origins,
-            allow_credentials=True,
-            allow_methods=["GET", "POST", "OPTIONS"],
-            allow_headers=["*"],
-        )
+        app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["GET", "POST"], allow_headers=["*"])
 
     @app.middleware("http")
     async def add_request_id(request: Request, call_next):

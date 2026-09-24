@@ -5,10 +5,10 @@ services:
     plan: free
     dockerfilePath: ./Dockerfile.api
     dockerContext: .
-    healthCheckPath: /ready
+    healthCheckPath: /health
     envVars:
       - key: CASE_PACK_PATH
-        value: /app/data/sample/case_pack.csv
+        value: ""
       - key: TRANSACTIONS_PATH
         value: /app/data/sample/transactions.csv
       - key: CLOSED_CASES_PATH
