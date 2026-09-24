@@ -1,0 +1,51 @@
+services:
+  - type: web
+    name: tigergraph-fraud-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile.api
+    dockerContext: .
+    healthCheckPath: /ready
+    envVars:
+      - key: CASE_PACK_PATH
+        value: /app/data/sample/case_pack.csv
+      - key: TRANSACTIONS_PATH
+        value: /app/data/sample/transactions.csv
+      - key: CLOSED_CASES_PATH
+        value: /app/data/sample/closed_cases_history.csv
+      - key: DATA_SOURCE
+        value: csv
+      - key: FRONTEND_ORIGINS
+        fromService:
+          type: web
+          name: tigergraph-fraud-frontend
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: APP_API_KEY
+        sync: false
+      - key: APP_APPROVER_ROLE
+        value: fraud_approver
+      - key: APP_RATE_LIMIT_PER_MINUTE
+        value: "120"
+
+  - type: web
+    name: tigergraph-fraud-frontend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile.frontend
+    dockerContext: .
+    healthCheckPath: /
+    envVars:
+      - key: NEXT_PUBLIC_API_BASE_URL
+        fromService:
+          type: web
+          name: tigergraph-fraud-api
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: NEXT_PUBLIC_API_KEY
+        fromService:
+          type: web
+          name: tigergraph-fraud-api
+          envVarKey: APP_API_KEY
+      - key: NEXT_PUBLIC_USER_ROLE
+        value: fraud_approver
+      - key: NEXT_PUBLIC_ANALYST_NAME
+        sync: false
