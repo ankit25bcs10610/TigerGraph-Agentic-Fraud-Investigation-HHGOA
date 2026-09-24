@@ -37,6 +37,7 @@ class _Blindfold:
     def __init__(self, source: Any, case: ClosedCaseRecord) -> None:
         self.source, self.case, self.name = source, case, source.name
         self.cutoff = parse_time(case.opened_at)
+        self._closed: tuple[ClosedCaseRecord, ...] = ()
 
     def _visible(self, other: ClosedCaseRecord) -> bool:
         if other.case_id == self.case.case_id:

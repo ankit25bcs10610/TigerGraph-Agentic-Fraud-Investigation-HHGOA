@@ -36,7 +36,7 @@ Required configuration:
 
 ```dotenv
 TG_HOST=
-TG_GRAPHNAME=FraudInvestigation
+TG_GRAPHNAME=FraudInvestigationGraph
 TG_API_TOKEN=
 TG_TGCLOUD=true
 TG_SSL_PORT=443
@@ -95,7 +95,7 @@ python scripts/test_tigergraph_mcp.py
 ```
 
 The script starts the official server through stdio, lists the actual tool
-names, confirms `FraudInvestigation` appears in `list_graphs`, verifies
+names, confirms `FraudInvestigationGraph` appears in `list_graphs`, verifies
 the expected vertex/edge schema names (including lowercase `made`), compares
 the validated per-type vertex and edge counts, and retrieves these known graph
 records and paths:
@@ -123,7 +123,7 @@ pytest -m integration
 | `tigergraph-mcp command was not found` | Install `requirements.txt` into the Python environment running the smoke command. |
 | Connection refused or startup timeout | Check `TG_HOST`, `TG_TGCLOUD=true`, `TG_SSL_PORT=443`, network access, and run `tigergraph-mcp -vv`. |
 | Authentication failed | Set `TG_API_TOKEN`, or set both `TG_USERNAME` and `TG_PASSWORD`. Verify the chosen credential has access to the target graph. |
-| Graph not found | Ensure `TG_GRAPHNAME=FraudInvestigation` and that the credential can list this graph. |
+| Graph not found | Ensure `TG_GRAPHNAME=FraudInvestigationGraph` and that the credential can list this graph. |
 | Required tool missing | Upgrade/reinstall `tigergraph-mcp`; the client refuses to make an unverified call. |
 | Vertex not found | Verify the supplied vertex type and ID against the loaded graph; this is not silently converted to an empty result. |
 

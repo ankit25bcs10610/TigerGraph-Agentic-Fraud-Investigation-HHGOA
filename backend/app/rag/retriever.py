@@ -41,9 +41,20 @@ class GraphRAGRetriever:
             return []
         vector = self.embeddings.embed([query_text])[0]
         # Over-fetching prevents one source category from starving another on a shared index.
-        results = await self.service.search_top_k_similarity(vertex_type=KNOWLEDGE_VERTEX_TYPE,
-            vector_attribute=self.vector_attribute, query_vector=vector, top_k=top_k * 4)
-        candidates = results.get("results") or results.get("vertices") or results.get("neighbors") or []
+        results = await self.service.run_installed_query(
+            "rag_vector_search", {"query_vector": vector, "top_k": top_k, "source_type": source_type}
+        )
+        candidates: list[dict[str, Any]] = []
+        distances: dict[str, float] = {}
+        for block in results.get("result", []):
+            if not isinstance(block, dict):
+                continue
+            values = block.get("result") or block.get("vertices") or block.get("rows") or []
+            if isinstance(values, list):
+                candidates.extend(item for item in values if isinstance(item, dict))
+            raw_distances = block.get("@@distances") or block.get("distances") or {}
+            if isinstance(raw_distances, dict):
+                distances.update({str(key): float(value) for key, value in raw_distances.items() if isinstance(value, (int, float))})
         retrieved: list[RetrievedChunk] = []
         for candidate in candidates:
             chunk_id = _id(candidate)
@@ -58,7 +69,8 @@ class GraphRAGRetriever:
                     str(attrs["title"]), str(attrs["text"]), str(attrs["section"]))
             except KeyError:
                 continue
-            score = candidate.get("score", candidate.get("distance")) if isinstance(candidate, dict) else None
+            distance = distances.get(chunk_id)
+            score = (1.0 - distance) if distance is not None else candidate.get("score", candidate.get("distance"))
             retrieved.append(RetrievedChunk(chunk, float(score) if isinstance(score, (float, int)) else None,
                 f"graph:KnowledgeChunk/{chunk_id}"))
             if len(retrieved) == top_k:

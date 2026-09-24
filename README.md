@@ -173,7 +173,7 @@ pip install -r requirements.txt
 CASE_PACK_PATH=data/sample/case_pack.csv \
 TRANSACTIONS_PATH=data/sample/transactions.csv \
 CLOSED_CASES_PATH=data/sample/closed_cases_history.csv \
-FRONTEND_ORIGINS=http://127.0.0.1:3001 \
+FRONTEND_ORIGINS=http://127.0.0.1:3000,http://localhost:3000,http://127.0.0.1:3001,http://localhost:3001 \
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 
 # 3. In a second terminal, start the workbench

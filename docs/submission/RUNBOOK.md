@@ -17,7 +17,7 @@ It must report **PREFLIGHT: PASSED**. The repository's `data/sample/` pack is on
 1. Download the **HHGOA_IEEE** dataset folder. It must contain `transactions.csv`, `identity.csv`, `closed_cases_history.csv`, `case_pack.csv`, the dataset `README`, the fraud policy, the five fraud patterns and the regulatory references.
 2. Read the dataset README's **answer format** section and compare it with `backend/models/answer.py`. If a field differs, tell whoever maintains the answer model before running the benchmark.
 3. Create a TigerGraph Savanna workspace (<https://savanna.tgcloud.io>) with **auto-stop and auto-start enabled**, or install Community Edition.
-4. Copy `.env.example` to `.env` and fill in `TG_HOST`, `TG_GRAPHNAME=FraudInvestigation`, and `TG_SECRET` (or `TG_USERNAME`/`TG_PASSWORD`). For explanations, set `LLM_PROVIDER=openai`, `LLM_MODEL=gpt-4o-mini` and `OPENAI_API_KEY`.
+4. Copy `.env.example` to `.env` and fill in `TG_HOST`, `TG_GRAPHNAME=FraudInvestigationGraph`, and `TG_SECRET` (or `TG_USERNAME`/`TG_PASSWORD`). For explanations, set `LLM_PROVIDER=openai`, `LLM_MODEL=gpt-4o-mini` and `OPENAI_API_KEY`.
 5. `pip install -r requirements.txt`
 
 Point these at the dataset folder (in `.env` or your shell):
@@ -119,7 +119,7 @@ git push
 Start the app against TigerGraph and follow [DEMO_SCRIPT.md](DEMO_SCRIPT.md):
 
 ```bash
-DATA_SOURCE=tigergraph CASE_PACK_PATH=$DATA/case_pack.csv FRONTEND_ORIGINS=http://127.0.0.1:3001 \
+DATA_SOURCE=tigergraph CASE_PACK_PATH=$DATA/case_pack.csv FRONTEND_ORIGINS=http://127.0.0.1:3000,http://localhost:3000,http://127.0.0.1:3001,http://localhost:3001 \
   python -m uvicorn backend.main:app --port 8000
 cd frontend && npm run dev -- --port 3001
 ```

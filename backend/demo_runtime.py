@@ -165,6 +165,6 @@ def build_reference_runtime(path: str, transactions_path: str | None = None, clo
     transactions = transactions_path or os.getenv("TRANSACTIONS_PATH")
     closed_cases = closed_cases_path or os.getenv("CLOSED_CASES_PATH")
     identity = os.getenv("IDENTITY_PATH")
-    kind = os.getenv("DATA_SOURCE", "csv")
+    kind = "csv" if transactions_path is not None else os.getenv("DATA_SOURCE", "csv")
     source = open_source(kind, transactions=transactions, identity=identity, closed_cases=closed_cases) if (kind.lower().startswith("tiger") or transactions) else None
     return CasePackProvider(path), LocalInvestigationEngine(source)

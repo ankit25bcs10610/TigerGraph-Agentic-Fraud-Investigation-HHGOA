@@ -145,6 +145,10 @@ class TigerGraphMCPConfig:
             raise TigerGraphMCPConfigurationError("TG_GRAPHNAME must not be empty.")
         if not api_token and not secret and not (username and password):
             raise TigerGraphMCPConfigurationError("Provide TG_API_TOKEN, TG_SECRET, or both TG_USERNAME and TG_PASSWORD.")
+        try:
+            timeout_s = float(setting("TG_MCP_TIMEOUT_S", str(timeout_s)))
+        except ValueError as error:
+            raise TigerGraphMCPConfigurationError("TG_MCP_TIMEOUT_S must be numeric.") from error
         if timeout_s <= 0:
             raise TigerGraphMCPConfigurationError("timeout_s must be greater than zero.")
 

@@ -29,7 +29,7 @@ def args() -> argparse.Namespace:
 async def main_async(options: argparse.Namespace) -> dict[str, int]:
     settings = EmbeddingSettings.from_environment()
     provider = create_embedding_provider(settings)
-    vector_name = __import__("os").environ.get("GRAPHRAG_VECTOR_ATTRIBUTE", "embedding").strip()
+    vector_name = __import__("os").environ.get("GRAPHRAG_VECTOR_ATTRIBUTE", "local_embedding").strip()
     if not vector_name:
         raise ValueError("GRAPHRAG_VECTOR_ATTRIBUTE must not be empty.")
     async with TigerGraphMCPClient(TigerGraphMCPConfig.from_environment()) as client:

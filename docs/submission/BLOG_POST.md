@@ -78,7 +78,9 @@ What *is* agentic:
 
 We replayed the bank's closed cases through the agent, hiding the case under test and every case opened after it, and compared the agent's pattern and verdict with the analysts' conclusions.
 
-*(Paste the table from `outputs/CALIBRATION.md` here.)*
+We replayed 49 closed cases, sampled evenly across the seven analyst labels, while hiding the case under test and all later cases. Pattern recall was 0% for account takeover and card testing, 14% for card-not-present fraud, 14% for card-not-present new device, 43% for out-of-region use, and 29% for undocumented activity. The agent decided only one case without further evidence, and that decision was incorrect; 41 fraud cases and 7 cleared cases remained uncertain. This is an honest calibration result, not a claim of benchmark accuracy, and it identifies detector tuning and evidence quality as the remaining accuracy work.
+
+The calibration runner now disables the expensive full closed-case text index during blindfolded replay, preventing the measurement itself from timing out. The complete report is retained at `outputs/CALIBRATION_REAL.md`.
 
 The most useful number isn't raw agreement: it's how often the agent stays *uncertain* instead of guessing wrong. Uncertain cases go to the evidence-request branch, not straight to a block.
 

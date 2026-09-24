@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import os
 import re
+import tempfile
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,7 +17,7 @@ from backend.app.rag.models import KnowledgeChunk
 from backend.app.services.tigergraph_service import TigerGraphService
 
 
-KNOWLEDGE_VERTEX_TYPE = "KnowledgeChunk"
+KNOWLEDGE_VERTEX_TYPE = os.getenv("GRAPHRAG_VERTEX_TYPE", "KnowledgeChunk").strip() or "KnowledgeChunk"
 
 
 def _value(vertex: dict[str, Any], name: str) -> Any:
@@ -96,17 +99,30 @@ class GraphRAGIngestor:
     batch_size: int = 64
 
     async def ensure_vector_schema(self) -> None:
-        """Create the vector attribute only when the live schema lacks it."""
-        existing = await self.service.list_vector_attributes(KNOWLEDGE_VERTEX_TYPE)
-        serialized = str(existing)
-        if self.vector_attribute not in serialized:
-            # A provider dimension is discovered from emitted embeddings, never a constant.
-            try:
-                await self.service.add_vector_attribute(vertex_type=KNOWLEDGE_VERTEX_TYPE, vector_name=self.vector_attribute,
-                                                        dimension=self.embeddings.dimension, metric=self.metric)
-            except Exception as error:  # noqa: BLE001 - schema listing can lag global schema changes.
-                if self.vector_attribute not in str(error) or "conflict" not in str(error).lower():
-                    raise
+        """Create the local vector attribute and installed search query if needed."""
+        graph_name = self.service.graph_name
+        job_name = "add_graphrag_vector"
+        command = f'''USE GRAPH {graph_name}
+CREATE SCHEMA_CHANGE JOB {job_name} FOR GRAPH {graph_name} {{
+  ALTER VERTEX {KNOWLEDGE_VERTEX_TYPE} ADD VECTOR ATTRIBUTE {self.vector_attribute}(DIMENSION={self.embeddings.dimension}, METRIC="{self.metric}");
+}}
+RUN SCHEMA_CHANGE JOB {job_name}'''
+        try:
+            await self.service.run_gsql(command)
+        except Exception as error:  # noqa: BLE001 - an existing vector is idempotent.
+            message = str(error).lower()
+            if "conflict" not in message and "already" not in message and "used by another" not in message:
+                raise
+        query = f'''USE GRAPH {graph_name}
+CREATE OR REPLACE QUERY rag_vector_search(LIST<FLOAT> query_vector, INT top_k, STRING source_type) FOR GRAPH {graph_name} SYNTAX v3 {{
+  MapAccum<Vertex, FLOAT> @@distances;
+  candidates = SELECT k FROM {KNOWLEDGE_VERTEX_TYPE}:k WHERE k.source_type == source_type;
+  result = vectorSearch({{{KNOWLEDGE_VERTEX_TYPE}.{self.vector_attribute}}}, query_vector, top_k, {{candidate_set: candidates, distance_map: @@distances}});
+  PRINT result WITH VECTOR;
+  PRINT @@distances;
+}}
+INSTALL QUERY rag_vector_search'''
+        await self.service.run_gsql(query)
 
     async def ingest(self, *, readme_path: Path, closed_case_limit: int, max_characters: int) -> dict[str, int]:
         vertices = await self.service.list_vertices("ClosedCase", limit=closed_case_limit)
@@ -117,9 +133,29 @@ class GraphRAGIngestor:
         if len(vectors) != len(chunks):
             raise ValueError("Embedding provider returned a different number of vectors than chunks.")
         await self.ensure_vector_schema()
-        for start in range(0, len(chunks), self.batch_size):
-            batch_chunks, batch_vectors = chunks[start:start + self.batch_size], vectors[start:start + self.batch_size]
-            await self.service.upsert_vectors(vertex_type=KNOWLEDGE_VERTEX_TYPE, vector_attribute=self.vector_attribute,
-                vectors=[{"vertex_id": item.chunk_id, "vector": vector, "attributes": item.attributes()} for item, vector in zip(batch_chunks, batch_vectors, strict=True)])
+        if hasattr(self.service, "add_nodes") and hasattr(self.service, "load_vectors_from_json"):
+            for start in range(0, len(chunks), self.batch_size * 8):
+                batch = chunks[start:start + self.batch_size * 8]
+                await self.service.add_nodes(
+                    KNOWLEDGE_VERTEX_TYPE,
+                    [{"chunk_id": item.chunk_id, **item.attributes()} for item in batch],
+                    vertex_id="chunk_id",
+                )
+            with tempfile.NamedTemporaryFile("w", suffix=".jsonl", encoding="utf-8", delete=False) as handle:
+                vector_file = handle.name
+                for chunk, vector in zip(chunks, vectors, strict=True):
+                    handle.write(json.dumps({"id": chunk.chunk_id, "vector": ",".join(str(value) for value in vector)}) + "\n")
+            try:
+                await self.service.load_vectors_from_json(
+                    vertex_type=KNOWLEDGE_VERTEX_TYPE, vector_attribute=self.vector_attribute,
+                    file_path=vector_file, id_key="id", vector_key="vector",
+                )
+            finally:
+                Path(vector_file).unlink(missing_ok=True)
+        else:
+            for start in range(0, len(chunks), self.batch_size):
+                batch_chunks, batch_vectors = chunks[start:start + self.batch_size], vectors[start:start + self.batch_size]
+                await self.service.upsert_vectors(vertex_type=KNOWLEDGE_VERTEX_TYPE, vector_attribute=self.vector_attribute,
+                    vectors=[{"vertex_id": item.chunk_id, "vector": vector, "attributes": item.attributes()} for item, vector in zip(batch_chunks, batch_vectors, strict=True)])
         counts = {source_type: sum(chunk.source_type == source_type for chunk in chunks) for source_type in ("closed_case", "pattern_document", "policy")}
         return {**counts, "total": len(chunks)}

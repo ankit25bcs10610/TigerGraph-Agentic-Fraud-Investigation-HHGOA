@@ -26,7 +26,7 @@ def args() -> argparse.Namespace:
     return parser.parse_args()
 
 async def run(options: argparse.Namespace) -> dict:
-    vector_name = os.environ.get("GRAPHRAG_VECTOR_ATTRIBUTE", "embedding").strip()
+    vector_name = os.environ.get("GRAPHRAG_VECTOR_ATTRIBUTE", "local_embedding").strip()
     async with TigerGraphMCPClient(TigerGraphMCPConfig.from_environment()) as client:
         retriever = GraphRAGRetriever(TigerGraphService(client), create_embedding_provider(EmbeddingSettings.from_environment()), vector_attribute=vector_name)
         result = await retriever.hybrid_retrieve(options.query, options.customer_id, options.card_id, options.transaction_id, options.top_k)

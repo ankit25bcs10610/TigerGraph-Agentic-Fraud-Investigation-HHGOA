@@ -25,7 +25,8 @@ select an embedding provider without committing any key:
 EMBEDDING_PROVIDER=local
 EMBEDDING_MODEL=<sentence-transformers model name>
 # Or: EMBEDDING_PROVIDER=openai and OPENAI_API_KEY=<local secret>
-GRAPHRAG_VECTOR_ATTRIBUTE=embedding
+GRAPHRAG_VECTOR_ATTRIBUTE=local_embedding
+GRAPHRAG_VERTEX_TYPE=KnowledgeChunk
 ```
 
 The local provider loads `sentence-transformers` lazily. The OpenAI provider

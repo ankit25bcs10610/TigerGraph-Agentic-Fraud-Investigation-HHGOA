@@ -161,6 +161,26 @@ class TigerGraphService:
              "vector_attribute": vector_attribute, "vectors": vectors},
         )
 
+    async def add_nodes(self, vertex_type: str, vertices: list[dict[str, Any]], *, vertex_id: str) -> dict[str, Any]:
+        return await self._call(
+            "tigergraph__add_nodes",
+            {"graph_name": self.graph_name, "vertex_type": vertex_type, "vertex_id": vertex_id, "vertices": vertices},
+        )
+
+    async def load_vectors_from_json(
+        self, *, vertex_type: str, vector_attribute: str, file_path: str,
+        id_key: str = "id", vector_key: str = "vector",
+    ) -> dict[str, Any]:
+        return await self._call(
+            "tigergraph__load_vectors_from_json",
+            {"graph_name": self.graph_name, "vertex_type": vertex_type,
+             "vector_attribute": vector_attribute, "file_path": file_path,
+             "id_key": id_key, "vector_key": vector_key},
+        )
+
+    async def run_gsql(self, command: str) -> dict[str, Any]:
+        return await self._call("tigergraph__gsql", {"command": command})
+
     async def search_top_k_similarity(
         self, *, vertex_type: str, vector_attribute: str, query_vector: list[float], top_k: int
     ) -> dict[str, Any]:

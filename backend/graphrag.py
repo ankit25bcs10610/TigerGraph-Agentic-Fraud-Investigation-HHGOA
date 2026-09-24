@@ -100,7 +100,7 @@ class TigerGraphVectorRAG:
         self.fallback = LocalSemanticRAG(knowledge, getattr(source, "_closed", ()))
         self._vector_available = True
         self.retriever = GraphRAGRetriever(source.service, create_embedding_provider(EmbeddingSettings.from_environment()),
-                                           vector_attribute=os.getenv("GRAPHRAG_VECTOR_ATTRIBUTE", "embedding"))
+                                           vector_attribute=os.getenv("GRAPHRAG_VECTOR_ATTRIBUTE", "local_embedding"))
 
     def retrieve(self, query: str, kind: str, top_k: int) -> list[Passage]:
         search = {"policy": self.retriever.search_policy, "closed_case": self.retriever.search_similar_closed_cases,

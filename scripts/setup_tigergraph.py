@@ -57,7 +57,7 @@ def gsql(conn, text: str) -> str:
 
 
 def graph_script(path: Path) -> str:
-    return path.read_text(encoding="utf-8").replace("FraudInvestigation", GRAPH)
+    return path.read_text(encoding="utf-8").replace("FraudInvestigationGraph", "__GRAPH__").replace("FraudInvestigation", "__GRAPH__").replace("__GRAPH__", GRAPH)
 
 
 def main() -> int:
@@ -87,7 +87,7 @@ def main() -> int:
             print(f"loading {path.name} ...", flush=True)
             print(conn.runLoadingJobWithFile(str(path), tag, "load_fraud_data", sep="\t"))
     if "queries" not in args.skip:
-        for path in sorted((ROOT / "tigergraph" / "queries").glob("*.gsql")):
+        for path in sorted((ROOT / "tigergraph" / "queries").glob("agent_*.gsql")):
             name = path.stem
             gsql(conn, f"USE GRAPH {GRAPH}\nDROP QUERY {name}")
             gsql(conn, f"USE GRAPH {GRAPH}\n" + graph_script(path))
