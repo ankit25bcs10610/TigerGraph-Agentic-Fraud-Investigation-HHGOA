@@ -13,3 +13,13 @@ __pycache__/
 frontend/node_modules/
 frontend/.next/
 frontend/tsconfig.tsbuildinfo
+
+# Local benchmark and graph-generation scratch artifacts
+.DS_Store
+build/
+outputs/CALIBRATION.md
+outputs/CALIBRATION_SMOKE.md
+outputs/benchmark_csv/
+outputs/benchmark_live*/
+outputs/live_smoke*/
+outputs/benchmark_final/answers/_needs_review/
