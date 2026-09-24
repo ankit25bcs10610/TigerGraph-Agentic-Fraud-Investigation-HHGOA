@@ -6,7 +6,7 @@
 - GraphRAG indexes 5,570 policy, pattern and closed-case chunks into `KnowledgeChunk` and returns policy, pattern and prior-case citations.
 - The real 20-case benchmark produced 20 valid answer files with zero review failures and wrote formal cases to the graph.
 - Case writes use `InvestigationCase` plus deployed relationship names; approval routes are policy-derived and role-protected.
-- Frontend TypeScript check passes; Python suite passes with 161 tests.
+- Frontend TypeScript check passes; Python suite passes with 162 tests.
 - Calibration report is generated at `outputs/CALIBRATION_REAL.md`.
 
 ## Manual before submission
