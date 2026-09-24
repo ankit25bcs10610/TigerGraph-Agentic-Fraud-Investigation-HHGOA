@@ -25,6 +25,10 @@ def discover(source: Any, case_pack: list[dict[str, Any]] | None = None, *, min_
     txns = getattr(source, "_txns", {})
     txns = txns if isinstance(txns, dict) else {}
     flagged = {item.get("flagged_txn_id"): item["case_id"] for item in (case_pack or []) if item.get("flagged_txn_id")}
+    by_card: dict[str, set[str]] = {}
+    for item in case_pack or []:
+        if item.get("card_id"):
+            by_card.setdefault(item["card_id"], set()).add(item["case_id"])
     results = []
     for community in source.communities(min_customers, top_k):
         patterns = Counter(closed[case_id].pattern for case_id in community.confirmed_cases if case_id in closed)
@@ -39,7 +43,8 @@ def discover(source: Any, case_pack: list[dict[str, Any]] | None = None, *, min_
             "transactions": community.transactions or len(members), "confirmed_cases": list(community.confirmed_cases), "confirmed_patterns": dict(patterns),
             "online_share": round(online / len(members), 2) if members else None, "total_amount_usd": round(sum(amounts), 2) if amounts else None,
             "span_hours": round((max(times) - min(times)).total_seconds() / 3600, 1) if len(times) > 1 else None,
-            "benchmark_cases": sorted({flagged[txn.transaction_id] for txn in members if txn.transaction_id in flagged}),
+            "benchmark_cases": sorted({flagged[txn.transaction_id] for txn in members if txn.transaction_id in flagged}
+                                      | {case_id for card in community.cards for case_id in by_card.get(card, ())}),
             "sample_cards": list(community.cards[:6]), "sample_devices": list(community.devices[:4]), "label": label,
         })
     return results

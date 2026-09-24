@@ -32,6 +32,7 @@ class CsvSource:
         self._closed: list[ClosedCaseRecord] = []
         self._cards: set[str] = set()
         self._device_users: dict[str, int] = {}
+        self._communities: dict[tuple[int, int], list[Community]] = {}
         devices: dict[str, tuple[str, dict[str, str]]] = {}
         if identity_path and Path(identity_path).exists():
             with Path(identity_path).open(newline="", encoding="utf-8-sig") as handle:
@@ -171,7 +172,13 @@ class CsvSource:
         return burst
 
     def communities(self, min_customers: int, top_k: int) -> list[Community]:
-        """Weakly connected components over card <-> burst-device links (union-find)."""
+        """Weakly connected components over card <-> burst-device links (union-find), computed once per arguments."""
+        key = (min_customers, top_k)
+        if key not in self._communities:
+            self._communities[key] = self._components(min_customers, top_k)
+        return self._communities[key]
+
+    def _components(self, min_customers: int, top_k: int) -> list[Community]:
         parent: dict[str, str] = {}
         burst = self._burst_devices()
 

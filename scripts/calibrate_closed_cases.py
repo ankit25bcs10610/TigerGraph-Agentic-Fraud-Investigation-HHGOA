@@ -25,9 +25,13 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from dotenv import load_dotenv  # noqa: E402
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
 from backend.local_engine import LocalInvestigationEngine  # noqa: E402
 from backend.memory import CaseMemory  # noqa: E402
-from backend.sources.base import ClosedCaseRecord, RingResult, parse_time  # noqa: E402
+from backend.sources.base import ClosedCaseRecord, Community, RingResult, parse_time  # noqa: E402
 from backend.sources.tigergraph_source import open_source  # noqa: E402
 
 
@@ -54,9 +58,22 @@ class _Blindfold:
     def closed_cases_by_pattern(self, pattern: str, limit: int) -> list[ClosedCaseRecord]:
         return [case for case in self.source.closed_cases_by_pattern(pattern, limit + 5) if self._visible(case)][:limit]
 
-    def device_ring(self, device: str, hops: int) -> RingResult:
-        ring = self.source.device_ring(device, hops)
-        return RingResult(ring.seed_device, ring.devices, ring.cards, ring.customers, ring.transactions, tuple(c for c in ring.confirmed_cases if c != self.case.case_id), ring.hops)
+    def _visible_id(self, case_id: str) -> bool:
+        other = self._by_id().get(case_id)
+        return other is None or self._visible(other)
+
+    def _by_id(self) -> dict[str, ClosedCaseRecord]:
+        closed = getattr(self.source, "_closed", ())
+        return {case.case_id: case for case in closed} if isinstance(closed, (list, tuple)) else {}
+
+    def device_ring(self, device: str, hops: int, around: Any = None) -> RingResult:
+        ring = self.source.device_ring(device, hops, around)
+        return RingResult(ring.seed_device, ring.devices, ring.cards, ring.customers, ring.transactions,
+                          tuple(c for c in ring.confirmed_cases if c != self.case.case_id and self._visible_id(c)), ring.hops, ring.extra)
+
+    def communities(self, min_customers: int, top_k: int) -> list[Community]:
+        return [Community(item.community_id, item.cards, item.devices, item.customers, tuple(c for c in item.confirmed_cases if c != self.case.case_id and self._visible_id(c)),
+                          item.transactions, item.customer_count) for item in self.source.communities(min_customers, top_k)]
 
 
 def load_cases(path: str) -> list[ClosedCaseRecord]:
