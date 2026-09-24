@@ -31,8 +31,8 @@
     ],
     "similar_prior_cases": [],
     "summary": "No documented fraud pattern on C12382-K1: fraud probability 0.09, exposure $0.00 across 0 transaction(s). Fraud probability 0.09 meets the strong-legitimate threshold with 2 independent supporting evidence sources.",
-    "written_to_graph": false,
-    "graph_case_id": ""
+    "written_to_graph": true,
+    "graph_case_id": "INV-HHG-001"
   },
   "evidence_requests": [],
   "next_best_actions": {
@@ -61,7 +61,7 @@
       "planner": "rules",
       "result": "$77.07 in_person on C12382-K1",
       "ok": true,
-      "ms": 327.5
+      "ms": 299.3
     },
     {
       "step": 2,
@@ -74,7 +74,7 @@
       "planner": "rules",
       "result": "422 transactions",
       "ok": true,
-      "ms": 126.7
+      "ms": 216.7
     },
     {
       "step": 3,
@@ -88,7 +88,7 @@
       "planner": "rules",
       "result": "0 closed cases",
       "ok": true,
-      "ms": 39.6
+      "ms": 74.2
     },
     {
       "step": 4,
@@ -102,9 +102,9 @@
       "planner": "rules",
       "result": "3 policy passages, 0 case narratives (tfidf)",
       "ok": true,
-      "ms": 0.2
+      "ms": 0.1
     }
   ],
   "tokens": 0,
-  "latency_s": 0.508
+  "latency_s": 0.838
 }

@@ -39,8 +39,8 @@
     ],
     "similar_prior_cases": [],
     "summary": "No documented fraud pattern on C05876-K2: fraud probability 0.08, exposure $0.00 across 0 transaction(s). Fraud probability 0.08 meets the strong-legitimate threshold with 2 independent supporting evidence sources.",
-    "written_to_graph": false,
-    "graph_case_id": ""
+    "written_to_graph": true,
+    "graph_case_id": "INV-HHG-012"
   },
   "evidence_requests": [],
   "next_best_actions": {
@@ -69,7 +69,7 @@
       "planner": "rules",
       "result": "$30.91 in_person on C05876-K2",
       "ok": true,
-      "ms": 84.7
+      "ms": 87.1
     },
     {
       "step": 2,
@@ -82,7 +82,7 @@
       "planner": "rules",
       "result": "991 transactions",
       "ok": true,
-      "ms": 241.3
+      "ms": 199.1
     },
     {
       "step": 3,
@@ -96,7 +96,7 @@
       "planner": "rules",
       "result": "0 closed cases",
       "ok": true,
-      "ms": 37.3
+      "ms": 36.8
     },
     {
       "step": 4,
@@ -126,5 +126,5 @@
     }
   ],
   "tokens": 0,
-  "latency_s": 0.373
+  "latency_s": 0.676
 }

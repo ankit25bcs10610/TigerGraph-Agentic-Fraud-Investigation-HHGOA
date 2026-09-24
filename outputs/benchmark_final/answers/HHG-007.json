@@ -39,8 +39,8 @@
     ],
     "similar_prior_cases": [],
     "summary": "No documented fraud pattern on C09933-K2: fraud probability 0.13, exposure $0.00 across 0 transaction(s). Fraud probability 0.13 meets the strong-legitimate threshold with 2 independent supporting evidence sources.",
-    "written_to_graph": false,
-    "graph_case_id": ""
+    "written_to_graph": true,
+    "graph_case_id": "INV-HHG-007"
   },
   "evidence_requests": [],
   "next_best_actions": {
@@ -69,7 +69,7 @@
       "planner": "rules",
       "result": "$111.92 in_person on C09933-K2",
       "ok": true,
-      "ms": 91.0
+      "ms": 107.4
     },
     {
       "step": 2,
@@ -82,7 +82,7 @@
       "planner": "rules",
       "result": "2792 transactions",
       "ok": true,
-      "ms": 217.0
+      "ms": 248.3
     },
     {
       "step": 3,
@@ -96,7 +96,7 @@
       "planner": "rules",
       "result": "0 closed cases",
       "ok": true,
-      "ms": 38.3
+      "ms": 37.3
     },
     {
       "step": 4,
@@ -126,5 +126,5 @@
     }
   ],
   "tokens": 0,
-  "latency_s": 0.413
+  "latency_s": 0.625
 }

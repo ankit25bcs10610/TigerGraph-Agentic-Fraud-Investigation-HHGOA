@@ -113,7 +113,7 @@
       "planner": "rules",
       "result": "$292.36 online on C11891-K1",
       "ok": true,
-      "ms": 82.2
+      "ms": 79.8
     },
     {
       "step": 2,
@@ -126,7 +126,7 @@
       "planner": "rules",
       "result": "44 transactions",
       "ok": true,
-      "ms": 43.2
+      "ms": 41.3
     },
     {
       "step": 3,
@@ -140,7 +140,7 @@
       "planner": "rules",
       "result": "0 closed cases",
       "ok": true,
-      "ms": 40.6
+      "ms": 49.9
     },
     {
       "step": 4,
@@ -180,7 +180,7 @@
       "planner": "rules",
       "result": "3 policy passages, 0 case narratives (tfidf)",
       "ok": true,
-      "ms": 0.2
+      "ms": 0.1
     },
     {
       "step": 7,
@@ -194,7 +194,7 @@
       "planner": "rules",
       "result": "3 policy passages, 0 case narratives (tfidf)",
       "ok": true,
-      "ms": 0.2
+      "ms": 0.1
     },
     {
       "tool": "execute_action",
@@ -205,7 +205,7 @@
       "system": "customer-messaging",
       "detail": "Verification request sent to the customer's registered phone",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T04:05:54.542030+00:00",
+      "executed_at": "2026-09-24T07:24:30.026650+00:00",
       "simulated": true
     },
     {
@@ -217,10 +217,10 @@
       "system": "transaction-monitoring",
       "detail": "Card added to enhanced monitoring for 30 days",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T04:05:54.547922+00:00",
+      "executed_at": "2026-09-24T07:24:30.031005+00:00",
       "simulated": true
     }
   ],
   "tokens": 0,
-  "latency_s": 0.381
+  "latency_s": 0.354
 }
