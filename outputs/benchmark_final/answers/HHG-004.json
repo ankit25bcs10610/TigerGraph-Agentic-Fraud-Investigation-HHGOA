@@ -6475,10 +6475,10 @@
     "similar_prior_cases": [
       "CC-5489",
       "CC-5451",
-      "CC-5493",
-      "CC-5473",
-      "CC-5293",
-      "CC-5424"
+      "CC-5450",
+      "CC-5424",
+      "CC-5342",
+      "CC-5275"
     ],
     "summary": "Card not present fraud pattern on C08106-K1: fraud probability 0.58, exposure $221.19 across 2 transaction(s). Verification response case_pack.trigger_text settled the question as fraud.",
     "written_to_graph": true,
@@ -6533,7 +6533,7 @@
       "planner": "rules",
       "result": "$128.33 online on C08106-K1",
       "ok": true,
-      "ms": 84.6
+      "ms": 96.0
     },
     {
       "step": 2,
@@ -6546,7 +6546,7 @@
       "planner": "rules",
       "result": "216 transactions",
       "ok": true,
-      "ms": 61.2
+      "ms": 53.5
     },
     {
       "step": 3,
@@ -6559,7 +6559,7 @@
       "planner": "rules",
       "result": "8 transactions from 1 customers",
       "ok": true,
-      "ms": 40.5
+      "ms": 39.3
     },
     {
       "step": 4,
@@ -6573,7 +6573,7 @@
       "planner": "rules",
       "result": "6322 customers, 6404 cards, 9457 devices, 0 confirmed cases",
       "ok": true,
-      "ms": 418.5
+      "ms": 440.9
     },
     {
       "step": 5,
@@ -6587,7 +6587,7 @@
       "planner": "rules",
       "result": "5565 closed cases",
       "ok": true,
-      "ms": 522.0
+      "ms": 688.5
     },
     {
       "step": 6,
@@ -6613,7 +6613,7 @@
       "planner": "rules",
       "result": "0 closed cases",
       "ok": true,
-      "ms": 39.0
+      "ms": 50.7
     },
     {
       "step": 8,
@@ -6638,10 +6638,10 @@
       "system": "case-management",
       "detail": "Fraud case opened in case management",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T03:49:40.380570+00:00",
+      "executed_at": "2026-09-24T04:00:33.331282+00:00",
       "simulated": true
     }
   ],
   "tokens": 0,
-  "latency_s": 1.686
+  "latency_s": 1.922
 }

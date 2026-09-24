@@ -93,6 +93,22 @@ def test_card_testing_can_be_found_after_the_trigger_transaction() -> None:
     assert result.pattern is FraudPattern.CARD_TESTING
 
 
+def test_card_testing_accepts_dataset_scale_small_authorizations() -> None:
+    result = detect_card_testing(
+        PatternContext(
+            target=tx("trigger", -2, amount=80),
+            card_history=(
+                tx("small-1", 0, amount=12),
+                tx("small-2", 0.15, amount=16),
+                tx("small-3", 0.30, amount=20),
+                tx("large", 0.70, amount=100),
+            ),
+        )
+    )
+
+    assert result.pattern is FraudPattern.CARD_TESTING
+
+
 def test_card_not_present_fraud_detects_inconsistent_online_burst() -> None:
     result = detect_card_not_present_fraud(
         PatternContext(

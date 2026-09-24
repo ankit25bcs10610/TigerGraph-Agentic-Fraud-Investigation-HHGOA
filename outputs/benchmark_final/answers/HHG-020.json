@@ -8107,10 +8107,10 @@
     "similar_prior_cases": [
       "CC-5489",
       "CC-5451",
-      "CC-5493",
-      "CC-5473",
-      "CC-5293",
-      "CC-5424"
+      "CC-5450",
+      "CC-5424",
+      "CC-5342",
+      "CC-5275"
     ],
     "summary": "Undocumented pattern on C12265-K2: fraud probability 0.42, exposure $125.08 across 1 transaction(s). Further investigation is unlikely to change the decision.",
     "written_to_graph": true,
@@ -8196,7 +8196,7 @@
       "planner": "rules",
       "result": "$125.08 online on C12265-K2",
       "ok": true,
-      "ms": 79.7
+      "ms": 81.0
     },
     {
       "step": 2,
@@ -8209,7 +8209,7 @@
       "planner": "rules",
       "result": "112 transactions",
       "ok": true,
-      "ms": 46.7
+      "ms": 42.8
     },
     {
       "step": 3,
@@ -8222,7 +8222,7 @@
       "planner": "rules",
       "result": "462 transactions from 1 customers",
       "ok": true,
-      "ms": 66.3
+      "ms": 62.4
     },
     {
       "step": 4,
@@ -8236,7 +8236,7 @@
       "planner": "rules",
       "result": "7690 customers, 8016 cards, 9533 devices, 0 confirmed cases",
       "ok": true,
-      "ms": 419.6
+      "ms": 453.6
     },
     {
       "step": 5,
@@ -8250,7 +8250,7 @@
       "planner": "rules",
       "result": "5565 closed cases",
       "ok": true,
-      "ms": 57.7
+      "ms": 57.8
     },
     {
       "step": 6,
@@ -8329,7 +8329,7 @@
       "system": "case-management",
       "detail": "Fraud case opened in case management",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T03:50:47.002643+00:00",
+      "executed_at": "2026-09-24T04:01:44.480797+00:00",
       "simulated": true
     },
     {
@@ -8341,7 +8341,7 @@
       "system": "case-management",
       "detail": "Case routed to the analyst review queue",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T03:50:47.002663+00:00",
+      "executed_at": "2026-09-24T04:01:44.480817+00:00",
       "simulated": true
     },
     {
@@ -8353,10 +8353,10 @@
       "system": "transaction-monitoring",
       "detail": "Card added to enhanced monitoring for 30 days",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T03:50:47.066101+00:00",
+      "executed_at": "2026-09-24T04:01:44.543507+00:00",
       "simulated": true
     }
   ],
   "tokens": 0,
-  "latency_s": 1.441
+  "latency_s": 1.46
 }

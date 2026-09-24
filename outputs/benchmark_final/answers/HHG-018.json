@@ -110,7 +110,7 @@
       "planner": "rules",
       "result": "$39.08 in_person on C02354-K2",
       "ok": true,
-      "ms": 77.5
+      "ms": 82.1
     },
     {
       "step": 2,
@@ -123,7 +123,7 @@
       "planner": "rules",
       "result": "7091 transactions",
       "ok": true,
-      "ms": 660.2
+      "ms": 574.9
     },
     {
       "step": 3,
@@ -137,7 +137,7 @@
       "planner": "rules",
       "result": "0 closed cases",
       "ok": true,
-      "ms": 37.5
+      "ms": 35.9
     },
     {
       "step": 4,
@@ -174,10 +174,10 @@
       "system": "case-management",
       "detail": "Fraud case opened in case management",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T03:50:44.491809+00:00",
+      "executed_at": "2026-09-24T04:01:41.848414+00:00",
       "simulated": true
     }
   ],
   "tokens": 0,
-  "latency_s": 1.308
+  "latency_s": 1.281
 }

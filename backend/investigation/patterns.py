@@ -78,28 +78,37 @@ def _result(pattern: FraudPattern, supporting: Iterable[str], contradicting: Ite
 
 
 def detect_card_testing(context: PatternContext) -> PatternResult:
-    """Three or more sub-$5 online authorizations followed by a larger purchase."""
+    """Three or more small online authorizations clustered around a larger purchase."""
     events = [item for item in _history(context) if _online(item)]
     for index, start in enumerate(events):
         small = [
             item for item in events[index:]
             if start.timestamp <= item.timestamp <= start.timestamp + timedelta(hours=1)
-            and 0 < item.amount_usd < 5
+            and 0 < item.amount_usd <= 25
         ]
         if len(small) < 3:
             continue
-        larger = next(
-            (item for item in events
-             if small[-1].timestamp < item.timestamp <= small[-1].timestamp + timedelta(hours=1)
-             and item.amount_usd >= 5),
+        small_median = median(item.amount_usd for item in small)
+        larger_before = next(
+            (item for item in reversed(events[:index])
+             if item.timestamp < start.timestamp
+             and start.timestamp - item.timestamp <= timedelta(hours=1)
+             and item.amount_usd >= max(5, 3 * small_median)),
             None,
         )
+        larger_after = next(
+            (item for item in events
+             if small[-1].timestamp < item.timestamp <= small[-1].timestamp + timedelta(hours=1)
+             and item.amount_usd >= max(5, 3 * small_median)),
+            None,
+        )
+        larger = larger_after or larger_before
         sequence = [*small, larger] if larger else []
         if larger and any(_within(item, context.target, 48) for item in sequence):
             return _result(
                 FraudPattern.CARD_TESTING,
                 [
-                    f"{len(small)} online authorizations below USD 5 occurred within one hour",
+                    f"{len(small)} small online authorizations averaging USD {small_median:.2f} occurred within one hour",
                     f"larger purchase of USD {larger.amount_usd:.2f} followed the authorizations",
                     "sequence transactions: " + ", ".join(item.transaction_id for item in sequence),
                 ],

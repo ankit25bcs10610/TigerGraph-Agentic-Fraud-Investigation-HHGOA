@@ -8122,10 +8122,10 @@
     "similar_prior_cases": [
       "CC-5489",
       "CC-5451",
-      "CC-5493",
-      "CC-5473",
-      "CC-5293",
-      "CC-5424"
+      "CC-5450",
+      "CC-5424",
+      "CC-5342",
+      "CC-5275"
     ],
     "summary": "Undocumented pattern on C09988-K1: fraud probability 0.45, exposure $59.67 across 1 transaction(s). Verification response case_pack.trigger_text settled the question as fraud.",
     "written_to_graph": true,
@@ -8216,7 +8216,7 @@
       "planner": "rules",
       "result": "$59.67 online on C09988-K1",
       "ok": true,
-      "ms": 81.1
+      "ms": 83.2
     },
     {
       "step": 2,
@@ -8229,7 +8229,7 @@
       "planner": "rules",
       "result": "61 transactions",
       "ok": true,
-      "ms": 43.9
+      "ms": 44.8
     },
     {
       "step": 3,
@@ -8242,7 +8242,7 @@
       "planner": "rules",
       "result": "592 transactions from 1 customers",
       "ok": true,
-      "ms": 61.6
+      "ms": 88.1
     },
     {
       "step": 4,
@@ -8256,7 +8256,7 @@
       "planner": "rules",
       "result": "7836 customers, 8046 cards, 9544 devices, 0 confirmed cases",
       "ok": true,
-      "ms": 554.6
+      "ms": 515.0
     },
     {
       "step": 5,
@@ -8270,7 +8270,7 @@
       "planner": "rules",
       "result": "5565 closed cases",
       "ok": true,
-      "ms": 59.4
+      "ms": 56.0
     },
     {
       "step": 6,
@@ -8321,7 +8321,7 @@
       "system": "case-management",
       "detail": "Fraud case opened in case management",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T03:50:41.332851+00:00",
+      "executed_at": "2026-09-24T04:01:38.731931+00:00",
       "simulated": true
     },
     {
@@ -8333,10 +8333,10 @@
       "system": "case-management",
       "detail": "Case routed to the analyst review queue",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T03:50:41.332898+00:00",
+      "executed_at": "2026-09-24T04:01:38.731953+00:00",
       "simulated": true
     }
   ],
   "tokens": 0,
-  "latency_s": 1.497
+  "latency_s": 1.416
 }

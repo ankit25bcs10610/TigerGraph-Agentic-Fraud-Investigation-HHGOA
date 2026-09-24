@@ -8124,10 +8124,10 @@
     "similar_prior_cases": [
       "CC-5489",
       "CC-5451",
-      "CC-5493",
-      "CC-5473",
-      "CC-5293",
-      "CC-5424"
+      "CC-5450",
+      "CC-5424",
+      "CC-5342",
+      "CC-5275"
     ],
     "summary": "Undocumented pattern on C07297-K1: fraud probability 0.58, exposure $2,394.13 across 6 transaction(s). Verification response case_pack.trigger_text settled the question as fraud.",
     "written_to_graph": true,
@@ -8218,7 +8218,7 @@
       "planner": "rules",
       "result": "$482.12 online on C07297-K1",
       "ok": true,
-      "ms": 83.0
+      "ms": 92.6
     },
     {
       "step": 2,
@@ -8231,7 +8231,7 @@
       "planner": "rules",
       "result": "261 transactions",
       "ok": true,
-      "ms": 134.7
+      "ms": 109.4
     },
     {
       "step": 3,
@@ -8244,7 +8244,7 @@
       "planner": "rules",
       "result": "1220 transactions from 1 customers",
       "ok": true,
-      "ms": 98.0
+      "ms": 108.9
     },
     {
       "step": 4,
@@ -8258,7 +8258,7 @@
       "planner": "rules",
       "result": "7433 customers, 8049 cards, 9537 devices, 0 confirmed cases",
       "ok": true,
-      "ms": 467.8
+      "ms": 478.1
     },
     {
       "step": 5,
@@ -8272,7 +8272,7 @@
       "planner": "rules",
       "result": "5565 closed cases",
       "ok": true,
-      "ms": 57.4
+      "ms": 54.7
     },
     {
       "step": 6,
@@ -8312,7 +8312,7 @@
       "planner": "rules",
       "result": "3 policy passages, 0 case narratives (tfidf)",
       "ok": true,
-      "ms": 0.4
+      "ms": 0.3
     },
     {
       "tool": "execute_action",
@@ -8323,7 +8323,7 @@
       "system": "case-management",
       "detail": "Fraud case opened in case management",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T03:49:43.431773+00:00",
+      "executed_at": "2026-09-24T04:00:36.294167+00:00",
       "simulated": true
     },
     {
@@ -8335,10 +8335,10 @@
       "system": "case-management",
       "detail": "Case routed to the analyst review queue",
       "approved_by": "policy (auto)",
-      "executed_at": "2026-09-24T03:49:43.431791+00:00",
+      "executed_at": "2026-09-24T04:00:36.294187+00:00",
       "simulated": true
     }
   ],
   "tokens": 0,
-  "latency_s": 1.346
+  "latency_s": 1.36
 }

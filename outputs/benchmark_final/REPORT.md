@@ -14,7 +14,7 @@ Source: `tigergraph-mcp`. Cases: 20. Valid and written to the graph: 20. Valid b
 | HHG-008 | undocumented | fraud | 0.45 | $595.74 | none | BLOCK_CARD (L1), CREATE_CASE (auto), FILE_REPORT (L2), ESCALATE_TO_ANALYST (auto) | yes | yes |  |
 | HHG-009 | undocumented | fraud | 0.43 | $30.02 | none | BLOCK_CARD (L1), CREATE_CASE (auto), FILE_REPORT (L2), ESCALATE_TO_ANALYST (auto) | yes | yes |  |
 | HHG-010 | undocumented | uncertain | 0.62 | $1,000.03 | customer_validation=no_reply, step_up_auth=not_completed | MONITOR_CARD (auto), DECLINE_TRANSACTION (L1), ESCALATE_TO_ANALYST (auto), CREATE_CASE (auto), FILE_REPORT (L2) | no | yes |  |
-| HHG-011 | card_not_present_fraud | fraud | 0.59 | $2,586.86 | none | BLOCK_CARD (L2), CREATE_CASE (auto), FILE_REPORT (L2) | yes | yes |  |
+| HHG-011 | card_testing | fraud | 0.64 | $2,586.86 | none | BLOCK_CARD (L2), CREATE_CASE (auto), FILE_REPORT (L2), DECLINE_TRANSACTION (L1), STEP_UP_AUTH (auto) | yes | yes |  |
 | HHG-012 | none | legitimate | 0.08 | $0.00 | none | none | no | no |  |
 | HHG-013 | undocumented | uncertain | 0.45 | $2,569.43 | customer_validation=no_reply, step_up_auth=not_completed | MONITOR_CARD (auto), DECLINE_TRANSACTION (L1), ESCALATE_TO_ANALYST (auto), CREATE_CASE (auto), FILE_REPORT (L2) | no | yes |  |
 | HHG-014 | undocumented | uncertain | 0.35 | $111.00 | customer_validation=no_reply, step_up_auth=not_completed | MONITOR_CARD (auto), DECLINE_TRANSACTION (L1), CREATE_CASE (auto), FILE_REPORT (L2), ESCALATE_TO_ANALYST (auto) | no | yes |  |
